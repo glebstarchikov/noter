@@ -29,3 +29,13 @@ export type MeetingStatus =
   | 'generating'
   | 'done'
   | 'error'
+
+export interface MeetingSource {
+  id: string
+  meeting_id: string
+  user_id: string
+  name: string
+  file_type: string
+  content: string
+  created_at: string
+}
