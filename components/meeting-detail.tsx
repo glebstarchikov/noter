@@ -14,9 +14,10 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { SourceManager } from '@/components/source-manager'
 import type { Meeting, ActionItem } from '@/lib/types'
 
-type Tab = 'summary' | 'actions' | 'decisions' | 'topics' | 'follow-ups' | 'transcript'
+type Tab = 'summary' | 'actions' | 'decisions' | 'topics' | 'follow-ups' | 'transcript' | 'sources'
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
@@ -25,6 +26,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'topics', label: 'Topics' },
   { key: 'follow-ups', label: 'Follow-ups' },
   { key: 'transcript', label: 'Transcript' },
+  { key: 'sources', label: 'Sources' },
 ]
 
 function formatDate(dateStr: string) {
@@ -234,6 +236,10 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
               <p className="text-sm text-muted-foreground">No transcript available.</p>
             )}
           </div>
+        )}
+
+        {activeTab === 'sources' && (
+          <SourceManager meetingId={meeting.id} />
         )}
       </div>
     </div>
