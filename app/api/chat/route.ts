@@ -1,5 +1,4 @@
 import {
-  consumeStream,
   convertToModelMessages,
   streamText,
   UIMessage,
@@ -123,6 +122,5 @@ ${context}`
 
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
-    consumeSseStream: consumeStream,
   })
 }

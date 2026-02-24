@@ -34,12 +34,7 @@ async function extractTextFromFile(file: File): Promise<string> {
   // DOCX - extract raw text from the XML inside the zip
   if (type.includes('wordprocessingml') || file.name.endsWith('.docx')) {
     try {
-      const { Readable } = await import('stream')
-      const { createInflate } = await import('zlib')
       const buffer = Buffer.from(await file.arrayBuffer())
-      
-      // Simple DOCX text extraction - read the document.xml from the zip
-      // DOCX files are ZIP archives; we'll do a simple extraction
       const text = extractDocxText(buffer)
       return text
     } catch {
