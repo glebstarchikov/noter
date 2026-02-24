@@ -124,3 +124,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Recording waveform animation */
+@keyframes pulse {
+  0% {
+    transform: scaleY(0.4);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
