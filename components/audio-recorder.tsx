@@ -121,12 +121,12 @@ export function AudioRecorder({ onProcessing }: Props) {
       {/* Waveform indicator */}
       {isRecording && !isPaused && (
         <div className="flex items-center gap-1">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {[16, 24, 32, 20, 28].map((h, i) => (
             <span
               key={i}
               className="inline-block w-1 rounded-full bg-accent"
               style={{
-                height: `${12 + Math.random() * 20}px`,
+                height: `${h}px`,
                 animation: `pulse 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
               }}
             />

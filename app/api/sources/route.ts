@@ -45,25 +45,10 @@ async function extractTextFromFile(file: File): Promise<string> {
   throw new Error(`Unsupported file type: ${type}`)
 }
 
-// Simple DOCX text extraction without heavy dependencies
+// Simple DOCX text extraction without heavy dependencies.
+// DOCX files are ZIP archives containing XML -- we scan for <w:t> text nodes.
 function extractDocxText(buffer: Buffer): string {
-  // DOCX is a ZIP file. Find the document.xml entry and extract text from XML tags
-  // This is a simplified approach - works for most standard DOCX files
   const str = buffer.toString('binary')
-  
-  // Find the document.xml content within the ZIP
-  const xmlStart = str.indexOf('<w:document')
-  if (xmlStart === -1) {
-    // Try finding any text content
-    const textParts: string[] = []
-    const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g
-    let match
-    while ((match = regex.exec(str)) !== null) {
-      textParts.push(match[1])
-    }
-    return textParts.join(' ') || 'Could not extract text from DOCX file.'
-  }
-  
   const textParts: string[] = []
   const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g
   let match
