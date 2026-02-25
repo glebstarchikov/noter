@@ -43,12 +43,7 @@ export function MeetingChat({ meetingId }: { meetingId: string }) {
     [meetingId]
   )
 
-  const { messages, sendMessage, status, error } = useChat({
-    transport,
-    onError: (err) => {
-      console.error('[v0] Chat error:', err)
-    },
-  })
+  const { messages, sendMessage, status, error } = useChat({ transport })
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
@@ -159,17 +154,15 @@ export function MeetingChat({ meetingId }: { meetingId: string }) {
                   </div>
                 )
               })}
-              {isLoading && messages[messages.length - 1]?.role === 'user' && (
-                <div className="flex items-start gap-1">
+              {isLoading && (
+                <div className="flex flex-col gap-1 items-start">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     noter AI
                   </span>
-                </div>
-              )}
-              {isLoading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Thinking...</span>
+                  <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Thinking...</span>
+                  </div>
                 </div>
               )}
               {error && (

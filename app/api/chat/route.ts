@@ -1,3 +1,4 @@
+import { createOpenAI } from '@ai-sdk/openai'
 import {
   convertToModelMessages,
   streamText,
@@ -9,7 +10,6 @@ export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
-    // Auth check
     const supabase = await createClient()
     const {
       data: { user },
@@ -24,15 +24,7 @@ export async function POST(req: Request) {
       meetingId: string
     }
 
-    console.log('[v0] Chat API received body keys:', Object.keys(body))
-    console.log('[v0] meetingId:', meetingId)
-    console.log('[v0] messages count:', messages?.length)
-
     if (!meetingId) {
-      console.log(
-        '[v0] Missing meetingId in body:',
-        JSON.stringify(body).slice(0, 200)
-      )
       return new Response('Missing meetingId', { status: 400 })
     }
 
@@ -46,16 +38,8 @@ export async function POST(req: Request) {
       .single()
 
     if (!meeting) {
-      console.log('[v0] Meeting not found for id:', meetingId)
       return new Response('Meeting not found', { status: 404 })
     }
-
-    console.log(
-      '[v0] Meeting found:',
-      meeting.title,
-      '| has transcript:',
-      !!meeting.transcript
-    )
 
     // Fetch attached sources
     const { data: sources } = await supabase
@@ -70,11 +54,7 @@ export async function POST(req: Request) {
       context += `## Summary\n${meeting.summary}\n\n`
     }
 
-    if (
-      meeting.action_items &&
-      Array.isArray(meeting.action_items) &&
-      meeting.action_items.length > 0
-    ) {
+    if (Array.isArray(meeting.action_items) && meeting.action_items.length > 0) {
       context += `## Action Items\n`
       for (const item of meeting.action_items as Array<{
         task: string
@@ -86,11 +66,7 @@ export async function POST(req: Request) {
       context += '\n'
     }
 
-    if (
-      meeting.key_decisions &&
-      Array.isArray(meeting.key_decisions) &&
-      meeting.key_decisions.length > 0
-    ) {
+    if (Array.isArray(meeting.key_decisions) && meeting.key_decisions.length > 0) {
       context += `## Key Decisions\n`
       for (const decision of meeting.key_decisions as string[]) {
         context += `- ${decision}\n`
@@ -98,11 +74,7 @@ export async function POST(req: Request) {
       context += '\n'
     }
 
-    if (
-      meeting.topics &&
-      Array.isArray(meeting.topics) &&
-      meeting.topics.length > 0
-    ) {
+    if (Array.isArray(meeting.topics) && meeting.topics.length > 0) {
       context += `## Topics Discussed\n`
       for (const topic of meeting.topics as string[]) {
         context += `- ${topic}\n`
@@ -110,11 +82,7 @@ export async function POST(req: Request) {
       context += '\n'
     }
 
-    if (
-      meeting.follow_ups &&
-      Array.isArray(meeting.follow_ups) &&
-      meeting.follow_ups.length > 0
-    ) {
+    if (Array.isArray(meeting.follow_ups) && meeting.follow_ups.length > 0) {
       context += `## Follow-ups\n`
       for (const followUp of meeting.follow_ups as string[]) {
         context += `- ${followUp}\n`
@@ -126,7 +94,6 @@ export async function POST(req: Request) {
       context += `## Full Transcript\n${meeting.transcript}\n\n`
     }
 
-    // Append external sources
     if (sources && sources.length > 0) {
       context += `## External Sources\n`
       for (const source of sources) {
@@ -140,7 +107,7 @@ Your job is to:
 - Answer questions about what happened in the meeting
 - Elaborate on specific points discussed
 - Verify whether topics or actions were mentioned
-- Cross-reference information from external sources (presentations, documents) with meeting content
+- Cross-reference information from external sources with meeting content
 - Provide clear, concise, and accurate answers
 
 Rules:
@@ -153,20 +120,20 @@ Here is the full meeting context:
 
 ${context}`
 
+    const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
     const result = streamText({
-      model: 'openai/gpt-4o-mini',
+      model: openai('gpt-4o-mini'),
       system: systemPrompt,
       messages: await convertToModelMessages(messages),
       abortSignal: req.signal,
     })
 
-    console.log('[v0] Streaming response from openai/gpt-4o-mini')
-
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
     })
   } catch (error: unknown) {
-    console.error('[v0] Chat API error:', error)
+    console.error('Chat API error:', error)
     const message =
       error instanceof Error ? error.message : 'Chat failed'
     return new Response(JSON.stringify({ error: message }), {
