@@ -38,14 +38,17 @@ export function MeetingChat({ meetingId }: { meetingId: string }) {
     () =>
       new DefaultChatTransport({
         api: '/api/chat',
-        prepareSendMessagesRequest: ({ id, messages }) => ({
-          body: { messages, meetingId, id },
-        }),
+        body: { meetingId },
       }),
     [meetingId]
   )
 
-  const { messages, sendMessage, status } = useChat({ transport })
+  const { messages, sendMessage, status, error } = useChat({
+    transport,
+    onError: (err) => {
+      console.error('[v0] Chat error:', err)
+    },
+  })
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
@@ -167,6 +170,11 @@ export function MeetingChat({ meetingId }: { meetingId: string }) {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   <span>Thinking...</span>
+                </div>
+              )}
+              {error && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  Something went wrong. Please try again.
                 </div>
               )}
             </div>
