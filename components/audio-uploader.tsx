@@ -86,8 +86,15 @@ export function AudioUploader({ onProcessing }: Props) {
       })
 
       if (!transcribeRes.ok) {
-        const err = await transcribeRes.json()
-        throw new Error(err.error || 'Transcription failed')
+        const textErr = await transcribeRes.text()
+        let errorMessage = 'Transcription failed'
+        try {
+          const jsonErr = JSON.parse(textErr)
+          errorMessage = jsonErr.error || errorMessage
+        } catch {
+          errorMessage = textErr || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       const { transcript } = await transcribeRes.json()
@@ -101,8 +108,15 @@ export function AudioUploader({ onProcessing }: Props) {
       })
 
       if (!notesRes.ok) {
-        const err = await notesRes.json()
-        throw new Error(err.error || 'Notes generation failed')
+        const textErr = await notesRes.text()
+        let errorMessage = 'Notes generation failed'
+        try {
+          const jsonErr = JSON.parse(textErr)
+          errorMessage = jsonErr.error || errorMessage
+        } catch {
+          errorMessage = textErr || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       onProcessing({ meetingId: meeting.id, step: 'done' })
@@ -127,11 +141,10 @@ export function AudioUploader({ onProcessing }: Props) {
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter') fileInputRef.current?.click() }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors ${
-          isDragging
+        className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors ${isDragging
             ? 'border-accent bg-accent/5'
             : 'border-border bg-card hover:border-muted-foreground'
-        }`}
+          }`}
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary">
           <Upload className="h-5 w-5 text-muted-foreground" />

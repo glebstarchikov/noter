@@ -93,8 +93,15 @@ export function AudioRecorder({ onProcessing }: Props) {
       })
 
       if (!transcribeRes.ok) {
-        const err = await transcribeRes.json()
-        throw new Error(err.error || 'Transcription failed')
+        const textErr = await transcribeRes.text()
+        let errorMessage = 'Transcription failed'
+        try {
+          const jsonErr = JSON.parse(textErr)
+          errorMessage = jsonErr.error || errorMessage
+        } catch {
+          errorMessage = textErr || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       const { transcript } = await transcribeRes.json()
@@ -108,8 +115,15 @@ export function AudioRecorder({ onProcessing }: Props) {
       })
 
       if (!notesRes.ok) {
-        const err = await notesRes.json()
-        throw new Error(err.error || 'Notes generation failed')
+        const textErr = await notesRes.text()
+        let errorMessage = 'Notes generation failed'
+        try {
+          const jsonErr = JSON.parse(textErr)
+          errorMessage = jsonErr.error || errorMessage
+        } catch {
+          errorMessage = textErr || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       onProcessing({ meetingId: meeting.id, step: 'done' })

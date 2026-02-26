@@ -90,11 +90,20 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
           body: formData,
         })
 
+        if (!res.ok) {
+          const textErr = await res.text()
+          let errorMessage = 'Upload failed'
+          try {
+            const jsonErr = JSON.parse(textErr)
+            errorMessage = jsonErr.error || errorMessage
+          } catch {
+            errorMessage = textErr || errorMessage
+          }
+          throw new Error(errorMessage)
+        }
+
         const data = await res.json()
 
-        if (!res.ok) {
-          throw new Error(data.error || 'Upload failed')
-        }
 
         setSources((prev) => [data.source, ...prev])
         toast.success(`${file.name} uploaded and processed`)
