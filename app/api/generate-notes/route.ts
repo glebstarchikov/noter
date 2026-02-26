@@ -4,6 +4,15 @@ import OpenAI from 'openai'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
+// ~4 chars per token is a rough estimate; gpt-4o-mini supports 128k context
+const MAX_TRANSCRIPT_CHARS = 400_000
+
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
+
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
     ? new Ratelimit({
@@ -49,8 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (ratelimit) {
-      const ip = request.headers.get('x-forwarded-for') || '127.0.0.1'
-      const { success } = await ratelimit.limit(`generate_notes_${ip}`)
+      const { success } = await ratelimit.limit(`generate_notes_${user.id}`)
       if (!success) {
         return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 })
       }
@@ -63,6 +71,11 @@ export async function POST(request: NextRequest) {
     if (!meetingId || !transcript) {
       return NextResponse.json({ error: 'Missing meetingId or transcript' }, { status: 400 })
     }
+
+    // Truncate very long transcripts to stay within model context limits
+    const truncatedTranscript = typeof transcript === 'string' && transcript.length > MAX_TRANSCRIPT_CHARS
+      ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'
+      : transcript
 
     // Verify user owns the meeting
     const { data: meeting } = await supabase
@@ -83,13 +96,11 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId)
 
     // Generate notes with GPT
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Here is the meeting transcript:\n\n${transcript}` },
+        { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
       ],
       temperature: 0.3,
       response_format: { type: 'json_object' },
@@ -128,14 +139,18 @@ export async function POST(request: NextRequest) {
 
     // Set meeting status to error so it doesn't stay stuck
     if (meetingId) {
-      await supabase
-        .from('meetings')
-        .update({
-          status: 'error',
-          error_message: message,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', meetingId)
+      try {
+        await supabase
+          .from('meetings')
+          .update({
+            status: 'error',
+            error_message: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', meetingId)
+      } catch (dbError) {
+        console.error('Failed to update meeting error status:', dbError)
+      }
     }
 
     return NextResponse.json({ error: message }, { status: 500 })

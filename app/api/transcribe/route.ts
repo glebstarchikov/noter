@@ -4,6 +4,12 @@ import OpenAI from 'openai'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
+
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
     ? new Ratelimit({
@@ -27,8 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (ratelimit) {
-      const ip = request.headers.get('x-forwarded-for') || '127.0.0.1'
-      const { success } = await ratelimit.limit(`transcribe_${ip}`)
+      const { success } = await ratelimit.limit(`transcribe_${user.id}`)
       if (!success) {
         return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 })
       }
@@ -61,7 +66,6 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId)
 
     // Upload audio to Supabase Storage
-    const fileName = `${meetingId}.webm` // The frontend records as webm or user uploads various formats, let's keep original extension or default to .webm
     const originalName = audioFile.name || 'audio.webm'
     const extension = originalName.split('.').pop() || 'webm'
     const storagePath = `${user.id}/${meetingId}.${extension}`
@@ -84,9 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Transcribe with OpenAI Whisper
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const transcription = await openai.audio.transcriptions.create({
+    const transcription = await getOpenAI().audio.transcriptions.create({
       file: audioFile,
       model: 'whisper-1',
       response_format: 'text',
@@ -108,14 +110,18 @@ export async function POST(request: NextRequest) {
 
     // Set meeting status to error so it doesn't stay stuck
     if (meetingId) {
-      await supabase
-        .from('meetings')
-        .update({
-          status: 'error',
-          error_message: message,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', meetingId)
+      try {
+        await supabase
+          .from('meetings')
+          .update({
+            status: 'error',
+            error_message: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', meetingId)
+      } catch (dbError) {
+        console.error('Failed to update meeting error status:', dbError)
+      }
     }
 
     return NextResponse.json({ error: message }, { status: 500 })

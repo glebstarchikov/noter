@@ -20,6 +20,7 @@ export default async function MeetingPage({
     .from('meetings')
     .select('*')
     .eq('id', id)
+    .eq('user_id', user.id)
     .single()
 
   if (!meeting) notFound()

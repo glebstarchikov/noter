@@ -14,4 +14,11 @@ vi.mock('next/server', () => ({
             headers: { 'Content-Type': 'application/json', ...init?.headers },
         })
     },
+    NextRequest: class MockNextRequest extends Request {
+        nextUrl: URL
+        constructor(input: string | URL, init?: RequestInit) {
+            super(input, init)
+            this.nextUrl = new URL(typeof input === 'string' ? input : input.toString())
+        }
+    },
 }))

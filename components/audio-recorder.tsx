@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mic, Square, Pause, Play, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -39,12 +39,15 @@ export function AudioRecorder({ onProcessing }: Props) {
     resetRecording,
   } = useAudioRecorder()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
 
   // Auto-stop at max duration
-  if (isRecording && duration >= MAX_DURATION_SECONDS) {
-    stopRecording()
-    toast.info('Maximum recording duration reached (60 minutes).')
-  }
+  useEffect(() => {
+    if (isRecording && duration >= MAX_DURATION_SECONDS) {
+      stopRecording()
+      toast.info('Maximum recording duration reached (60 minutes).')
+    }
+  }, [isRecording, duration, stopRecording])
 
   // Warning near max
   const isNearLimit = isRecording && duration >= WARNING_THRESHOLD && duration < MAX_DURATION_SECONDS
@@ -58,7 +61,8 @@ export function AudioRecorder({ onProcessing }: Props) {
   }
 
   const handleSubmit = async () => {
-    if (!audioBlob) return
+    if (!audioBlob || submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -133,6 +137,7 @@ export function AudioRecorder({ onProcessing }: Props) {
       toast.error(message)
       onProcessing({ meetingId: '', step: 'error', error: message })
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }

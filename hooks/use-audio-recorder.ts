@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 export interface AudioRecorderState {
   isRecording: boolean
@@ -18,6 +18,7 @@ export function useAudioRecorder() {
   })
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
@@ -43,6 +44,7 @@ export function useAudioRecorder() {
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
@@ -63,6 +65,7 @@ export function useAudioRecorder() {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         setState((prev) => ({ ...prev, audioBlob: blob, isRecording: false, isPaused: false }))
         stream.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
       }
 
       mediaRecorderRef.current = mediaRecorder
@@ -105,6 +108,20 @@ export function useAudioRecorder() {
     durationRef.current = 0
     setState({ isRecording: false, isPaused: false, duration: 0, audioBlob: null })
   }, [stopRecording])
+
+  // Cleanup on unmount: stop timer and release microphone
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
+    }
+  }, [])
 
   return {
     ...state,

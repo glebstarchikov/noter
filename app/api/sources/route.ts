@@ -35,7 +35,7 @@ async function extractTextFromFile(file: File): Promise<string> {
   if (type.includes('wordprocessingml') || file.name.endsWith('.docx')) {
     try {
       const buffer = Buffer.from(await file.arrayBuffer())
-      const text = extractDocxText(buffer)
+      const text = await extractDocxText(buffer)
       return text
     } catch {
       throw new Error('Failed to parse DOCX file.')
@@ -45,18 +45,22 @@ async function extractTextFromFile(file: File): Promise<string> {
   throw new Error(`Unsupported file type: ${type}`)
 }
 
-// Simple DOCX text extraction without heavy dependencies.
-// DOCX files are ZIP archives containing XML -- we scan for <w:t> text nodes.
-function extractDocxText(buffer: Buffer): string {
-  const str = buffer.toString('binary')
+// Extract text from DOCX by decompressing the ZIP and parsing word/document.xml
+async function extractDocxText(buffer: Buffer): Promise<string> {
+  const JSZip = (await import('jszip')).default
+  const zip = await JSZip.loadAsync(buffer)
+  const docXml = zip.file('word/document.xml')
+  if (!docXml) {
+    throw new Error('Invalid DOCX: missing word/document.xml')
+  }
+  const xmlContent = await docXml.async('text')
   const textParts: string[] = []
   const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g
   let match
-  while ((match = regex.exec(str)) !== null) {
+  while ((match = regex.exec(xmlContent)) !== null) {
     textParts.push(match[1])
   }
   if (textParts.length === 0) {
-    console.warn('DOCX extraction: no text nodes found. The file may be compressed or use an unsupported format.')
     return 'Could not extract text from DOCX file.'
   }
   return textParts.join(' ')
@@ -91,6 +95,7 @@ export async function POST(request: NextRequest) {
       .from('meetings')
       .select('id')
       .eq('id', meetingId)
+      .eq('user_id', user.id)
       .single()
 
     if (!meeting) {
@@ -139,6 +144,18 @@ export async function GET(request: NextRequest) {
     const meetingId = request.nextUrl.searchParams.get('meetingId')
     if (!meetingId) {
       return NextResponse.json({ error: 'Missing meetingId' }, { status: 400 })
+    }
+
+    // Verify user owns the meeting
+    const { data: meeting } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('id', meetingId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
     }
 
     const { data: sources, error } = await supabase

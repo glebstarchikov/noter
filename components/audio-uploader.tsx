@@ -24,6 +24,7 @@ export function AudioUploader({ onProcessing }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
 
   const validateFile = (f: File): string | null => {
     if (!ACCEPTED_TYPES.includes(f.type) && !f.name.match(/\.(mp3|wav|m4a|webm|ogg)$/i)) {
@@ -52,7 +53,8 @@ export function AudioUploader({ onProcessing }: Props) {
   }
 
   const handleSubmit = async () => {
-    if (!file) return
+    if (!file || submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -126,6 +128,7 @@ export function AudioUploader({ onProcessing }: Props) {
       toast.error(message)
       onProcessing({ meetingId: '', step: 'error', error: message })
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }

@@ -30,8 +30,7 @@ export async function POST(req: Request) {
     }
 
     if (ratelimit) {
-      const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
-      const { success } = await ratelimit.limit(`chat_${ip}`)
+      const { success } = await ratelimit.limit(`chat_${user.id}`)
       if (!success) {
         return new Response('Too Many Requests', { status: 429 })
       }
@@ -47,13 +46,14 @@ export async function POST(req: Request) {
       return new Response('Missing meetingId', { status: 400 })
     }
 
-    // Fetch meeting data
+    // Fetch meeting data (with ownership check)
     const { data: meeting } = await supabase
       .from('meetings')
       .select(
-        'title, transcript, summary, action_items, key_decisions, topics, follow_ups'
+        'title, transcript, summary, action_items, key_decisions, topics, follow_ups, user_id'
       )
       .eq('id', meetingId)
+      .eq('user_id', user.id)
       .single()
 
     if (!meeting) {
@@ -110,13 +110,21 @@ export async function POST(req: Request) {
     }
 
     if (meeting.transcript) {
-      context += `## Full Transcript\n${meeting.transcript}\n\n`
+      // Truncate transcript if it's very long to stay within context limits
+      const transcript = meeting.transcript.length > 300_000
+        ? meeting.transcript.slice(0, 300_000) + '\n\n[Transcript truncated due to length]'
+        : meeting.transcript
+      context += `## Full Transcript\n${transcript}\n\n`
     }
 
     if (sources && sources.length > 0) {
       context += `## External Sources\n`
       for (const source of sources) {
-        context += `### ${source.name} (${source.file_type})\n${source.content}\n\n`
+        // Truncate individual source content if very large
+        const content = source.content.length > 50_000
+          ? source.content.slice(0, 50_000) + '\n\n[Document truncated due to length]'
+          : source.content
+        context += `### ${source.name} (${source.file_type})\n${content}\n\n`
       }
     }
 
