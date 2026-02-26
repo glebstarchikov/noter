@@ -5,6 +5,17 @@ import {
   UIMessage,
 } from 'ai'
 import { createClient } from '@/lib/supabase/server'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const ratelimit =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(10, '10 s'),
+      analytics: true,
+    })
+    : null
 
 export const maxDuration = 60
 
@@ -16,6 +27,14 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser()
     if (!user) {
       return new Response('Unauthorized', { status: 401 })
+    }
+
+    if (ratelimit) {
+      const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
+      const { success } = await ratelimit.limit(`chat_${ip}`)
+      if (!success) {
+        return new Response('Too Many Requests', { status: 429 })
+      }
     }
 
     const body = await req.json()

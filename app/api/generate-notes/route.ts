@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import OpenAI from 'openai'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const ratelimit =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(5, '1 m'),
+      analytics: true,
+    })
+    : null
 
 export const maxDuration = 60
 
@@ -35,6 +46,14 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (ratelimit) {
+      const ip = request.headers.get('x-forwarded-for') || '127.0.0.1'
+      const { success } = await ratelimit.limit(`generate_notes_${ip}`)
+      if (!success) {
+        return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 })
+      }
     }
 
     const body = await request.json()
