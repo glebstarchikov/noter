@@ -27,18 +27,34 @@ Rules:
 - Return ONLY valid JSON, nothing else`
 
 export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  let meetingId: string | null = null
+
   try {
     // Auth check
-    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { meetingId, transcript } = await request.json()
+    const body = await request.json()
+    meetingId = body.meetingId
+    const transcript = body.transcript
 
     if (!meetingId || !transcript) {
       return NextResponse.json({ error: 'Missing meetingId or transcript' }, { status: 400 })
+    }
+
+    // Verify user owns the meeting
+    const { data: meeting } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('id', meetingId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
     }
 
     // Update status
@@ -65,14 +81,19 @@ export async function POST(request: NextRequest) {
       throw new Error('No response from AI')
     }
 
-    const notes = JSON.parse(content)
+    let notes: Record<string, unknown>
+    try {
+      notes = JSON.parse(content)
+    } catch {
+      throw new Error('AI returned invalid JSON. Please try again.')
+    }
 
     // Save notes to database
     await supabase
       .from('meetings')
       .update({
-        title: notes.title || 'Untitled Meeting',
-        summary: notes.summary || '',
+        title: (notes.title as string) || 'Untitled Meeting',
+        summary: (notes.summary as string) || '',
         action_items: notes.action_items || [],
         key_decisions: notes.key_decisions || [],
         topics: notes.topics || [],
@@ -85,6 +106,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ notes, meetingId })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Notes generation failed'
+
+    // Set meeting status to error so it doesn't stay stuck
+    if (meetingId) {
+      await supabase
+        .from('meetings')
+        .update({
+          status: 'error',
+          error_message: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', meetingId)
+    }
+
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

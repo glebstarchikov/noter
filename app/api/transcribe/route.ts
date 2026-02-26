@@ -5,9 +5,11 @@ import OpenAI from 'openai'
 export const maxDuration = 120
 
 export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  let meetingId: string | null = null
+
   try {
     // Auth check
-    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,10 +17,22 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData()
     const audioFile = formData.get('audio') as File | null
-    const meetingId = formData.get('meetingId') as string | null
+    meetingId = formData.get('meetingId') as string | null
 
     if (!audioFile || !meetingId) {
       return NextResponse.json({ error: 'Missing audio file or meeting ID' }, { status: 400 })
+    }
+
+    // Verify user owns the meeting
+    const { data: meeting } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('id', meetingId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
     }
 
     // Update status to transcribing
@@ -26,6 +40,29 @@ export async function POST(request: NextRequest) {
       .from('meetings')
       .update({ status: 'transcribing' })
       .eq('id', meetingId)
+
+    // Upload audio to Supabase Storage
+    const fileName = `${meetingId}.webm` // The frontend records as webm or user uploads various formats, let's keep original extension or default to .webm
+    const originalName = audioFile.name || 'audio.webm'
+    const extension = originalName.split('.').pop() || 'webm'
+    const storagePath = `${user.id}/${meetingId}.${extension}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('meeting-audio')
+      .upload(storagePath, audioFile, {
+        contentType: audioFile.type || 'audio/webm',
+        upsert: true,
+      })
+
+    // Save storage path to DB if successful
+    if (!uploadError) {
+      await supabase
+        .from('meetings')
+        .update({ audio_url: storagePath })
+        .eq('id', meetingId)
+    } else {
+      console.warn('Failed to upload audio to storage:', uploadError)
+    }
 
     // Transcribe with OpenAI Whisper
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -49,6 +86,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ transcript: transcription, meetingId })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Transcription failed'
+
+    // Set meeting status to error so it doesn't stay stuck
+    if (meetingId) {
+      await supabase
+        .from('meetings')
+        .update({
+          status: 'error',
+          error_message: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', meetingId)
+    }
+
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

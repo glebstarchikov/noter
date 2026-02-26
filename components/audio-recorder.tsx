@@ -8,6 +8,9 @@ import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
+const MAX_DURATION_SECONDS = 60 * 60 // 60 minutes
+const WARNING_THRESHOLD = 55 * 60 // 55 minutes
+
 function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
@@ -36,6 +39,15 @@ export function AudioRecorder({ onProcessing }: Props) {
     resetRecording,
   } = useAudioRecorder()
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Auto-stop at max duration
+  if (isRecording && duration >= MAX_DURATION_SECONDS) {
+    stopRecording()
+    toast.info('Maximum recording duration reached (60 minutes).')
+  }
+
+  // Warning near max
+  const isNearLimit = isRecording && duration >= WARNING_THRESHOLD && duration < MAX_DURATION_SECONDS
 
   const handleStart = async () => {
     try {
@@ -197,9 +209,10 @@ export function AudioRecorder({ onProcessing }: Props) {
       </div>
 
       {/* Status text */}
-      <p className="text-xs text-muted-foreground">
+      <p className={`text-xs ${isNearLimit ? 'text-destructive' : 'text-muted-foreground'}`}>
         {!isRecording && !audioBlob && 'Tap to start recording'}
-        {isRecording && !isPaused && 'Recording in progress...'}
+        {isRecording && !isPaused && !isNearLimit && 'Recording in progress...'}
+        {isRecording && !isPaused && isNearLimit && `Warning: ${formatTime(MAX_DURATION_SECONDS - duration)} remaining before auto-stop`}
         {isPaused && 'Recording paused'}
         {audioBlob && !isRecording && `${formatTime(duration)} recorded - ready to process`}
       </p>

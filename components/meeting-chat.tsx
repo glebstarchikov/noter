@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
+import ReactMarkdown from 'react-markdown'
 import {
   MessageSquare,
   X,
@@ -143,13 +144,19 @@ export function MeetingChat({ meetingId }: { meetingId: string }) {
                     </span>
                     <div
                       className={cn(
-                        'max-w-[90%] rounded-xl px-3 py-2 text-sm leading-relaxed',
+                        'max-w-[90%] rounded-xl px-3 py-2 text-sm leading-relaxed overflow-hidden',
                         message.role === 'user'
                           ? 'bg-accent text-accent-foreground'
                           : 'bg-secondary text-foreground'
                       )}
                     >
-                      <div className="whitespace-pre-wrap">{text}</div>
+                      {message.role === 'user' ? (
+                        <div className="whitespace-pre-wrap">{text}</div>
+                      ) : (
+                        <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:mb-2 [&>ol]:list-decimal [&>ol]:pl-4 [&>h3]:font-bold [&>h3]:mb-1 [&>h2]:font-bold [&>h2]:mb-1 font-sans">
+                          <ReactMarkdown>{text}</ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

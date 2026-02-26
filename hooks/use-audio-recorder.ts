@@ -22,11 +22,13 @@ export function useAudioRecorder() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
   const pausedDurationRef = useRef<number>(0)
+  const durationRef = useRef<number>(0)
 
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now() - pausedDurationRef.current * 1000
     timerRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+      durationRef.current = elapsed
       setState((prev) => ({ ...prev, duration: elapsed }))
     }, 200)
   }, [])
@@ -49,6 +51,7 @@ export function useAudioRecorder() {
 
       chunksRef.current = []
       pausedDurationRef.current = 0
+      durationRef.current = 0
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -81,11 +84,11 @@ export function useAudioRecorder() {
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause()
-      pausedDurationRef.current = state.duration
+      pausedDurationRef.current = durationRef.current
       stopTimer()
       setState((prev) => ({ ...prev, isPaused: true }))
     }
-  }, [state.duration, stopTimer])
+  }, [stopTimer])
 
   const resumeRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
@@ -99,6 +102,7 @@ export function useAudioRecorder() {
     stopRecording()
     chunksRef.current = []
     pausedDurationRef.current = 0
+    durationRef.current = 0
     setState({ isRecording: false, isPaused: false, duration: 0, audioBlob: null })
   }, [stopRecording])
 

@@ -36,11 +36,11 @@ function formatDate(dateStr: string) {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ]
-  const h = d.getUTCHours()
-  const m = d.getUTCMinutes()
+  const h = d.getHours()
+  const m = d.getMinutes()
   const period = h >= 12 ? 'PM' : 'AM'
   const hour12 = h % 12 || 12
-  return `${weekdays[d.getUTCDay()]}, ${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()} at ${hour12}:${m.toString().padStart(2, '0')} ${period}`
+  return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at ${hour12}:${m.toString().padStart(2, '0')} ${period}`
 }
 
 export function MeetingDetail({ meeting }: { meeting: Meeting }) {
@@ -49,22 +49,37 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
+  const keyDecisions = meeting.key_decisions ?? []
+  const topics = meeting.topics ?? []
+  const followUps = meeting.follow_ups ?? []
+
   const toggleAction = async (index: number) => {
+    const previous = [...actionItems]
     const updated = [...actionItems]
     updated[index] = { ...updated[index], done: !updated[index].done }
     setActionItems(updated)
 
     const supabase = createClient()
-    await supabase
+    const { error } = await supabase
       .from('meetings')
       .update({ action_items: updated })
       .eq('id', meeting.id)
+
+    if (error) {
+      setActionItems(previous)
+      toast.error('Failed to update action item')
+    }
   }
 
   const handleDelete = async () => {
     if (!confirm('Delete this meeting? This cannot be undone.')) return
     setIsDeleting(true)
     const supabase = createClient()
+
+    // Delete related sources first (cascade should handle this via FK,
+    // but we do it explicitly for safety)
+    await supabase.from('meeting_sources').delete().eq('meeting_id', meeting.id)
+
     const { error } = await supabase.from('meetings').delete().eq('id', meeting.id)
     if (error) {
       toast.error('Failed to delete meeting')
@@ -184,8 +199,8 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
         {activeTab === 'decisions' && (
           <div className="flex flex-col gap-3">
-            {meeting.key_decisions.length > 0 ? (
-              meeting.key_decisions.map((decision, i) => (
+            {keyDecisions.length > 0 ? (
+              keyDecisions.map((decision, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
                   <span className="text-sm leading-relaxed text-foreground">{decision}</span>
@@ -199,8 +214,8 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
         {activeTab === 'topics' && (
           <div className="flex flex-wrap gap-2">
-            {meeting.topics.length > 0 ? (
-              meeting.topics.map((topic, i) => (
+            {topics.length > 0 ? (
+              topics.map((topic, i) => (
                 <span
                   key={i}
                   className="inline-flex rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground"
@@ -216,8 +231,8 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
         {activeTab === 'follow-ups' && (
           <div className="flex flex-col gap-3">
-            {meeting.follow_ups.length > 0 ? (
-              meeting.follow_ups.map((followUp, i) => (
+            {followUps.length > 0 ? (
+              followUps.map((followUp, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
                   <span className="text-sm leading-relaxed text-foreground">{followUp}</span>

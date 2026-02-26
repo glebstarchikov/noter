@@ -55,7 +55,11 @@ function extractDocxText(buffer: Buffer): string {
   while ((match = regex.exec(str)) !== null) {
     textParts.push(match[1])
   }
-  return textParts.join(' ') || 'Could not extract text from DOCX file.'
+  if (textParts.length === 0) {
+    console.warn('DOCX extraction: no text nodes found. The file may be compressed or use an unsupported format.')
+    return 'Could not extract text from DOCX file.'
+  }
+  return textParts.join(' ')
 }
 
 // POST - Upload a new source
@@ -172,6 +176,7 @@ export async function DELETE(request: NextRequest) {
       .from('meeting_sources')
       .delete()
       .eq('id', sourceId)
+      .eq('user_id', user.id)
 
     if (error) throw error
 

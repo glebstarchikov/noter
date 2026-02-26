@@ -25,11 +25,11 @@ function formatFileType(type: string) {
 function formatDate(dateStr: string) {
   const d = new Date(dateStr)
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const h = d.getUTCHours()
-  const m = d.getUTCMinutes()
+  const h = d.getHours()
+  const m = d.getMinutes()
   const period = h >= 12 ? 'PM' : 'AM'
   const hour12 = h % 12 || 12
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${hour12}:${m.toString().padStart(2, '0')} ${period}`
+  return `${months[d.getMonth()]} ${d.getDate()}, ${hour12}:${m.toString().padStart(2, '0')} ${period}`
 }
 
 const TYPE_COLORS: Record<string, string> = {

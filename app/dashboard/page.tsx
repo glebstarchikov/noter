@@ -9,10 +9,25 @@ export default async function DashboardPage() {
 
   if (!user) redirect('/auth/login')
 
-  const { data: meetings } = await supabase
+  const { data: meetings, error } = await supabase
     .from('meetings')
     .select('*')
     .order('created_at', { ascending: false })
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6 p-6 md:p-10">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold text-foreground">
+            Meetings
+          </h1>
+          <p className="text-sm text-destructive">
+            Failed to load meetings. Please try refreshing the page.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6 md:p-10">
