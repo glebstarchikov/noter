@@ -77,14 +77,29 @@ export function AudioUploader({ onProcessing }: Props) {
 
       onProcessing({ meetingId: meeting.id, step: 'transcribing' })
 
-      // Send audio for transcription
-      const formData = new FormData()
-      formData.append('audio', file)
-      formData.append('meetingId', meeting.id)
+      // Upload audio directly to Supabase Storage (avoids serverless payload limits)
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
+      const storagePath = `${user.id}/${meeting.id}.${extension}`
+      const { error: uploadError } = await supabase.storage
+        .from('meeting-audio')
+        .upload(storagePath, file, {
+          contentType: file.type || 'audio/webm',
+          upsert: true,
+        })
 
+      if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
+
+      // Save storage path to DB
+      await supabase
+        .from('meetings')
+        .update({ audio_url: storagePath })
+        .eq('id', meeting.id)
+
+      // Call transcribe API with storage path (lightweight JSON, no large payload)
       const transcribeRes = await fetch('/api/transcribe', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId: meeting.id, storagePath }),
       })
 
       if (!transcribeRes.ok) {

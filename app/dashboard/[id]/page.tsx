@@ -45,6 +45,19 @@ export default async function MeetingPage({
     )
   }
 
+  // If the meeting errored, show the error state with retry/delete options
+  if (meeting.status === 'error') {
+    return (
+      <div className="flex flex-col gap-6 p-6 md:p-10">
+        <ProcessingView
+          meetingId={id}
+          step="error"
+          error={meeting.error_message || 'An unexpected error occurred during processing.'}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6 p-6 md:p-10">
       <MeetingDetail meeting={meeting as Meeting} />

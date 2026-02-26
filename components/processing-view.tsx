@@ -1,8 +1,13 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   meetingId: string
@@ -17,20 +22,52 @@ const steps = [
 ]
 
 export function ProcessingView({ meetingId, step, error }: Props) {
+  const router = useRouter()
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this meeting? This cannot be undone.')) return
+    setIsDeleting(true)
+    try {
+      const supabase = createClient()
+      await supabase.from('meeting_sources').delete().eq('meeting_id', meetingId)
+      const { error: deleteError } = await supabase.from('meetings').delete().eq('id', meetingId)
+      if (deleteError) throw deleteError
+      router.push('/dashboard')
+    } catch {
+      toast.error('Failed to delete meeting')
+      setIsDeleting(false)
+    }
+  }
+
   if (step === 'error') {
     return (
       <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-card px-6 py-16">
         <AlertCircle className="h-8 w-8 text-destructive" />
         <div className="flex flex-col items-center gap-1 text-center">
           <p className="text-sm font-medium text-foreground">Something went wrong</p>
-          <p className="text-xs text-muted-foreground">{error || 'An unexpected error occurred'}</p>
+          <p className="text-xs text-muted-foreground max-w-md">{error || 'An unexpected error occurred'}</p>
         </div>
-        <Link
-          href="/dashboard/new"
-          className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90"
-        >
-          Try again
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/new"
+            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90"
+          >
+            Try again
+          </Link>
+          {meetingId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              {isDeleting ? 'Deleting...' : 'Delete meeting'}
+            </Button>
+          )}
+        </div>
       </div>
     )
   }
@@ -79,6 +116,22 @@ export function ProcessingView({ meetingId, step, error }: Props) {
           >
             View meeting notes
           </Link>
+        </div>
+      )}
+
+      {/* Delete option for stuck processing states */}
+      {(step === 'transcribing' || step === 'generating') && meetingId && (
+        <div className="mt-2 flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="text-xs text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="mr-1 h-3 w-3" />
+            {isDeleting ? 'Deleting...' : 'Cancel and delete'}
+          </Button>
         </div>
       )}
     </div>

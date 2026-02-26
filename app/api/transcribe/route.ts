@@ -39,12 +39,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const formData = await request.formData()
-    const audioFile = formData.get('audio') as File | null
-    meetingId = formData.get('meetingId') as string | null
+    const body = await request.json()
+    meetingId = body.meetingId
+    const storagePath = body.storagePath as string | undefined
 
-    if (!audioFile || !meetingId) {
-      return NextResponse.json({ error: 'Missing audio file or meeting ID' }, { status: 400 })
+    if (!meetingId) {
+      return NextResponse.json({ error: 'Missing meeting ID' }, { status: 400 })
     }
 
     // Verify user owns the meeting
@@ -65,27 +65,30 @@ export async function POST(request: NextRequest) {
       .update({ status: 'transcribing' })
       .eq('id', meetingId)
 
-    // Upload audio to Supabase Storage
-    const originalName = audioFile.name || 'audio.webm'
-    const extension = originalName.split('.').pop() || 'webm'
-    const storagePath = `${user.id}/${meetingId}.${extension}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('meeting-audio')
-      .upload(storagePath, audioFile, {
-        contentType: audioFile.type || 'audio/webm',
-        upsert: true,
-      })
-
-    // Save storage path to DB if successful
-    if (!uploadError) {
-      await supabase
-        .from('meetings')
-        .update({ audio_url: storagePath })
-        .eq('id', meetingId)
-    } else {
-      console.warn('Failed to upload audio to storage:', uploadError)
+    if (!storagePath) {
+      return NextResponse.json({ error: 'Missing audio storage path' }, { status: 400 })
     }
+
+    // Download audio from Supabase Storage
+    const { data: audioData, error: downloadError } = await supabase.storage
+      .from('meeting-audio')
+      .download(storagePath)
+
+    if (downloadError || !audioData) {
+      throw new Error('Failed to download audio from storage')
+    }
+
+    // Determine file extension from path
+    const extension = storagePath.split('.').pop() || 'webm'
+    const mimeType = extension === 'webm' ? 'audio/webm'
+      : extension === 'mp3' ? 'audio/mpeg'
+      : extension === 'wav' ? 'audio/wav'
+      : extension === 'm4a' ? 'audio/mp4'
+      : extension === 'ogg' ? 'audio/ogg'
+      : 'audio/webm'
+
+    // Convert Blob to File for OpenAI API
+    const audioFile = new File([audioData], `audio.${extension}`, { type: mimeType })
 
     // Transcribe with OpenAI Whisper
     const transcription = await getOpenAI().audio.transcriptions.create({
