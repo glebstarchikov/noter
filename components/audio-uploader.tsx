@@ -84,7 +84,6 @@ export function AudioUploader({ onProcessing }: Props) {
         .from('meeting-audio')
         .upload(storagePath, file, {
           contentType: file.type || 'audio/webm',
-          upsert: true,
         })
 
       if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
@@ -160,8 +159,8 @@ export function AudioUploader({ onProcessing }: Props) {
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter') fileInputRef.current?.click() }}
         className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors ${isDragging
-            ? 'border-accent bg-accent/5'
-            : 'border-border bg-card hover:border-muted-foreground'
+          ? 'border-accent bg-accent/5'
+          : 'border-border bg-card hover:border-muted-foreground'
           }`}
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary">

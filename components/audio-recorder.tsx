@@ -92,7 +92,6 @@ export function AudioRecorder({ onProcessing }: Props) {
         .from('meeting-audio')
         .upload(storagePath, audioBlob, {
           contentType: 'audio/webm',
-          upsert: true,
         })
 
       if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
