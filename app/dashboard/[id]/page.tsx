@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { MeetingDetail } from '@/components/meeting-detail'
-import { MeetingChat } from '@/components/meeting-chat'
+import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
 import { ProcessingView } from '@/components/processing-view'
 import type { Meeting } from '@/lib/types'
 
@@ -59,9 +58,6 @@ export default async function MeetingPage({
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 md:p-10">
-      <MeetingDetail meeting={meeting as Meeting} />
-      <MeetingChat meetingId={id} />
-    </div>
+    <MeetingDetailWrapper meeting={meeting as Meeting} meetingId={id} />
   )
 }

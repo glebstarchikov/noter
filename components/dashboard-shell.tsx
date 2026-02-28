@@ -8,7 +8,7 @@ import { FileText, LogOut, Plus, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/dashboard', label: 'Meetings', icon: FileText },
+  { href: '/dashboard', label: 'All Notes', icon: FileText },
 ]
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
