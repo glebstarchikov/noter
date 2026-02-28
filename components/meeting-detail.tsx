@@ -17,14 +17,11 @@ import { toast } from 'sonner'
 import { SourceManager } from '@/components/source-manager'
 import type { Meeting, ActionItem } from '@/lib/types'
 
-type Tab = 'summary' | 'actions' | 'decisions' | 'topics' | 'follow-ups' | 'transcript' | 'sources'
+type Tab = 'summary' | 'actions' | 'transcript' | 'sources'
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'actions', label: 'Actions' },
-  { key: 'decisions', label: 'Decisions' },
-  { key: 'topics', label: 'Topics' },
-  { key: 'follow-ups', label: 'Follow-ups' },
   { key: 'transcript', label: 'Transcript' },
   { key: 'sources', label: 'Sources' },
 ]
@@ -99,7 +96,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
             className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3 w-3" />
-            Back to meetings
+            Back to notes
           </Link>
           <h1 className="text-xl font-semibold text-foreground text-balance">
             {meeting.title}
@@ -149,97 +146,103 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
       {/* Tab content */}
       <div className="rounded-xl border border-border bg-card p-6">
         {activeTab === 'summary' && (
-          <div className="flex flex-col gap-4">
-            {meeting.summary ? (
-              <p className="text-sm leading-relaxed text-foreground">
-                {meeting.summary}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">No summary available.</p>
+          <div className="flex flex-col gap-6">
+            {/* Summary text */}
+            <div>
+              {meeting.summary ? (
+                <p className="text-sm leading-relaxed text-foreground">
+                  {meeting.summary}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No summary available.</p>
+              )}
+            </div>
+
+            {/* Topics (inline tags) */}
+            {topics.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Topics</h3>
+                <div className="flex flex-wrap gap-2">
+                  {topics.map((topic, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Key Decisions */}
+            {keyDecisions.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Key Decisions</h3>
+                <div className="flex flex-col gap-2">
+                  {keyDecisions.map((decision, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                      <span className="text-sm leading-relaxed text-foreground">{decision}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
 
         {activeTab === 'actions' && (
-          <div className="flex flex-col gap-3">
-            {actionItems.length > 0 ? (
-              actionItems.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => toggleAction(i)}
-                  className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary"
-                >
-                  {item.done ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                  ) : (
-                    <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <div className="flex flex-col gap-0.5">
-                    <span
-                      className={cn(
-                        'text-sm',
-                        item.done ? 'text-muted-foreground line-through' : 'text-foreground'
-                      )}
-                    >
-                      {item.task}
-                    </span>
-                    {item.owner && (
-                      <span className="text-xs text-muted-foreground">
-                        Assigned to {item.owner}
-                      </span>
+          <div className="flex flex-col gap-6">
+            {/* Action Items */}
+            <div className="flex flex-col gap-3">
+              {actionItems.length > 0 ? (
+                actionItems.map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => toggleAction(i)}
+                    className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary"
+                  >
+                    {item.done ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                    ) : (
+                      <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
-                  </div>
-                </button>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No action items found.</p>
-            )}
-          </div>
-        )}
+                    <div className="flex flex-col gap-0.5">
+                      <span
+                        className={cn(
+                          'text-sm',
+                          item.done ? 'text-muted-foreground line-through' : 'text-foreground'
+                        )}
+                      >
+                        {item.task}
+                      </span>
+                      {item.owner && (
+                        <span className="text-xs text-muted-foreground">
+                          Assigned to {item.owner}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No action items found.</p>
+              )}
+            </div>
 
-        {activeTab === 'decisions' && (
-          <div className="flex flex-col gap-3">
-            {keyDecisions.length > 0 ? (
-              keyDecisions.map((decision, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  <span className="text-sm leading-relaxed text-foreground">{decision}</span>
+            {/* Follow-ups subsection */}
+            {followUps.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-border pt-4">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Follow-ups</h3>
+                <div className="flex flex-col gap-2">
+                  {followUps.map((followUp, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
+                      <span className="text-sm leading-relaxed text-foreground">{followUp}</span>
+                    </div>
+                  ))}
                 </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No key decisions found.</p>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'topics' && (
-          <div className="flex flex-wrap gap-2">
-            {topics.length > 0 ? (
-              topics.map((topic, i) => (
-                <span
-                  key={i}
-                  className="inline-flex rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground"
-                >
-                  {topic}
-                </span>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No topics found.</p>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'follow-ups' && (
-          <div className="flex flex-col gap-3">
-            {followUps.length > 0 ? (
-              followUps.map((followUp, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
-                  <span className="text-sm leading-relaxed text-foreground">{followUp}</span>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No follow-ups found.</p>
+              </div>
             )}
           </div>
         )}
