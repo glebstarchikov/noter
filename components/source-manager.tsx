@@ -51,6 +51,7 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
     const fetchSources = async () => {
       try {
         const res = await fetch(`/api/sources?meetingId=${meetingId}`)
+        if (!res.ok) throw new Error('Failed to fetch')
         const data = await res.json()
         if (data.sources) {
           setSources(data.sources)

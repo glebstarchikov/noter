@@ -102,12 +102,24 @@ export function useAudioRecorder() {
   }, [startTimer])
 
   const resetRecording = useCallback(() => {
-    stopRecording()
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = null // Prevent saving the blob
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+
+    stopTimer()
     chunksRef.current = []
     pausedDurationRef.current = 0
     durationRef.current = 0
     setState({ isRecording: false, isPaused: false, duration: 0, audioBlob: null })
-  }, [stopRecording])
+  }, [stopTimer])
 
   // Cleanup on unmount: stop timer and release microphone
   useEffect(() => {
