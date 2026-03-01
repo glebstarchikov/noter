@@ -28,7 +28,8 @@ const SYSTEM_PROMPT = `You are an expert meeting note-taker. Given a meeting tra
 
 {
   "title": "A short descriptive title for the meeting",
-  "summary": "A 2-4 sentence executive summary of the meeting",
+  "summary": "A 1-2 sentence executive summary of the meeting",
+  "detailed_notes": "Comprehensive meeting notes in markdown format. Use ## headers for each major topic discussed. Under each header, include detailed bullet points covering: context and background, key discussion points, arguments or perspectives raised, conclusions reached, and any nuances worth capturing. These notes serve as the canonical record of the meeting and should be thorough enough that someone who missed the meeting can fully understand what happened.",
   "action_items": [
     { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
   ],
@@ -43,6 +44,7 @@ Rules:
 - List key decisions that were made during the meeting
 - List the main topics/themes discussed
 - List any follow-ups or next steps mentioned
+- The detailed_notes field should be comprehensive markdown with section headers per topic, not a repetition of the summary
 - Keep language clear, professional, and concise
 - Return ONLY valid JSON, nothing else`
 
@@ -124,6 +126,7 @@ export async function POST(request: NextRequest) {
       .update({
         title: (notes.title as string) || 'Untitled Meeting',
         summary: (notes.summary as string) || '',
+        detailed_notes: (notes.detailed_notes as string) || '',
         action_items: notes.action_items || [],
         key_decisions: notes.key_decisions || [],
         topics: notes.topics || [],

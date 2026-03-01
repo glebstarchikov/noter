@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const { data: meeting } = await supabase
       .from('meetings')
       .select(
-        'title, transcript, summary, action_items, key_decisions, topics, follow_ups, user_id'
+        'title, transcript, summary, detailed_notes, action_items, key_decisions, topics, follow_ups, user_id'
       )
       .eq('id', meetingId)
       .eq('user_id', user.id)
@@ -71,6 +71,10 @@ export async function POST(req: Request) {
 
     if (meeting.summary) {
       context += `## Summary\n${meeting.summary}\n\n`
+    }
+
+    if (meeting.detailed_notes) {
+      context += `## Detailed Notes\n${meeting.detailed_notes}\n\n`
     }
 
     if (Array.isArray(meeting.action_items) && meeting.action_items.length > 0) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
@@ -10,9 +10,11 @@ import {
   Send,
   Sparkles,
   Loader2,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getChatMessages, saveChatMessages, clearChatMessages } from '@/lib/chat-storage'
 
 function getMessageText(msg: UIMessage): string {
   if (!msg.parts || !Array.isArray(msg.parts)) return ''
@@ -49,7 +51,33 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
     [meetingId]
   )
 
-  const { messages, sendMessage, status, error } = useChat({ transport })
+  const storedMessages = useMemo(() => getChatMessages(meetingId), [meetingId])
+
+  const { messages, sendMessage, setMessages, status, error } = useChat({
+    id: meetingId,
+    transport,
+    messages: storedMessages,
+  })
+
+  // Persist messages to localStorage (debounced via ref to avoid excessive writes)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (messages.length === 0) return
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = setTimeout(() => {
+      saveChatMessages(meetingId, messages)
+    }, 500)
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [messages, meetingId])
+
+  const handleClearChat = useCallback(() => {
+    clearChatMessages(meetingId)
+    setMessages([])
+  }, [meetingId, setMessages])
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
@@ -76,12 +104,24 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
           <Sparkles className="h-4 w-4 text-accent" />
           <span className="text-sm font-medium text-foreground">noter AI</span>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <button
+              onClick={handleClearChat}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Clear chat history"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Close chat"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -153,13 +193,15 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
                 </span>
                 <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Thinking...</span>
+                  <span>{status === 'streaming' ? 'Responding...' : 'Thinking...'}</span>
                 </div>
               </div>
             )}
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                Something went wrong. Please try again.
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+                {error.message?.includes('429') || error.message?.includes('Too Many')
+                  ? "You're sending messages too quickly. Please wait a moment."
+                  : 'Something went wrong. Please try again.'}
               </div>
             )}
           </div>

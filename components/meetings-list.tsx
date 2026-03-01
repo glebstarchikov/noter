@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, Check } from 'lucide-react'
+import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, Check, AudioLines, FileUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -105,17 +105,35 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
 
   if (meetings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-20">
-        <p className="text-sm text-muted-foreground">
-          No meetings yet
-        </p>
-        <Link
-          href="/dashboard/new"
-          className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-        >
-          <Plus className="h-4 w-4" />
-          New meeting
-        </Link>
+      <div className="flex flex-col items-center justify-center gap-6 rounded-xl border border-dashed border-border py-20 px-6">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
+          <AudioLines className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <div className="flex flex-col items-center gap-2 text-center">
+          <h2 className="text-base font-semibold text-foreground">No meetings yet</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Record a live meeting or upload an audio file to get started. AI will transcribe and extract structured notes automatically.
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-2 sm:flex-row">
+          <Link
+            href="/dashboard/new"
+            className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+          >
+            <Plus className="h-4 w-4" />
+            New meeting
+          </Link>
+        </div>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <AudioLines className="h-3.5 w-3.5" />
+            Record live
+          </span>
+          <span className="flex items-center gap-1.5">
+            <FileUp className="h-3.5 w-3.5" />
+            Upload audio
+          </span>
+        </div>
       </div>
     )
   }
@@ -139,6 +157,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
                 className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" />
@@ -198,6 +217,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
                 <button
                   key={opt.value}
                   onClick={() => setStatusFilter(opt.value)}
+                  aria-pressed={statusFilter === opt.value}
                   className={cn(
                     'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                     statusFilter === opt.value

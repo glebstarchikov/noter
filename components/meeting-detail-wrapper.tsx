@@ -18,17 +18,20 @@ export function MeetingDetailWrapper({
 }) {
     const [isChatOpen, setIsChatOpen] = useState(false)
 
-    // Keyboard shortcut: ⌘J to toggle chat
+    // Keyboard shortcuts: ⌘J to toggle chat, Escape to close mobile overlay
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
                 e.preventDefault()
                 setIsChatOpen((prev) => !prev)
             }
+            if (e.key === 'Escape' && isChatOpen) {
+                setIsChatOpen(false)
+            }
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [])
+    }, [isChatOpen])
 
     return (
         <div className="flex h-full">
@@ -76,7 +79,7 @@ export function MeetingDetailWrapper({
             <div
                 className={cn(
                     'hidden border-l border-border bg-background transition-all duration-300 md:flex md:flex-col md:sticky md:top-0 md:h-screen',
-                    isChatOpen ? 'md:w-[420px]' : 'md:w-0 md:overflow-hidden md:border-l-0'
+                    isChatOpen ? 'md:w-[360px] lg:w-[420px]' : 'md:w-0 md:overflow-hidden md:border-l-0'
                 )}
             >
                 {isChatOpen && (
@@ -94,9 +97,15 @@ export function MeetingDetailWrapper({
                 <>
                     <div
                         className="fixed inset-0 z-20 bg-background/60 backdrop-blur-sm md:hidden"
+                        role="presentation"
                         onClick={() => setIsChatOpen(false)}
                     />
-                    <div className="fixed inset-y-0 right-0 z-30 flex w-full flex-col border-l border-border bg-background sm:w-[420px] md:hidden">
+                    <div
+                        role="dialog"
+                        aria-label="Meeting AI chat"
+                        aria-modal="true"
+                        className="fixed inset-y-0 right-0 z-30 flex w-full flex-col border-l border-border bg-background sm:w-[420px] md:hidden"
+                    >
                         <MeetingChat
                             meetingId={meetingId}
                             isOpen={isChatOpen}

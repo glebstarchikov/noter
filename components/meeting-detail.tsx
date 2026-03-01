@@ -10,7 +10,9 @@ import {
   Circle,
   Clock,
   GripHorizontal,
+  Copy,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -29,6 +31,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { SourceManager } from '@/components/source-manager'
+import { clearChatMessages } from '@/lib/chat-storage'
 import type { Meeting, ActionItem } from '@/lib/types'
 
 const DEFAULT_PANEL_HEIGHT = 360
@@ -123,6 +126,30 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const topics = meeting.topics ?? []
   const followUps = meeting.follow_ups ?? []
 
+  const handleCopyNotes = useCallback(() => {
+    const parts: string[] = []
+    if (meeting.title) parts.push(`# ${meeting.title}\n`)
+    if (meeting.summary) parts.push(`${meeting.summary}\n`)
+    if (meeting.detailed_notes) {
+      parts.push(meeting.detailed_notes)
+    } else {
+      if (keyDecisions.length > 0) {
+        parts.push(`## Key Decisions\n${keyDecisions.map((d) => `- ${d}`).join('\n')}`)
+      }
+    }
+    if (actionItems.length > 0) {
+      parts.push(`## Action Items\n${actionItems.map((a) => `- [${a.done ? 'x' : ' '}] ${a.task}${a.owner ? ` (${a.owner})` : ''}`).join('\n')}`)
+    }
+    if (followUps.length > 0) {
+      parts.push(`## Follow-ups\n${followUps.map((f) => `- ${f}`).join('\n')}`)
+    }
+    navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+      toast.success('Notes copied to clipboard')
+    }).catch(() => {
+      toast.error('Failed to copy notes')
+    })
+  }, [meeting, actionItems, keyDecisions, followUps])
+
   const toggleAction = async (index: number) => {
     const previous = [...actionItems]
     const updated = [...actionItems]
@@ -153,6 +180,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
       setIsDeleting(false)
       return
     }
+    clearChatMessages(meeting.id)
     router.push('/dashboard')
   }
 
@@ -223,8 +251,18 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
       {/* Tabs — shadcn accessible tabs */}
       <Tabs defaultValue="summary">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="summary">Notes</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
+          <div className="ml-auto">
+            <button
+              onClick={handleCopyNotes}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Copy notes to clipboard"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Copy</span>
+            </button>
+          </div>
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
           <TabsTrigger value="sources">Sources</TabsTrigger>
         </TabsList>
@@ -232,44 +270,49 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
         <TabsContent value="summary">
           <ScrollablePanel>
             <div className="flex flex-col gap-6">
-              {/* Summary text */}
-              <div>
-                {meeting.summary ? (
-                  <p className="text-sm leading-relaxed text-foreground">
-                    {meeting.summary}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No summary available.</p>
-                )}
-              </div>
+              {/* Executive summary */}
+              {meeting.summary && (
+                <p className="text-sm leading-relaxed text-muted-foreground italic">
+                  {meeting.summary}
+                </p>
+              )}
 
               {/* Topics as Badges */}
               {topics.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Topics</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {topics.map((topic, i) => (
-                      <Badge key={i} variant="secondary" className="rounded-full">
-                        {topic}
-                      </Badge>
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {topics.map((topic, i) => (
+                    <Badge key={i} variant="secondary" className="rounded-full">
+                      {topic}
+                    </Badge>
+                  ))}
                 </div>
               )}
 
-              {/* Key Decisions */}
-              {keyDecisions.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Key Decisions</h3>
-                  <div className="flex flex-col gap-2">
-                    {keyDecisions.map((decision, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                        <span className="text-sm leading-relaxed text-foreground">{decision}</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Detailed notes (markdown) or fallback to key decisions */}
+              {meeting.detailed_notes ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none text-foreground [&>h2]:text-base [&>h2]:font-semibold [&>h2]:mt-4 [&>h2]:mb-2 [&>ul]:mb-3 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:mb-3 [&>ol]:list-decimal [&>ol]:pl-5 [&>p]:mb-2 [&>p]:leading-relaxed">
+                  <ReactMarkdown>{meeting.detailed_notes}</ReactMarkdown>
                 </div>
+              ) : (
+                <>
+                  {/* Fallback for old meetings without detailed_notes */}
+                  {keyDecisions.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Key Decisions</h3>
+                      <div className="flex flex-col gap-2">
+                        {keyDecisions.map((decision, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                            <span className="text-sm leading-relaxed text-foreground">{decision}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!meeting.summary && keyDecisions.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No notes available.</p>
+                  )}
+                </>
               )}
             </div>
           </ScrollablePanel>

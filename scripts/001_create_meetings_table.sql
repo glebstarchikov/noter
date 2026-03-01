@@ -7,6 +7,7 @@ create table if not exists public.meetings (
   audio_duration integer,
   transcript text,
   summary text,
+  detailed_notes text,
   action_items jsonb default '[]'::jsonb,
   key_decisions jsonb default '[]'::jsonb,
   topics jsonb default '[]'::jsonb,
