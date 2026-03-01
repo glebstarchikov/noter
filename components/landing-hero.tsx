@@ -30,7 +30,7 @@ export function LandingHero() {
           </Link>
           <Link
             href="/auth/login"
-            className="rounded-lg border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-card"
+            className="rounded-lg border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
           >
             Sign in
           </Link>
