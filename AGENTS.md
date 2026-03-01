@@ -18,13 +18,15 @@ Guidance for AI coding agents working in this repository.
 - `app/`
   - App Router pages and route handlers.
   - `app/page.tsx` — public landing page.
-  - `app/layout.tsx` — root layout (fonts, metadata, Toaster, Analytics).
+  - `app/layout.tsx` — root layout (fonts, SEO metadata, `ThemeProvider`, Toaster, Analytics).
   - API endpoints live under `app/api/*/route.ts` (colocated tests in `route.test.ts`).
   - Auth pages under `app/auth/*` (login, sign-up, sign-up-success, error).
   - Dashboard pages under `app/dashboard/*` (list, `[id]` detail, `new` creation).
+  - `app/dashboard/layout.tsx` — dashboard layout with `SidebarProvider`, `AppSidebar`, and header.
 - `components/`
-  - Product-level UI components (meeting detail, chat, recorder, uploader, source manager, processing view, dashboard shell, meetings list, landing page sections).
-  - `components/ui/` contains reusable UI primitives (shadcn/ui, configured via `components.json`).
+  - Product-level UI components (meeting detail, chat, recorder, uploader, source manager, processing view, sidebar, meetings list, landing page sections).
+  - `components/ui/` contains reusable UI primitives (shadcn/ui Radix-based, configured via `components.json`).
+  - Key UI primitives: `sidebar.tsx`, `scroll-area.tsx`, `collapsible.tsx`, `dropdown-menu.tsx`, `dialog.tsx`, `tabs.tsx`, `badge.tsx`, `button.tsx`.
 - `hooks/`
   - Shared React hooks (`use-audio-recorder`, `use-toast`, `use-mobile`).
 - `lib/`
@@ -33,11 +35,11 @@ Guidance for AI coding agents working in this repository.
   - `lib/utils.ts` — `cn()` helper (combines `clsx` + `tailwind-merge`).
   - Supabase clients separated by runtime: `lib/supabase/client.ts` (browser), `server.ts` (server components/routes), `proxy.ts` (middleware session refresh).
 - `styles/`
-  - `styles/globals.css` — design token system (CSS custom properties, light/dark themes, Tailwind v4 `@theme inline` configuration, oklch colors).
+  - `styles/globals.css` — design token system (CSS custom properties, light/dark themes via `.dark` class, Tailwind v4 `@theme inline` configuration, oklch colors).
 - `scripts/`
   - SQL migration/setup scripts for required tables/buckets (numbered, run in order).
 - `public/`
-  - Static assets/icons/placeholders.
+  - Static assets, placeholders, and favicons (`icon.svg`, `icon-dark-32x32.png`, `icon-light-32x32.png`, `apple-icon.png`).
 - Root config files:
   - `proxy.ts` — Next.js middleware (Supabase session refresh + auth redirect).
   - `next.config.mjs` — Next.js config (`bodySizeLimit: '25mb'`, unoptimized images).
@@ -116,7 +118,6 @@ This project uses Tailwind v4 with the `@tailwindcss/postcss` plugin — not the
 ## 5) Frontend Practices
 - Respect client/server component boundaries (`'use client'` only where required).
 - Reuse components from `components/ui` and utilities from `lib/utils.ts`.
-- The app is dark-mode only — the root `<html>` has `className="dark"` hardcoded in `app/layout.tsx`.
 - Fonts: Geist (sans) and Geist Mono (monospace) via `next/font/google`.
 - Icons: lucide-react — use existing icons from this library.
 - Toast notifications: use sonner (`toast()` from `sonner`, global `<Toaster>` in root layout). The Radix-based `use-toast` hook exists but sonner is the primary system.
@@ -125,6 +126,28 @@ This project uses Tailwind v4 with the `@tailwindcss/postcss` plugin — not the
   - keyboard support for interactive custom elements,
   - semantic labels/aria attributes where appropriate,
   - non-color-only state indicators.
+
+### Theme System
+- Light + dark mode supported via `next-themes` (`ThemeProvider` in root layout, `defaultTheme="dark"`, `enableSystem`).
+- Theme toggle is integrated in the sidebar profile dropdown (`components/app-sidebar.tsx`).
+- All color tokens use CSS custom properties with `.dark` class overrides in `styles/globals.css`.
+- When adding new UI, use semantic tokens (`bg-card`, `text-foreground`, `border-border`, etc.) — never hardcode light/dark colors.
+
+### Sidebar Architecture
+- The dashboard uses `SidebarProvider` + `AppSidebar` from `components/app-sidebar.tsx` (based on shadcn/ui Radix sidebar).
+- Sidebar contains: logo/branding, navigation, and user profile footer with dropdown (logout, theme toggle).
+- The sidebar collapses to icon-only mode and persists state via cookie.
+- `components/dashboard-shell.tsx` was removed — the sidebar replaced it.
+
+### Meeting Detail Layout
+- `components/meeting-detail-wrapper.tsx` wraps `meeting-detail.tsx` and the AI chat panel in a split-pane layout.
+- Chat panel uses `sticky top-0 h-screen` to stay pinned while main content scrolls.
+- Tab content (Summary, Actions, Transcript) uses a `ScrollablePanel` component with a drag-to-resize bottom handle and internal `overflow-y-auto` scrolling.
+
+### SEO & Favicon
+- Root layout exports `Metadata` with `metadataBase`, Open Graph, Twitter card, and keyword meta tags.
+- Favicons: `icon.svg` (main), `icon-dark-32x32.png` / `icon-light-32x32.png` (theme-aware via `media` attribute in metadata), `apple-icon.png`.
+- Website URL: `https://noter1.vercel.app`.
 
 ## 6) Data Model Awareness
 
@@ -204,7 +227,8 @@ When changing AI behavior, keep the model consistent unless the task specificall
 
 ### Pages
 - Landing page: `app/page.tsx`
-- Root layout (fonts, metadata, Toaster): `app/layout.tsx`
+- Root layout (fonts, SEO metadata, ThemeProvider, Toaster): `app/layout.tsx`
+- Dashboard layout (sidebar + header): `app/dashboard/layout.tsx`
 - Dashboard (meetings list): `app/dashboard/page.tsx`
 - New meeting (record/upload): `app/dashboard/new/page.tsx`
 - Meeting detail: `app/dashboard/[id]/page.tsx`
@@ -220,13 +244,15 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - Source upload/list/delete: `app/api/sources/route.ts`
 
 ### Components
-- Meeting detail UI: `components/meeting-detail.tsx`
+- Meeting detail UI: `components/meeting-detail.tsx` (includes `ScrollablePanel` for resizable tab content)
+- Meeting detail + chat layout: `components/meeting-detail-wrapper.tsx`
 - Meeting AI chat panel: `components/meeting-chat.tsx`
 - Audio file upload: `components/audio-uploader.tsx`
 - Live audio recording: `components/audio-recorder.tsx`
 - Processing progress: `components/processing-view.tsx`
 - Source file manager: `components/source-manager.tsx`
-- Dashboard layout shell: `components/dashboard-shell.tsx`
+- Sidebar (navigation + profile): `components/app-sidebar.tsx`
+- Theme provider: `components/theme-provider.tsx`
 - Meetings list: `components/meetings-list.tsx`
 - Landing hero: `components/landing-hero.tsx`
 - Landing features: `components/landing-features.tsx`

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Sparkles, PanelRightClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+
 import { cn } from '@/lib/utils'
 import { MeetingDetail } from '@/components/meeting-detail'
 import { MeetingChat } from '@/components/meeting-chat'
@@ -49,7 +50,7 @@ export function MeetingDetailWrapper({
                                 'gap-2 border-border text-muted-foreground transition-colors',
                                 isChatOpen
                                     ? 'bg-secondary text-foreground'
-                                    : 'hover:border-accent/40 hover:text-foreground'
+                                    : 'hover:bg-secondary hover:text-foreground'
                             )}
                         >
                             {isChatOpen ? (
@@ -74,7 +75,7 @@ export function MeetingDetailWrapper({
             {/* Desktop panel */}
             <div
                 className={cn(
-                    'hidden border-l border-border bg-background transition-all duration-300 md:flex md:flex-col',
+                    'hidden border-l border-border bg-background transition-all duration-300 md:flex md:flex-col md:sticky md:top-0 md:h-screen',
                     isChatOpen ? 'md:w-[420px]' : 'md:w-0 md:overflow-hidden md:border-l-0'
                 )}
             >

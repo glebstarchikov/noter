@@ -164,7 +164,7 @@ export function AudioRecorder({ onProcessing }: Props) {
 
       {/* Waveform indicator */}
       {isRecording && !isPaused && (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" aria-hidden="true">
           {[16, 24, 32, 20, 28].map((h, i) => (
             <span
               key={i}
