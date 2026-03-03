@@ -18,13 +18,16 @@ export default function AppleIcon() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 16,
+                    gap: 10,
                 }}
             >
-                {/* AudioLines icon — 3 vertical bars */}
-                <div style={{ width: 16, height: 80, background: 'white', borderRadius: 8 }} />
-                <div style={{ width: 16, height: 120, background: 'white', borderRadius: 8 }} />
-                <div style={{ width: 16, height: 56, background: 'white', borderRadius: 8 }} />
+                {/* AudioLines motif — 6 asymmetric bars matching lucide AudioLines */}
+                <div style={{ width: 12, height: 23, background: 'white', borderRadius: 6 }} />
+                <div style={{ width: 12, height: 83, background: 'white', borderRadius: 6 }} />
+                <div style={{ width: 12, height: 135, background: 'white', borderRadius: 6 }} />
+                <div style={{ width: 12, height: 53, background: 'white', borderRadius: 6 }} />
+                <div style={{ width: 12, height: 98, background: 'white', borderRadius: 6 }} />
+                <div style={{ width: 12, height: 23, background: 'white', borderRadius: 6 }} />
             </div>
         ),
         { ...size }

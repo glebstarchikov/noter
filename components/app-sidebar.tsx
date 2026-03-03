@@ -3,18 +3,15 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useTheme } from 'next-themes'
 import {
     FileText,
     LogOut,
     Plus,
     ChevronsUpDown,
-    AudioLines,
-    Sun,
-    Moon,
-    Monitor,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { Logo } from '@/components/logo'
+import { ThemeToggleInline } from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
     DropdownMenu,
@@ -45,7 +42,6 @@ const navItems = [
 export function AppSidebar() {
     const pathname = usePathname()
     const router = useRouter()
-    const { theme, setTheme } = useTheme()
     const [userEmail, setUserEmail] = useState<string | null>(null)
 
     useEffect(() => {
@@ -71,15 +67,9 @@ export function AppSidebar() {
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
+                        <SidebarMenuButton size="lg" asChild tooltip="noter">
                             <Link href="/dashboard">
-                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <AudioLines className="size-4" />
-                                </div>
-                                <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold">noter</span>
-                                    <span className="truncate text-xs">Meeting notes</span>
-                                </div>
+                                <Logo />
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -177,10 +167,7 @@ export function AppSidebar() {
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                                    {theme === 'dark' ? <Sun /> : <Moon />}
-                                    {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                                </DropdownMenuItem>
+                                <ThemeToggleInline />
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleSignOut}>
                                     <LogOut />

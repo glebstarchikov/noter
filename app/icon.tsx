@@ -18,13 +18,16 @@ export default function Icon() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 3,
+                    gap: 2,
                 }}
             >
-                {/* AudioLines icon — 3 vertical bars */}
-                <div style={{ width: 3, height: 14, background: 'white', borderRadius: 2 }} />
-                <div style={{ width: 3, height: 22, background: 'white', borderRadius: 2 }} />
-                <div style={{ width: 3, height: 10, background: 'white', borderRadius: 2 }} />
+                {/* AudioLines motif — 6 asymmetric bars matching lucide AudioLines */}
+                <div style={{ width: 2, height: 4, background: 'white', borderRadius: 1 }} />
+                <div style={{ width: 2, height: 15, background: 'white', borderRadius: 1 }} />
+                <div style={{ width: 2, height: 24, background: 'white', borderRadius: 1 }} />
+                <div style={{ width: 2, height: 9, background: 'white', borderRadius: 1 }} />
+                <div style={{ width: 2, height: 17, background: 'white', borderRadius: 1 }} />
+                <div style={{ width: 2, height: 4, background: 'white', borderRadius: 1 }} />
             </div>
         ),
         { ...size }

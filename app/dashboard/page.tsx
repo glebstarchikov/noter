@@ -11,7 +11,7 @@ export default async function DashboardPage() {
 
   const { data: meetings, error } = await supabase
     .from('meetings')
-    .select('id, title, status, created_at, audio_duration, error_message')
+    .select('id, title, status, created_at, audio_duration, error_message, summary, topics')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 

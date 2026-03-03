@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, Check, AudioLines, FileUp } from 'lucide-react'
+import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, FileUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -151,7 +151,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
               role="searchbox"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by title, summary, or topic..."
+              placeholder="Search by title, summary, or topics…"
               className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             />
             {searchQuery && (
