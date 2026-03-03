@@ -6,14 +6,17 @@ import { Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import type { MeetingStatus } from '@/lib/types'
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
+const STATUS_POLL_INTERVAL_MS = 3_000
+const STATUS_POLL_TIMEOUT_MS = 20 * 60 * 1000
 
 interface Props {
   onProcessing: (state: {
     meetingId: string
-    step: 'transcribing' | 'generating' | 'done' | 'error'
+    step: MeetingStatus
     error?: string
   }) => void
 }
@@ -52,10 +55,89 @@ export function AudioUploader({ onProcessing }: Props) {
     if (f) handleFile(f)
   }
 
+  const readApiError = async (response: Response, fallbackMessage: string) => {
+    const text = await response.text()
+    try {
+      const parsed = JSON.parse(text)
+      return {
+        message: typeof parsed?.error === 'string' ? parsed.error : fallbackMessage,
+        code: typeof parsed?.code === 'string' ? parsed.code : undefined,
+      }
+    } catch {
+      return { message: text || fallbackMessage, code: undefined }
+    }
+  }
+
+  const waitForMeetingCompletion = async (meetingId: string) => {
+    const startedAt = Date.now()
+
+    while (Date.now() - startedAt < STATUS_POLL_TIMEOUT_MS) {
+      const statusRes = await fetch(`/api/meetings/${meetingId}`, { cache: 'no-store' })
+      if (!statusRes.ok) {
+        await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
+        continue
+      }
+
+      const payload = await statusRes.json().catch(() => null)
+      const status = payload?.meeting?.status as MeetingStatus | undefined
+      const errorMessage = payload?.meeting?.error_message as string | null | undefined
+
+      if (status && ['recording', 'uploading', 'transcribing', 'generating', 'done', 'error'].includes(status)) {
+        onProcessing({
+          meetingId,
+          step: status,
+          error: status === 'error' ? errorMessage ?? undefined : undefined,
+        })
+      }
+
+      if (status === 'done') {
+        return
+      }
+
+      if (status === 'error') {
+        throw new Error(errorMessage || 'Processing failed')
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
+    }
+
+    throw new Error('Processing timed out. Please open the meeting from dashboard and try again.')
+  }
+
+  const runLegacyPipeline = async (meetingId: string, storagePath: string) => {
+    onProcessing({ meetingId, step: 'transcribing' })
+
+    const transcribeRes = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meetingId, storagePath }),
+    })
+
+    if (!transcribeRes.ok) {
+      const { message } = await readApiError(transcribeRes, 'Transcription failed')
+      throw new Error(message)
+    }
+
+    await transcribeRes.json()
+    onProcessing({ meetingId, step: 'generating' })
+
+    const notesRes = await fetch('/api/generate-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meetingId }),
+    })
+
+    if (!notesRes.ok) {
+      const { message } = await readApiError(notesRes, 'Notes generation failed')
+      throw new Error(message)
+    }
+  }
+
   const handleSubmit = async () => {
     if (!file || submittingRef.current) return
     submittingRef.current = true
     setIsSubmitting(true)
+    let currentMeetingId = ''
 
     try {
       const supabase = createClient()
@@ -68,14 +150,15 @@ export function AudioUploader({ onProcessing }: Props) {
         .insert({
           user_id: user.id,
           title: file.name.replace(/\.[^/.]+$/, ''),
-          status: 'transcribing',
+          status: 'uploading',
         })
         .select('id')
         .single()
 
       if (insertError || !meeting) throw new Error('Failed to create meeting')
 
-      onProcessing({ meetingId: meeting.id, step: 'transcribing' })
+      currentMeetingId = meeting.id
+      onProcessing({ meetingId: meeting.id, step: 'uploading' })
 
       // Upload audio directly to Supabase Storage (avoids serverless payload limits)
       const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
@@ -94,53 +177,32 @@ export function AudioUploader({ onProcessing }: Props) {
         .update({ audio_url: storagePath })
         .eq('id', meeting.id)
 
-      // Call transcribe API with storage path (lightweight JSON, no large payload)
-      const transcribeRes = await fetch('/api/transcribe', {
+      const processRes = await fetch(`/api/meetings/${meeting.id}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId: meeting.id, storagePath }),
+        body: JSON.stringify({}),
       })
 
-      if (!transcribeRes.ok) {
-        const textErr = await transcribeRes.text()
-        let errorMessage = 'Transcription failed'
-        try {
-          const jsonErr = JSON.parse(textErr)
-          errorMessage = jsonErr.error || errorMessage
-        } catch {
-          errorMessage = textErr || errorMessage
+      if (!processRes.ok) {
+        const processError = await readApiError(processRes, 'Failed to queue processing')
+        if (processError.code === 'QUEUE_UNAVAILABLE') {
+          await runLegacyPipeline(meeting.id, storagePath)
+          onProcessing({ meetingId: meeting.id, step: 'done' })
+          router.push(`/dashboard/${meeting.id}`)
+          return
         }
-        throw new Error(errorMessage)
+
+        throw new Error(processError.message)
       }
 
-      const { transcript } = await transcribeRes.json()
-      onProcessing({ meetingId: meeting.id, step: 'generating' })
-
-      // Generate notes
-      const notesRes = await fetch('/api/generate-notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId: meeting.id, transcript }),
-      })
-
-      if (!notesRes.ok) {
-        const textErr = await notesRes.text()
-        let errorMessage = 'Notes generation failed'
-        try {
-          const jsonErr = JSON.parse(textErr)
-          errorMessage = jsonErr.error || errorMessage
-        } catch {
-          errorMessage = textErr || errorMessage
-        }
-        throw new Error(errorMessage)
-      }
-
+      onProcessing({ meetingId: meeting.id, step: 'transcribing' })
+      await waitForMeetingCompletion(meeting.id)
       onProcessing({ meetingId: meeting.id, step: 'done' })
       router.push(`/dashboard/${meeting.id}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       toast.error(message)
-      onProcessing({ meetingId: '', step: 'error', error: message })
+      onProcessing({ meetingId: currentMeetingId, step: 'error', error: message })
     } finally {
       submittingRef.current = false
       setIsSubmitting(false)
@@ -157,11 +219,17 @@ export function AudioUploader({ onProcessing }: Props) {
         onClick={() => fileInputRef.current?.click()}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter') fileInputRef.current?.click() }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors ${isDragging
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            fileInputRef.current?.click()
+          }
+        }}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isDragging
           ? 'border-accent bg-accent/5'
           : 'border-border bg-card hover:border-muted-foreground'
           }`}
+        aria-label="Upload audio file"
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary">
           <Upload className="h-5 w-5 text-muted-foreground" />

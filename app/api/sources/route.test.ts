@@ -47,7 +47,7 @@ describe('POST /api/sources', () => {
   it('returns 401 if user is not authenticated', async () => {
     mockSupabase(null)
     const formData = new FormData()
-    formData.append('file', new Blob(['hello'], { type: 'text/plain' }), 'test.txt')
+    formData.append('file', new File(['hello'], 'test.txt', { type: 'text/plain' }))
     formData.append('meetingId', 'meeting-1')
     const req = new NextRequest('http://localhost/api/sources', {
       method: 'POST',
@@ -55,6 +55,8 @@ describe('POST /api/sources', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(401)
+    const data = await res.json()
+    expect(data.code).toBe('UNAUTHORIZED')
   })
 
   it('returns 400 if file is missing', async () => {
@@ -67,21 +69,23 @@ describe('POST /api/sources', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.code).toBe('INVALID_REQUEST')
   })
 
   it('returns 400 if meetingId is missing', async () => {
     mockSupabase({ id: 'user-1' })
     const formData = new FormData()
-    formData.append('file', new Blob(['hello'], { type: 'text/plain' }), 'test.txt')
+    formData.append('file', 'hello')
     const req = new NextRequest('http://localhost/api/sources', {
       method: 'POST',
       body: formData,
     })
     const res = await POST(req)
-    // Missing meetingId returns 400
-    expect(res.status).toBeLessThanOrEqual(500)
+    expect(res.status).toBe(400)
     const data = await res.json()
-    expect(data.error).toBeDefined()
+    expect(data.error).toBe('Missing file or meetingId')
+    expect(data.code).toBe('INVALID_REQUEST')
   })
 })
 
@@ -93,6 +97,8 @@ describe('GET /api/sources', () => {
     const req = new NextRequest('http://localhost/api/sources?meetingId=meeting-1')
     const res = await GET(req)
     expect(res.status).toBe(401)
+    const data = await res.json()
+    expect(data.code).toBe('UNAUTHORIZED')
   })
 
   it('returns 400 if meetingId is missing', async () => {
@@ -100,6 +106,8 @@ describe('GET /api/sources', () => {
     const req = new NextRequest('http://localhost/api/sources')
     const res = await GET(req)
     expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.code).toBe('INVALID_REQUEST')
   })
 })
 
@@ -115,6 +123,8 @@ describe('DELETE /api/sources', () => {
     })
     const res = await DELETE(req)
     expect(res.status).toBe(401)
+    const data = await res.json()
+    expect(data.code).toBe('UNAUTHORIZED')
   })
 
   it('returns 400 if sourceId is missing', async () => {
@@ -126,5 +136,8 @@ describe('DELETE /api/sources', () => {
     })
     const res = await DELETE(req)
     expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toBe('Invalid request body')
+    expect(data.code).toBe('INVALID_REQUEST')
   })
 })

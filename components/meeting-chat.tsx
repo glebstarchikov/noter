@@ -97,7 +97,12 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
   if (!isOpen) return null
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={cn(
+        'flex h-full flex-col',
+        variant === 'floating' && 'rounded-xl border border-border bg-card shadow-sm'
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
@@ -108,7 +113,7 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
           {messages.length > 0 && (
             <button
               onClick={handleClearChat}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Clear chat history"
             >
               <Trash2 className="h-4 w-4" />
@@ -116,7 +121,7 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
           )}
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Close chat"
           >
             <X className="h-4 w-4" />
@@ -144,7 +149,7 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
                 <button
                   key={suggestion}
                   onClick={() => handleSubmit(suggestion)}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  className="rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {suggestion}
                 </button>

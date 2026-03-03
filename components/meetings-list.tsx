@@ -158,7 +158,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
               <button
                 onClick={() => setSearchQuery('')}
                 aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -169,7 +169,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
-              'flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+              'flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               showFilters || hasActiveFilters
                 ? 'border-accent/40 bg-accent/10 text-foreground'
                 : 'border-border text-muted-foreground hover:border-border hover:text-foreground'
@@ -188,7 +188,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowUpDown className="h-3.5 w-3.5" />
                 {currentSortLabel}
@@ -219,7 +219,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
                   onClick={() => setStatusFilter(opt.value)}
                   aria-pressed={statusFilter === opt.value}
                   className={cn(
-                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     statusFilter === opt.value
                       ? 'bg-secondary text-foreground'
                       : 'text-muted-foreground hover:text-foreground'
@@ -235,7 +235,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
                   setSearchQuery('')
                   setStatusFilter('all')
                 }}
-                className="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="ml-auto rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Clear all
               </button>
@@ -263,7 +263,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
               setSearchQuery('')
               setStatusFilter('all')
             }}
-            className="text-xs text-accent transition-colors hover:text-accent/80"
+            className="rounded-sm text-xs text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Clear filters
           </button>

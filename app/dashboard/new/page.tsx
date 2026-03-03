@@ -5,6 +5,7 @@ import { AudioRecorder } from '@/components/audio-recorder'
 import { AudioUploader } from '@/components/audio-uploader'
 import { ProcessingView } from '@/components/processing-view'
 import { cn } from '@/lib/utils'
+import type { MeetingStatus } from '@/lib/types'
 
 type Tab = 'record' | 'upload'
 
@@ -12,7 +13,7 @@ export default function NewMeetingPage() {
   const [activeTab, setActiveTab] = useState<Tab>('record')
   const [processing, setProcessing] = useState<{
     meetingId: string
-    step: 'transcribing' | 'generating' | 'done' | 'error'
+    step: MeetingStatus
     error?: string
   } | null>(null)
 

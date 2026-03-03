@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -122,9 +122,9 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
-  const keyDecisions = meeting.key_decisions ?? []
-  const topics = meeting.topics ?? []
-  const followUps = meeting.follow_ups ?? []
+  const keyDecisions = useMemo(() => meeting.key_decisions ?? [], [meeting.key_decisions])
+  const topics = useMemo(() => meeting.topics ?? [], [meeting.topics])
+  const followUps = useMemo(() => meeting.follow_ups ?? [], [meeting.follow_ups])
 
   const handleCopyNotes = useCallback(() => {
     const parts: string[] = []
@@ -170,18 +170,22 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
   const handleDelete = async () => {
     setIsDeleting(true)
-    const supabase = createClient()
+    try {
+      const response = await fetch(`/api/meetings/${meeting.id}`, {
+        method: 'DELETE',
+      })
 
-    await supabase.from('meeting_sources').delete().eq('meeting_id', meeting.id)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Failed to delete meeting')
+      }
 
-    const { error } = await supabase.from('meetings').delete().eq('id', meeting.id)
-    if (error) {
+      clearChatMessages(meeting.id)
+      router.push('/dashboard')
+    } catch {
       toast.error('Failed to delete meeting')
       setIsDeleting(false)
-      return
     }
-    clearChatMessages(meeting.id)
-    router.push('/dashboard')
   }
 
   return (
@@ -191,7 +195,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
         <div className="flex flex-col gap-2">
           <Link
             href="/dashboard"
-            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to notes
@@ -256,7 +260,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           <div className="ml-auto">
             <button
               onClick={handleCopyNotes}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Copy notes to clipboard"
             >
               <Copy className="h-3.5 w-3.5" />
@@ -328,7 +332,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
                     <button
                       key={i}
                       onClick={() => toggleAction(i)}
-                      className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary"
+                      className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {item.done ? (
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
