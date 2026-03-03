@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 
 export function LandingHero() {
   return (
@@ -12,7 +13,7 @@ export function LandingHero() {
         {/* Heading */}
         <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight text-foreground md:text-6xl md:leading-tight">
           Record. Transcribe.{' '}
-          <span className="text-accent-foreground">Understand.</span>
+          <span className="text-accent">Understand.</span>
         </h1>
 
         {/* Subheading */}
@@ -21,19 +22,17 @@ export function LandingHero() {
         </p>
 
         {/* CTA */}
-        <div className="flex items-center gap-4">
-          <Link
-            href="/auth/sign-up"
-            className="rounded-lg bg-foreground px-7 py-3.5 text-sm font-medium text-background shadow-lg shadow-foreground/10 transition-colors hover:bg-foreground/90"
-          >
-            Start for free
-          </Link>
-          <Link
-            href="/auth/login"
-            className="rounded-lg border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-          >
-            Sign in
-          </Link>
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <Button asChild size="lg">
+            <Link href="/auth/sign-up">
+              Start for free
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="lg">
+            <Link href="/auth/login">
+              Sign in
+            </Link>
+          </Button>
         </div>
       </div>
     </section>

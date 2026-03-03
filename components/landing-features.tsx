@@ -28,7 +28,7 @@ export function LandingFeatures() {
         {features.map((feature) => (
           <div key={feature.title} className="flex flex-col gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card">
-              <feature.icon className="h-5 w-5 text-accent" />
+              <feature.icon className="size-5 text-accent" />
             </div>
             <h3 className="text-sm font-medium text-foreground">
               {feature.title}

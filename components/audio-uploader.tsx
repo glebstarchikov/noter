@@ -2,16 +2,20 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload, X } from 'lucide-react'
+import { Upload, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { MeetingStatus } from '@/lib/types'
+import {
+  readApiError,
+  waitForMeetingCompletion,
+  runLegacyPipeline,
+  type ProcessingState,
+} from '@/lib/meeting-pipeline'
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
-const STATUS_POLL_INTERVAL_MS = 3_000
-const STATUS_POLL_TIMEOUT_MS = 20 * 60 * 1000
 
 interface Props {
   onProcessing: (state: {
@@ -55,83 +59,6 @@ export function AudioUploader({ onProcessing }: Props) {
     if (f) handleFile(f)
   }
 
-  const readApiError = async (response: Response, fallbackMessage: string) => {
-    const text = await response.text()
-    try {
-      const parsed = JSON.parse(text)
-      return {
-        message: typeof parsed?.error === 'string' ? parsed.error : fallbackMessage,
-        code: typeof parsed?.code === 'string' ? parsed.code : undefined,
-      }
-    } catch {
-      return { message: text || fallbackMessage, code: undefined }
-    }
-  }
-
-  const waitForMeetingCompletion = async (meetingId: string) => {
-    const startedAt = Date.now()
-
-    while (Date.now() - startedAt < STATUS_POLL_TIMEOUT_MS) {
-      const statusRes = await fetch(`/api/meetings/${meetingId}`, { cache: 'no-store' })
-      if (!statusRes.ok) {
-        await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
-        continue
-      }
-
-      const payload = await statusRes.json().catch(() => null)
-      const status = payload?.meeting?.status as MeetingStatus | undefined
-      const errorMessage = payload?.meeting?.error_message as string | null | undefined
-
-      if (status && ['recording', 'uploading', 'transcribing', 'generating', 'done', 'error'].includes(status)) {
-        onProcessing({
-          meetingId,
-          step: status,
-          error: status === 'error' ? errorMessage ?? undefined : undefined,
-        })
-      }
-
-      if (status === 'done') {
-        return
-      }
-
-      if (status === 'error') {
-        throw new Error(errorMessage || 'Processing failed')
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
-    }
-
-    throw new Error('Processing timed out. Please open the meeting from dashboard and try again.')
-  }
-
-  const runLegacyPipeline = async (meetingId: string, storagePath: string) => {
-    onProcessing({ meetingId, step: 'transcribing' })
-
-    const transcribeRes = await fetch('/api/transcribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meetingId, storagePath }),
-    })
-
-    if (!transcribeRes.ok) {
-      const { message } = await readApiError(transcribeRes, 'Transcription failed')
-      throw new Error(message)
-    }
-
-    await transcribeRes.json()
-    onProcessing({ meetingId, step: 'generating' })
-
-    const notesRes = await fetch('/api/generate-notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meetingId }),
-    })
-
-    if (!notesRes.ok) {
-      const { message } = await readApiError(notesRes, 'Notes generation failed')
-      throw new Error(message)
-    }
-  }
 
   const handleSubmit = async () => {
     if (!file || submittingRef.current) return
@@ -186,7 +113,7 @@ export function AudioUploader({ onProcessing }: Props) {
       if (!processRes.ok) {
         const processError = await readApiError(processRes, 'Failed to queue processing')
         if (processError.code === 'QUEUE_UNAVAILABLE') {
-          await runLegacyPipeline(meeting.id, storagePath)
+          await runLegacyPipeline(meeting.id, storagePath, onProcessing)
           onProcessing({ meetingId: meeting.id, step: 'done' })
           router.push(`/dashboard/${meeting.id}`)
           return
@@ -196,7 +123,7 @@ export function AudioUploader({ onProcessing }: Props) {
       }
 
       onProcessing({ meetingId: meeting.id, step: 'transcribing' })
-      await waitForMeetingCompletion(meeting.id)
+      await waitForMeetingCompletion(meeting.id, onProcessing)
       onProcessing({ meetingId: meeting.id, step: 'done' })
       router.push(`/dashboard/${meeting.id}`)
     } catch (err: unknown) {
@@ -216,10 +143,14 @@ export function AudioUploader({ onProcessing }: Props) {
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          if (!isSubmitting) fileInputRef.current?.click()
+        }}
         role="button"
-        tabIndex={0}
+        tabIndex={isSubmitting ? -1 : 0}
+        aria-disabled={isSubmitting}
         onKeyDown={(e) => {
+          if (isSubmitting) return
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             fileInputRef.current?.click()
@@ -228,11 +159,11 @@ export function AudioUploader({ onProcessing }: Props) {
         className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isDragging
           ? 'border-accent bg-accent/5'
           : 'border-border bg-card hover:border-muted-foreground'
-          }`}
+          } ${isSubmitting ? 'pointer-events-none opacity-60' : ''}`}
         aria-label="Upload audio file"
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary">
-          <Upload className="h-5 w-5 text-muted-foreground" />
+          <Upload className="size-5 text-muted-foreground" />
         </div>
         <div className="flex flex-col items-center gap-1">
           <p className="text-sm font-medium text-foreground">
@@ -266,11 +197,12 @@ export function AudioUploader({ onProcessing }: Props) {
           </div>
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); setFile(null) }}
-              className="text-muted-foreground transition-colors hover:text-foreground"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Remove file"
             >
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </button>
           </div>
         </div>
@@ -283,7 +215,14 @@ export function AudioUploader({ onProcessing }: Props) {
           disabled={isSubmitting}
           className="rounded-lg bg-foreground text-background hover:bg-foreground/90"
         >
-          {isSubmitting ? 'Processing...' : 'Generate notes'}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Processing…
+            </>
+          ) : (
+            'Generate notes'
+          )}
         </Button>
       )}
     </div>

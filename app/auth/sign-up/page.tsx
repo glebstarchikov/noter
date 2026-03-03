@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('')
@@ -119,7 +120,14 @@ export default function SignUpPage() {
               className="h-11 w-full bg-foreground text-background hover:bg-foreground/90"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating account...' : 'Create account'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Creating account…
+                </>
+              ) : (
+                'Create account'
+              )}
             </Button>
           </form>
 

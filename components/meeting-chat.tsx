@@ -106,36 +106,38 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" />
+          <Sparkles className="size-4 text-accent" />
           <span className="text-sm font-medium text-foreground">noter AI</span>
         </div>
         <div className="flex items-center gap-1">
           {messages.length > 0 && (
             <button
+              type="button"
               onClick={handleClearChat}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Clear chat history"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="size-4" />
             </button>
           )}
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Close chat"
           >
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label="Chat messages">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
-                <Sparkles className="h-5 w-5 text-accent" />
+                <Sparkles className="size-5 text-accent" />
               </div>
               <p className="text-sm font-medium text-foreground">
                 Ask anything about this meeting
@@ -147,8 +149,10 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
             <div className="flex w-full flex-col gap-2">
               {SUGGESTIONS.map((suggestion) => (
                 <button
+                  type="button"
                   key={suggestion}
                   onClick={() => handleSubmit(suggestion)}
+                  disabled={isLoading}
                   className="rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {suggestion}
@@ -197,7 +201,7 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
                   noter AI
                 </span>
                 <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className="size-3 animate-spin" />
                   <span>{status === 'streaming' ? 'Responding...' : 'Thinking...'}</span>
                 </div>
               </div>
@@ -234,9 +238,9 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
             type="submit"
             size="icon"
             disabled={!input.trim() || isLoading}
-            className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-30"
+            className="size-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-30"
           >
-            <Send className="h-4 w-4" />
+            <Send className="size-4" />
             <span className="sr-only">Send message</span>
           </Button>
         </form>

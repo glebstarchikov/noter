@@ -2,17 +2,23 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mic, Square, Pause, Play, RotateCcw } from 'lucide-react'
+import { Mic, Square, Pause, Play, RotateCcw, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { MeetingStatus } from '@/lib/types'
+import {
+  readApiError,
+  waitForMeetingCompletion,
+  runLegacyPipeline,
+  STATUS_POLL_INTERVAL_MS,
+  STATUS_POLL_TIMEOUT_MS,
+  type ProcessingState,
+} from '@/lib/meeting-pipeline'
 
 const MAX_DURATION_SECONDS = 60 * 60 // 60 minutes
 const WARNING_THRESHOLD = 55 * 60 // 55 minutes
-const STATUS_POLL_INTERVAL_MS = 3_000
-const STATUS_POLL_TIMEOUT_MS = 20 * 60 * 1000
 
 function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60)
@@ -60,84 +66,6 @@ export function AudioRecorder({ onProcessing }: Props) {
       await startRecording()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Could not start recording')
-    }
-  }
-
-  const readApiError = async (response: Response, fallbackMessage: string) => {
-    const text = await response.text()
-    try {
-      const parsed = JSON.parse(text)
-      return {
-        message: typeof parsed?.error === 'string' ? parsed.error : fallbackMessage,
-        code: typeof parsed?.code === 'string' ? parsed.code : undefined,
-      }
-    } catch {
-      return { message: text || fallbackMessage, code: undefined }
-    }
-  }
-
-  const waitForMeetingCompletion = async (meetingId: string) => {
-    const startedAt = Date.now()
-
-    while (Date.now() - startedAt < STATUS_POLL_TIMEOUT_MS) {
-      const statusRes = await fetch(`/api/meetings/${meetingId}`, { cache: 'no-store' })
-      if (!statusRes.ok) {
-        await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
-        continue
-      }
-
-      const payload = await statusRes.json().catch(() => null)
-      const status = payload?.meeting?.status as MeetingStatus | undefined
-      const errorMessage = payload?.meeting?.error_message as string | null | undefined
-
-      if (status && ['recording', 'uploading', 'transcribing', 'generating', 'done', 'error'].includes(status)) {
-        onProcessing({
-          meetingId,
-          step: status,
-          error: status === 'error' ? errorMessage ?? undefined : undefined,
-        })
-      }
-
-      if (status === 'done') {
-        return
-      }
-
-      if (status === 'error') {
-        throw new Error(errorMessage || 'Processing failed')
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL_MS))
-    }
-
-    throw new Error('Processing timed out. Please open the meeting from dashboard and try again.')
-  }
-
-  const runLegacyPipeline = async (meetingId: string, storagePath: string) => {
-    onProcessing({ meetingId, step: 'transcribing' })
-
-    const transcribeRes = await fetch('/api/transcribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meetingId, storagePath }),
-    })
-
-    if (!transcribeRes.ok) {
-      const { message } = await readApiError(transcribeRes, 'Transcription failed')
-      throw new Error(message)
-    }
-
-    await transcribeRes.json()
-    onProcessing({ meetingId, step: 'generating' })
-
-    const notesRes = await fetch('/api/generate-notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meetingId }),
-    })
-
-    if (!notesRes.ok) {
-      const { message } = await readApiError(notesRes, 'Notes generation failed')
-      throw new Error(message)
     }
   }
 
@@ -194,7 +122,7 @@ export function AudioRecorder({ onProcessing }: Props) {
       if (!processRes.ok) {
         const processError = await readApiError(processRes, 'Failed to queue processing')
         if (processError.code === 'QUEUE_UNAVAILABLE') {
-          await runLegacyPipeline(meeting.id, storagePath)
+          await runLegacyPipeline(meeting.id, storagePath, onProcessing)
           onProcessing({ meetingId: meeting.id, step: 'done' })
           router.push(`/dashboard/${meeting.id}`)
           return
@@ -204,7 +132,7 @@ export function AudioRecorder({ onProcessing }: Props) {
       }
 
       onProcessing({ meetingId: meeting.id, step: 'transcribing' })
-      await waitForMeetingCompletion(meeting.id)
+      await waitForMeetingCompletion(meeting.id, onProcessing)
       onProcessing({ meetingId: meeting.id, step: 'done' })
       router.push(`/dashboard/${meeting.id}`)
     } catch (err: unknown) {
@@ -246,9 +174,9 @@ export function AudioRecorder({ onProcessing }: Props) {
           <Button
             onClick={handleStart}
             size="lg"
-            className="h-14 w-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
+            className="size-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            <Mic className="h-6 w-6" />
+            <Mic className="size-6" />
             <span className="sr-only">Start recording</span>
           </Button>
         )}
@@ -259,21 +187,21 @@ export function AudioRecorder({ onProcessing }: Props) {
               onClick={isPaused ? resumeRecording : pauseRecording}
               variant="outline"
               size="lg"
-              className="h-12 w-12 rounded-full border-border"
+              className="size-12 rounded-full border-border"
             >
               {isPaused ? (
-                <Play className="h-5 w-5" />
+                <Play className="size-5" />
               ) : (
-                <Pause className="h-5 w-5" />
+                <Pause className="size-5" />
               )}
               <span className="sr-only">{isPaused ? 'Resume' : 'Pause'}</span>
             </Button>
             <Button
               onClick={stopRecording}
               size="lg"
-              className="h-14 w-14 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="size-14 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              <Square className="h-5 w-5" />
+              <Square className="size-5" />
               <span className="sr-only">Stop recording</span>
             </Button>
           </>
@@ -285,9 +213,9 @@ export function AudioRecorder({ onProcessing }: Props) {
               onClick={resetRecording}
               variant="outline"
               size="lg"
-              className="h-12 w-12 rounded-full border-border"
+              className="size-12 rounded-full border-border"
             >
-              <RotateCcw className="h-5 w-5" />
+              <RotateCcw className="size-5" />
               <span className="sr-only">Re-record</span>
             </Button>
             <Button
@@ -296,7 +224,14 @@ export function AudioRecorder({ onProcessing }: Props) {
               disabled={isSubmitting}
               className="rounded-lg bg-foreground px-8 text-background hover:bg-foreground/90"
             >
-              {isSubmitting ? 'Processing...' : 'Generate notes'}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Processing…
+                </>
+              ) : (
+                'Generate notes'
+              )}
             </Button>
           </>
         )}

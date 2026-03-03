@@ -137,14 +137,15 @@
   }
 }
 
-@-webkit-keyframes pulse {
-  0% {
-    -webkit-transform: scaleY(0.4);
-    transform: scaleY(0.4);
-  }
+/* Respect user motion preferences (Vercel guideline: Honor prefers-reduced-motion) */
+@media (prefers-reduced-motion: reduce) {
 
-  100% {
-    -webkit-transform: scaleY(1);
-    transform: scaleY(1);
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

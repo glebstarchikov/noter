@@ -11,6 +11,7 @@ import {
   Clock,
   GripHorizontal,
   Copy,
+  FileText,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
@@ -95,9 +96,10 @@ function ScrollablePanel({
           if (e.key === 'ArrowDown') { e.preventDefault(); setHeight(h => Math.max(120, h + step)) }
           if (e.key === 'ArrowUp') { e.preventDefault(); setHeight(h => Math.max(120, h - step)) }
         }}
-        className="flex h-5 cursor-row-resize items-center justify-center border-t border-border transition-colors hover:bg-secondary"
+        className="flex h-5 cursor-row-resize items-center justify-center border-t border-border transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <GripHorizontal className="h-3 w-3 text-muted-foreground" />
+        <GripHorizontal className="size-3 text-muted-foreground" />
+        <span className="sr-only">Use Arrow Up and Arrow Down to resize this panel.</span>
       </div>
     </div>
   )
@@ -191,13 +193,13 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-2">
           <Link
             href="/dashboard"
             className="flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ArrowLeft className="h-3 w-3" />
+            <ArrowLeft className="size-3" />
             Back to notes
           </Link>
           <h1 className="text-xl font-semibold text-foreground text-balance">
@@ -205,7 +207,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           </h1>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <Clock className="size-3" />
               {formatDate(meeting.created_at)}
             </span>
             {meeting.audio_duration && (
@@ -225,7 +227,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
               disabled={isDeleting}
               className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="size-4" />
               <span className="sr-only">Delete meeting</span>
             </Button>
           </DialogTrigger>
@@ -254,22 +256,25 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
       {/* Tabs — shadcn accessible tabs */}
       <Tabs defaultValue="summary">
-        <TabsList className="w-full justify-start">
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="summary">Notes</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
-          <div className="ml-auto">
-            <button
-              onClick={handleCopyNotes}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Copy notes to clipboard"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Copy</span>
-            </button>
-          </div>
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
           <TabsTrigger value="sources">Sources</TabsTrigger>
         </TabsList>
+
+        {/* Copy button — repositioned above content for better flow */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleCopyNotes}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Copy notes to clipboard"
+          >
+            <Copy className="size-3.5" />
+            Copy notes
+          </button>
+        </div>
 
         <TabsContent value="summary">
           <ScrollablePanel>
@@ -330,14 +335,16 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
                 {actionItems.length > 0 ? (
                   actionItems.map((item, i) => (
                     <button
+                      type="button"
                       key={i}
                       onClick={() => toggleAction(i)}
+                      aria-pressed={item.done}
                       className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {item.done ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
                       ) : (
-                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       )}
                       <div className="flex flex-col gap-0.5">
                         <span
@@ -386,7 +393,11 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
                 {meeting.transcript}
               </p>
             ) : (
-              <p className="text-sm text-muted-foreground">No transcript available.</p>
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                <FileText className="size-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-muted-foreground">No transcript available</p>
+                <p className="text-xs text-muted-foreground/70">The transcript will appear here once audio has been processed.</p>
+              </div>
             )}
           </ScrollablePanel>
         </TabsContent>

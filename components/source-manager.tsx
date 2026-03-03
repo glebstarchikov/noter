@@ -11,6 +11,17 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import type { MeetingSource } from '@/lib/types'
 
 const ALLOWED_EXTENSIONS = ['pdf', 'txt', 'md', 'docx']
@@ -43,6 +54,7 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch sources on mount
@@ -118,8 +130,6 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
   )
 
   const deleteSource = async (sourceId: string, name: string) => {
-    if (!confirm(`Remove "${name}" from this meeting?`)) return
-
     try {
       const res = await fetch('/api/sources', {
         method: 'DELETE',
@@ -135,6 +145,8 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
       toast.success('Source removed')
     } catch {
       toast.error('Failed to remove source')
+    } finally {
+      setDeleteTarget(null)
     }
   }
 
@@ -166,116 +178,142 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Upload zone */}
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !isUploading && fileInputRef.current?.click()}
-        role="button"
-        tabIndex={isUploading ? -1 : 0}
-        onKeyDown={(e) => {
-          if (isUploading) return
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            fileInputRef.current?.click()
-          }
-        }}
-        className={cn(
-          'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          isDragging
-            ? 'border-accent bg-accent/5'
-            : 'border-border hover:border-muted-foreground',
-          isUploading && 'pointer-events-none opacity-50'
-        )}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.txt,.md,.docx"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        {isUploading ? (
-          <>
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Processing document...</p>
-          </>
+    <>
+      <div className="flex flex-col gap-5">
+        {/* Upload zone */}
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => !isUploading && fileInputRef.current?.click()}
+          role="button"
+          tabIndex={isUploading ? -1 : 0}
+          aria-disabled={isUploading}
+          onKeyDown={(e) => {
+            if (isUploading) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              fileInputRef.current?.click()
+            }
+          }}
+          className={cn(
+            'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            isDragging
+              ? 'border-accent bg-accent/5'
+              : 'border-border hover:border-muted-foreground',
+            isUploading && 'pointer-events-none opacity-50'
+          )}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.md,.docx"
+            onChange={handleFileSelect}
+            className="hidden"
+            aria-label="Upload source document"
+          />
+          {isUploading ? (
+            <>
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Processing document...</p>
+            </>
+          ) : (
+            <>
+              <Upload className="size-8 text-muted-foreground" />
+              <div className="flex flex-col items-center gap-1 text-center">
+                <p className="text-sm text-foreground">
+                  Drop a file or click to upload
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  PDF, TXT, Markdown, DOCX -- up to {MAX_SIZE_MB}MB
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Sources list */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : sources.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Attached documents ({sources.length})
+            </span>
+            {sources.map((source) => (
+              <div
+                key={source.id}
+                className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5"
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary">
+                    {source.file_type === 'pdf' ? (
+                      <FileText className="size-4 text-muted-foreground" />
+                    ) : (
+                      <File className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="truncate text-sm text-foreground">{source.name}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatDate(source.created_at)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+                      TYPE_BADGE_STYLES[source.file_type] || 'bg-secondary text-muted-foreground border-border'
+                    )}
+                  >
+                    {formatFileType(source.file_type)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget({ id: source.id, name: source.name })}
+                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="sr-only">Delete {source.name}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <>
-            <Upload className="h-8 w-8 text-muted-foreground" />
-            <div className="flex flex-col items-center gap-1 text-center">
-              <p className="text-sm text-foreground">
-                Drop a file or click to upload
-              </p>
-              <p className="text-xs text-muted-foreground">
-                PDF, TXT, Markdown, DOCX -- up to {MAX_SIZE_MB}MB
-              </p>
-            </div>
-          </>
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <AlertCircle className="size-5 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">
+              No documents attached yet. Upload presentations, notes, or reference materials to enrich
+              the AI chatbot context.
+            </p>
+          </div>
         )}
       </div>
 
-      {/* Sources list */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : sources.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Attached documents ({sources.length})
-          </span>
-          {sources.map((source) => (
-            <div
-              key={source.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5"
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove source?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove &ldquo;{deleteTarget?.name}&rdquo; from this meeting? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteSource(deleteTarget.id, deleteTarget.name)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary">
-                  {source.file_type === 'pdf' ? (
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <File className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="truncate text-sm text-foreground">{source.name}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {formatDate(source.created_at)}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
-                    TYPE_BADGE_STYLES[source.file_type] || 'bg-secondary text-muted-foreground border-border'
-                  )}
-                >
-                  {formatFileType(source.file_type)}
-                </span>
-                <button
-                  onClick={() => deleteSource(source.id, source.name)}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="sr-only">Delete {source.name}</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2 py-6 text-center">
-          <AlertCircle className="h-5 w-5 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">
-            No documents attached yet. Upload presentations, notes, or reference materials to enrich
-            the AI chatbot context.
-          </p>
-        </div>
-      )}
-    </div>
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

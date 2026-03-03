@@ -31,8 +31,9 @@ export function ThemeToggle({ className }: { className?: string }) {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <button
+                    type="button"
                     className={cn(
-                        'inline-flex items-center justify-center rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
+                        'inline-flex items-center justify-center rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         className
                     )}
                     aria-label="Toggle theme"
@@ -45,7 +46,7 @@ export function ThemeToggle({ className }: { className?: string }) {
                     <DropdownMenuItem
                         key={value}
                         onClick={() => setTheme(value)}
-                        className={cn(theme === value && 'bg-accent')}
+                        className={cn(theme === value && 'bg-accent text-accent-foreground')}
                     >
                         <Icon className="size-4" />
                         {label}
@@ -71,7 +72,7 @@ export function ThemeToggleInline() {
                 <DropdownMenuItem
                     key={value}
                     onClick={() => setTheme(value)}
-                    className={cn(theme === value && 'bg-accent')}
+                    className={cn(theme === value && 'bg-accent text-accent-foreground')}
                 >
                     <Icon className="size-4" />
                     {label}
