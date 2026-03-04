@@ -9,7 +9,6 @@ import {
     Plus,
     ChevronsUpDown,
     PanelLeftIcon,
-    Sparkles,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Logo } from '@/components/logo'
@@ -42,10 +41,6 @@ const navItems = [
     { href: '/dashboard', label: 'All Notes', icon: FileText },
 ]
 
-interface AppSidebarProps {
-    onGlobalChatToggle?: () => void
-    isGlobalChatOpen?: boolean
-}
 
 function SidebarBrandToggle() {
     const { state, isMobile, toggleSidebar } = useSidebar()
@@ -88,7 +83,7 @@ function SidebarBrandToggle() {
     )
 }
 
-export function AppSidebar({ onGlobalChatToggle, isGlobalChatOpen }: AppSidebarProps = {}) {
+export function AppSidebar() {
     const pathname = usePathname()
     const router = useRouter()
     const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -153,16 +148,6 @@ export function AppSidebar({ onGlobalChatToggle, isGlobalChatOpen }: AppSidebarP
                                     </SidebarMenuItem>
                                 )
                             })}
-                            <SidebarMenuItem>
-                                <SidebarMenuButton
-                                    isActive={isGlobalChatOpen}
-                                    tooltip="noter AI"
-                                    onClick={onGlobalChatToggle}
-                                >
-                                    <Sparkles />
-                                    <span>noter AI</span>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
