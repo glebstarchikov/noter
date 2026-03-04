@@ -14,6 +14,8 @@ export interface StartRecordingOptions {
 }
 
 export function useAudioRecorder() {
+  // Tracks whether system audio is currently being captured for this session
+  const hasSystemAudioRef = useRef<boolean>(false)
   const [state, setState] = useState<AudioRecorderState>({
     isRecording: false,
     isPaused: false,
@@ -30,6 +32,7 @@ export function useAudioRecorder() {
   const startTimeRef = useRef<number>(0)
   const pausedDurationRef = useRef<number>(0)
   const durationRef = useRef<number>(0)
+  const stopRecordingRef = useRef<() => void>(() => { })
 
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now() - pausedDurationRef.current * 1000
@@ -37,7 +40,7 @@ export function useAudioRecorder() {
       const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
       durationRef.current = elapsed
       setState((prev) => ({ ...prev, duration: elapsed }))
-    }, 200)
+    }, 1000)
   }, [])
 
   const stopTimer = useCallback(() => {
@@ -77,8 +80,7 @@ export function useAudioRecorder() {
           }
 
           // 3. Mix streams via Web Audio API
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-          const audioContext = new AudioContextClass()
+          const audioContext = new AudioContext()
           audioContextRef.current = audioContext
 
           const micSource = audioContext.createMediaStreamSource(micStream)
@@ -90,10 +92,19 @@ export function useAudioRecorder() {
 
           finalStream = destination.stream
 
-          // Stop recording when system stream ends (e.g. user clicks "Stop sharing" on the browser bar)
-          systemStream.getVideoTracks()[0].onended = () => {
-            stopRecording()
+          // Stop the video track immediately — we only need the audio.
+          // Keeping it running wastes CPU/GPU on screen capture encoding.
+          const videoTrack = systemStream.getVideoTracks()[0]
+          const systemAudioTrack = systemAudioTracks[0]
+
+          // Listen on the audio track for share-stop, since stopping the video
+          // track ourselves would also fire onended.
+          systemAudioTrack.onended = () => {
+            stopRecordingRef.current()
           }
+
+          videoTrack.stop()
+          hasSystemAudioRef.current = true
 
         } catch (systemErr: any) {
           // If the user denied the screen share, we still need to cleanup the mic we gathered
@@ -117,6 +128,7 @@ export function useAudioRecorder() {
       chunksRef.current = []
       pausedDurationRef.current = 0
       durationRef.current = 0
+      hasSystemAudioRef.current = false
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -155,6 +167,9 @@ export function useAudioRecorder() {
       stopTimer()
     }
   }, [stopTimer])
+
+  // Keep the ref in sync so startRecording's onended handler always calls the latest version
+  stopRecordingRef.current = stopRecording
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -202,6 +217,7 @@ export function useAudioRecorder() {
     chunksRef.current = []
     pausedDurationRef.current = 0
     durationRef.current = 0
+    hasSystemAudioRef.current = false
     setState({ isRecording: false, isPaused: false, duration: 0, audioBlob: null })
   }, [stopTimer])
 
@@ -222,6 +238,7 @@ export function useAudioRecorder() {
 
   return {
     ...state,
+    hasSystemAudio: hasSystemAudioRef.current,
     startRecording,
     stopRecording,
     pauseRecording,

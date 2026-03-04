@@ -1,11 +1,17 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mic, Square, Pause, Play, RotateCcw, Loader2 } from 'lucide-react'
+import { Mic, Square, Pause, Play, RotateCcw, Loader2, Monitor, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -43,6 +49,7 @@ export function AudioRecorder({ onProcessing }: Props) {
     isPaused,
     duration,
     audioBlob,
+    hasSystemAudio,
     startRecording,
     stopRecording,
     pauseRecording,
@@ -52,6 +59,21 @@ export function AudioRecorder({ onProcessing }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const [recordSystemAudio, setRecordSystemAudio] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
+
+  // Create object URL for audio preview
+  const previewUrl = useMemo(() => {
+    if (!audioBlob) return null
+    return URL.createObjectURL(audioBlob)
+  }, [audioBlob])
+
+  // Revoke preview URL on cleanup / reset
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
 
   // Auto-stop at max duration
   useEffect(() => {
@@ -157,17 +179,25 @@ export function AudioRecorder({ onProcessing }: Props) {
 
       {/* Waveform indicator */}
       {isRecording && !isPaused && (
-        <div className="flex items-center gap-1" aria-hidden="true">
-          {[16, 24, 32, 20, 28].map((h, i) => (
-            <span
-              key={i}
-              className="inline-block w-1 rounded-full bg-accent"
-              style={{
-                height: `${h}px`,
-                animation: `pulse 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
-              }}
-            />
-          ))}
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-1" aria-hidden="true">
+            {[16, 24, 32, 20, 28].map((h, i) => (
+              <span
+                key={i}
+                className="inline-block w-1 rounded-full bg-accent"
+                style={{
+                  height: `${h}px`,
+                  animation: `pulse 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
+                }}
+              />
+            ))}
+          </div>
+          {hasSystemAudio && (
+            <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
+              <Monitor className="size-3 text-primary" />
+              <span className="text-xs font-medium text-primary">System audio active</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -241,18 +271,70 @@ export function AudioRecorder({ onProcessing }: Props) {
           )}
         </div>
 
-        {!isRecording && !audioBlob && (
-          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-2">
-            <Switch
-              id="system-audio"
-              checked={recordSystemAudio}
-              onCheckedChange={setRecordSystemAudio}
-              className="data-[state=checked]:bg-primary"
+        {/* Audio preview */}
+        {audioBlob && !isRecording && previewUrl && (
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-4 py-2.5">
+            <Button
+              onClick={() => {
+                const el = audioElementRef.current
+                if (!el) return
+                if (isPlaying) {
+                  el.pause()
+                } else {
+                  el.play()
+                }
+              }}
+              variant="ghost"
+              size="sm"
+              className="size-8 rounded-full p-0"
+            >
+              {isPlaying ? (
+                <Pause className="size-3.5" />
+              ) : (
+                <Play className="size-3.5" />
+              )}
+              <span className="sr-only">{isPlaying ? 'Pause preview' : 'Play preview'}</span>
+            </Button>
+            <span className="text-xs text-muted-foreground">Preview recording</span>
+            <audio
+              ref={audioElementRef}
+              src={previewUrl}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => setIsPlaying(false)}
+              className="hidden"
             />
-            <Label htmlFor="system-audio" className="cursor-pointer text-sm font-medium text-foreground">
-              Record meeting audio
-            </Label>
           </div>
+        )}
+
+        {!isRecording && !audioBlob && (
+          <TooltipProvider>
+            <div className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-2">
+              <Switch
+                id="system-audio"
+                checked={recordSystemAudio}
+                onCheckedChange={setRecordSystemAudio}
+                className="data-[state=checked]:bg-primary"
+              />
+              <Label htmlFor="system-audio" className="cursor-pointer text-sm font-medium text-foreground">
+                Include system audio
+              </Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="What is system audio?"
+                  >
+                    <Info className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[240px] text-xs">
+                  Captures audio playing on your computer (e.g., Zoom, Google Meet). You'll be asked to select a tab or screen to share.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         )}
       </div>
 
