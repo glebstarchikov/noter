@@ -33,7 +33,7 @@ Guidance for AI coding agents working in this repository.
   - Shared utilities, domain types, and Supabase helpers.
   - `lib/types.ts` — `Meeting`, `ActionItem`, `MeetingStatus`, `MeetingSource` interfaces.
   - `lib/utils.ts` — `cn()` helper (combines `clsx` + `tailwind-merge`).
-  - Supabase clients separated by runtime: `lib/supabase/client.ts` (browser), `server.ts` (server components/routes), `proxy.ts` (middleware session refresh).
+  - Supabase clients separated by runtime: `lib/supabase/client.ts` (browser), `server.ts` (server components/routes), `proxy.ts` (middleware session refresh), `admin.ts` (service role — privileged operations only).
 - `styles/`
   - `styles/globals.css` — design token system (CSS custom properties, light/dark themes via `.dark` class, Tailwind v4 `@theme inline` configuration, oklch colors).
 - `scripts/`
@@ -62,6 +62,7 @@ When adding functionality, put code in the nearest existing domain folder. Avoid
   - Browser/client components: `@/lib/supabase/client`.
   - Server components/routes: `@/lib/supabase/server`.
   - Middleware session refresh: `@/lib/supabase/proxy`.
+  - Admin / privileged operations (service role key): `@/lib/supabase/admin`.
 - Do not globalize server Supabase clients (especially with Fluid compute).
 - Preserve session cookie behavior in proxy logic.
 - Both database tables and the storage bucket have Row Level Security (RLS) enabled — all data access is scoped to the authenticated user.
@@ -172,8 +173,11 @@ See `lib/types.ts` and SQL scripts in `scripts/`.
 - Files stored at path `{user_id}/{meeting_id}.{extension}`.
 - RLS policies scope access by user folder.
 
+### `processing_jobs` table
+- Supports async processing jobs (see `scripts/004_create_processing_jobs_table.sql`).
+
 ### Schema Changes
-- Add a new numbered SQL script in `scripts/` (e.g., `004_*.sql`).
+- Add a new numbered SQL script in `scripts/` (e.g., `005_*.sql`).
 - Keep backward compatibility in app code until migration assumptions are safe.
 
 ## 7) Testing and Validation Expectations
@@ -187,6 +191,7 @@ Tests are colocated with route handlers: `app/api/*/route.test.ts`. Do not place
 
 ### Running Tests
 - `pnpm lint` — ESLint check.
+- `pnpm typecheck` — TypeScript type check (`tsc --noEmit`).
 - `pnpm test` — run all Vitest tests once.
 - `pnpm test:watch` — watch mode.
 - `pnpm test:ui` — Vitest UI.
@@ -213,6 +218,7 @@ When changing API behavior, add/update Vitest coverage under matching `app/api/*
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | All Supabase clients |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | All Supabase clients |
 | `OPENAI_API_KEY` | Yes | Transcribe, generate-notes, chat routes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Optional | Admin client (`@/lib/supabase/admin`) |
 | `UPSTASH_REDIS_REST_URL` | Optional | Rate limiting (conditionally enabled) |
 | `UPSTASH_REDIS_REST_TOKEN` | Optional | Rate limiting (conditionally enabled) |
 
@@ -235,6 +241,7 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - Dashboard error boundary: `app/dashboard/error.tsx`
 - Dashboard loading skeleton: `app/dashboard/loading.tsx`
 - Auth login: `app/auth/login/page.tsx`
+- Auth sign-up success: `app/auth/sign-up-success/page.tsx`
 - Auth sign-up: `app/auth/sign-up/page.tsx`
 
 ### API Routes
@@ -242,6 +249,8 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - Notes generation: `app/api/generate-notes/route.ts`
 - Audio transcription: `app/api/transcribe/route.ts`
 - Source upload/list/delete: `app/api/sources/route.ts`
+- Meeting CRUD + processing trigger: `app/api/meetings/[id]/route.ts`, `app/api/meetings/[id]/process/route.ts`
+- Async processing worker: `app/api/processing/worker/route.ts`
 
 ### Components
 - Meeting detail UI: `components/meeting-detail.tsx` (includes `ScrollablePanel` for resizable tab content)
@@ -268,6 +277,7 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - Class name utility: `lib/utils.ts`
 - Supabase browser client: `lib/supabase/client.ts`
 - Supabase server client: `lib/supabase/server.ts`
+- Supabase admin client (service role): `lib/supabase/admin.ts`
 - Supabase middleware helper: `lib/supabase/proxy.ts`
 - Next.js middleware: `proxy.ts` (root)
 - Design tokens / theme: `styles/globals.css`
@@ -278,16 +288,20 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - `scripts/001_create_meetings_table.sql`
 - `scripts/002_create_storage_bucket.sql`
 - `scripts/003_create_meeting_sources_table.sql`
+- `scripts/004_create_processing_jobs_table.sql`
 
 ## 13) Agent Anti-Patterns to Avoid
 - Skipping ownership checks in server routes.
 - Moving server-only logic into client components.
+- Adding `'use client'` unnecessarily — default to server components.
 - Returning inconsistent error shapes for similar failures.
 - Embedding huge prompts/content blocks without truncation safeguards.
 - Re-implementing shared UI primitives instead of reusing `components/ui/*`.
 - Mixing unrelated refactors into feature/fix commits.
 - Using Tailwind v3 config syntax (`tailwind.config.ts`) instead of the v4 `@theme inline` approach.
+- Hardcoding light/dark colors instead of using semantic CSS custom property tokens.
 - Importing the wrong Supabase client for the runtime context.
 - Forgetting `maxDuration` exports on new API routes.
 - Omitting rate limiting on new long-running or abuse-sensitive routes.
 - Skipping error recovery (updating meeting status to `error`) in processing routes.
+- Committing `.env` files, secrets, or API keys.
