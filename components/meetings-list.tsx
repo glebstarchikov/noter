@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo, useId } from 'react'
+import { useState, useMemo, useId, useTransition } from 'react'
 import Link from 'next/link'
-import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, FileUp } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, FileUp, Pin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +16,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Meeting, MeetingStatus } from '@/lib/types'
 
 function statusBadge(status: string) {
@@ -57,12 +59,38 @@ const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
   { value: 'title-desc', label: 'Title Z → A' },
 ]
 
-export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
+export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[] }) {
+  const [meetings, setMeetings] = useState(initialMeetings)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all')
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest')
   const [showFilters, setShowFilters] = useState(false)
   const filtersPanelId = useId()
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+
+  const togglePin = async (meetingId: string, currentPinned: boolean) => {
+    const newPinned = !currentPinned
+    // Optimistic update
+    setMeetings((prev) =>
+      prev.map((m) => (m.id === meetingId ? { ...m, is_pinned: newPinned } : m))
+    )
+    try {
+      const res = await fetch(`/api/meetings/${meetingId}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: newPinned }),
+      })
+      if (!res.ok) throw new Error('Failed to update pin')
+      startTransition(() => router.refresh())
+    } catch {
+      // Revert on error
+      setMeetings((prev) =>
+        prev.map((m) => (m.id === meetingId ? { ...m, is_pinned: currentPinned } : m))
+      )
+      toast.error('Failed to update pin')
+    }
+  }
 
   const filteredMeetings = useMemo(() => {
     let result = meetings
@@ -83,8 +111,11 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
       result = result.filter((m) => m.status === statusFilter)
     }
 
-    // Sort
+    // Sort — pinned notes always come first, then apply user sort within each group
     result = [...result].sort((a, b) => {
+      // Pinned first
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1
+
       switch (sortOrder) {
         case 'newest':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -176,14 +207,14 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
             className={cn(
               'flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               showFilters || hasActiveFilters
-                ? 'border-accent/40 bg-accent/10 text-foreground'
+                ? 'border-border bg-secondary text-foreground'
                 : 'border-border text-muted-foreground hover:border-border hover:text-foreground'
             )}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
             Filters
             {hasActiveFilters && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                 {(searchQuery.trim() ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}
               </span>
             )}
@@ -282,23 +313,43 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
           {filteredMeetings.map((meeting) => {
             const status = statusBadge(meeting.status)
             return (
-              <Link
+              <div
                 key={meeting.id}
-                href={`/dashboard/${meeting.id}`}
-                className="flex items-center justify-between px-5 py-4 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="group flex items-center transition-colors hover:bg-secondary"
               >
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-foreground">
+                <Link
+                  href={`/dashboard/${meeting.id}`}
+                  className="flex min-w-0 flex-1 flex-col gap-1 px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
+                  <span className="truncate text-sm font-medium text-foreground">
                     {meeting.title}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {formatDate(meeting.created_at)}
                   </span>
+                </Link>
+                <div className="flex shrink-0 items-center gap-2 pr-5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      togglePin(meeting.id, meeting.is_pinned)
+                    }}
+                    aria-label={meeting.is_pinned ? 'Unpin note' : 'Pin note'}
+                    className={cn(
+                      'rounded-md p-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      meeting.is_pinned
+                        ? 'text-primary hover:bg-primary/10'
+                        : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground'
+                    )}
+                  >
+                    <Pin className={cn('size-3.5', meeting.is_pinned && 'rotate-45')} />
+                  </button>
+                  <Badge variant={status.variant} className="shrink-0">
+                    {status.label}
+                  </Badge>
                 </div>
-                <Badge variant={status.variant} className="shrink-0">
-                  {status.label}
-                </Badge>
-              </Link>
+              </div>
             )
           })}
         </div>

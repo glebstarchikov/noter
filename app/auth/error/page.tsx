@@ -45,7 +45,7 @@ export default async function AuthErrorPage({
 
           <Link
             href="/auth/login"
-            className="text-sm text-foreground underline underline-offset-4 hover:text-accent"
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
           >
             Back to sign in
           </Link>

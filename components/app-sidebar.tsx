@@ -41,6 +41,7 @@ const navItems = [
     { href: '/dashboard', label: 'All Notes', icon: FileText },
 ]
 
+
 function SidebarBrandToggle() {
     const { state, isMobile, toggleSidebar } = useSidebar()
     const showExpandedLayout = isMobile || state === 'expanded'

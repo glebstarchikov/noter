@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { AudioLines } from 'lucide-react'
 import { LandingHero } from '@/components/landing-hero'
 import { LandingFeatures } from '@/components/landing-features'
+import { LandingCta } from '@/components/landing-cta'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 
@@ -42,6 +43,9 @@ export default function HomePage() {
 
       {/* Features */}
       <LandingFeatures />
+
+      {/* CTA */}
+      <LandingCta />
 
       {/* Footer */}
       <footer className="flex items-center justify-between border-t border-border px-6 py-6 md:px-12" aria-label="Site footer">
