@@ -176,9 +176,8 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                 'backdrop-blur-xl backdrop-saturate-150',
                 'border rounded-3xl overflow-hidden',
                 'transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
-                // Light theme glass
-                'bg-white/70 border-black/[0.08] shadow-[0_4px_24px_-4px_oklch(0_0_0/0.1)]',
-                // Dark theme glass
+                // Glass: symmetric tint for both themes
+                'bg-black/[0.03] border-black/[0.08] shadow-[0_4px_24px_-4px_oklch(0_0_0/0.08)]',
                 'dark:bg-white/[0.06] dark:border-white/[0.1] dark:shadow-[0_4px_24px_-4px_oklch(0_0_0/0.4)]',
                 // Size transition — rounded-3xl stays constant (24px radius = pill at 48px height)
                 isExpanded
@@ -193,11 +192,11 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
             {isExpanded && (
                 <>
                     {/* Header */}
-                    <div className="flex items-center justify-between px-5 py-2.5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <div className="flex items-center justify-between px-5 py-2.5 border-b border-black/[0.06] dark:border-white/[0.08]">
                         <div className="flex items-center gap-2">
                             <Sparkles className="size-3.5 text-accent" />
                             <span className="text-xs font-medium text-foreground">noter AI</span>
-                            <span className="rounded-full bg-black/[0.05] dark:bg-white/[0.08] px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            <span className="rounded-full bg-black/[0.06] dark:bg-white/[0.08] px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                                 {isGlobal ? 'Global' : 'Meeting'}
                             </span>
                         </div>
@@ -215,7 +214,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                             <button
                                 type="button"
                                 onClick={() => setIsExpanded(false)}
-                                className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.08]"
+                                className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"
                                 aria-label="Collapse"
                             >
                                 <ChevronDown className="size-3.5" />
@@ -265,7 +264,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                                                     'max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed overflow-hidden',
                                                     message.role === 'user'
                                                         ? 'bg-accent text-accent-foreground'
-                                                        : 'bg-black/[0.04] dark:bg-white/[0.06] text-foreground'
+                                                        : 'bg-black/[0.05] dark:bg-white/[0.06] text-foreground'
                                                 )}
                                             >
                                                 {message.role === 'user' ? (
@@ -284,7 +283,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                                             noter AI
                                         </span>
-                                        <div className="flex items-center gap-2 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] px-3.5 py-2 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-2 rounded-2xl bg-black/[0.05] dark:bg-white/[0.06] px-3.5 py-2 text-xs text-muted-foreground">
                                             <Loader2 className="size-3 animate-spin" />
                                             <span>{status === 'streaming' ? 'Responding...' : 'Thinking...'}</span>
                                         </div>
@@ -312,7 +311,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                                     key={s}
                                     onClick={() => handleSubmit(s)}
                                     disabled={isLoading}
-                                    className="shrink-0 rounded-full border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] px-3 py-1 text-[11px] text-muted-foreground whitespace-nowrap transition-colors hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground"
+                                    className="shrink-0 rounded-full border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.04] dark:bg-white/[0.05] px-3 py-1 text-[11px] text-muted-foreground whitespace-nowrap transition-colors hover:bg-black/[0.08] dark:hover:bg-white/[0.1] hover:text-foreground"
                                 >
                                     {s}
                                 </button>
@@ -325,7 +324,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
             {/* Input bar — always visible */}
             <div className={cn(
                 'flex items-center gap-3 h-12',
-                isExpanded ? 'px-5 border-t border-black/[0.06] dark:border-white/[0.06]' : 'px-5'
+                isExpanded ? 'px-5 border-t border-black/[0.06] dark:border-white/[0.08]' : 'px-5'
             )}>
                 {!isExpanded && (
                     <Sparkles className="size-4 shrink-0 text-accent" />
@@ -353,7 +352,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                                 {messages.length}
                             </span>
                         )}
-                        <kbd className="hidden rounded-md border border-black/[0.06] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-muted-foreground md:inline-block">
+                        <kbd className="hidden rounded-md border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-muted-foreground md:inline-block">
                             ⌘J
                         </kbd>
                         <button
