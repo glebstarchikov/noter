@@ -46,7 +46,7 @@ export function ThemeToggle({ className }: { className?: string }) {
                     <DropdownMenuItem
                         key={value}
                         onClick={() => setTheme(value)}
-                        className={cn(theme === value && 'bg-accent text-accent-foreground')}
+                        className={cn(theme === value && 'bg-secondary text-secondary-foreground')}
                     >
                         <Icon className="size-4" />
                         {label}
@@ -72,7 +72,7 @@ export function ThemeToggleInline() {
                 <DropdownMenuItem
                     key={value}
                     onClick={() => setTheme(value)}
-                    className={cn(theme === value && 'bg-accent text-accent-foreground')}
+                    className={cn(theme === value && 'bg-secondary text-secondary-foreground')}
                 >
                     <Icon className="size-4" />
                     {label}

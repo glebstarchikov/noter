@@ -12,6 +12,7 @@ import {
   GripHorizontal,
   Copy,
   FileText,
+  Pin,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
@@ -121,8 +122,25 @@ function formatDate(dateStr: string) {
 
 export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const [actionItems, setActionItems] = useState<ActionItem[]>(meeting.action_items || [])
+  const [isPinned, setIsPinned] = useState(meeting.is_pinned)
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
+
+  const togglePin = async () => {
+    const newPinned = !isPinned
+    setIsPinned(newPinned) // optimistic
+    try {
+      const res = await fetch(`/api/meetings/${meeting.id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: newPinned }),
+      })
+      if (!res.ok) throw new Error('Failed to update pin')
+    } catch {
+      setIsPinned(!newPinned) // revert
+      toast.error('Failed to update pin status')
+    }
+  }
 
   const keyDecisions = useMemo(() => meeting.key_decisions ?? [], [meeting.key_decisions])
   const topics = useMemo(() => meeting.topics ?? [], [meeting.topics])
@@ -218,40 +236,58 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           </div>
         </div>
 
-        {/* Delete button with Dialog confirmation */}
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={isDeleting}
-              className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
-            >
-              <Trash2 className="size-4" />
-              <span className="sr-only">Delete meeting</span>
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete this meeting?</DialogTitle>
-              <DialogDescription>
-                This will permanently delete &ldquo;{meeting.title}&rdquo; and all its data including sources, transcript, and action items. This cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
+        <div className="flex items-center gap-2">
+          {/* Pin button */}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={togglePin}
+            className={cn(
+              'border-border',
+              isPinned
+                ? 'text-primary hover:text-primary/80'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Pin className={cn('size-4', isPinned && 'rotate-45')} />
+            <span className="sr-only">{isPinned ? 'Unpin meeting' : 'Pin meeting'}</span>
+          </Button>
+
+          {/* Delete button with Dialog confirmation */}
+          <Dialog>
+            <DialogTrigger asChild>
               <Button
-                variant="destructive"
-                onClick={handleDelete}
+                variant="outline"
+                size="icon"
                 disabled={isDeleting}
+                className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
               >
-                {isDeleting ? 'Deleting...' : 'Delete'}
+                <Trash2 className="size-4" />
+                <span className="sr-only">Delete meeting</span>
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete this meeting?</DialogTitle>
+                <DialogDescription>
+                  This will permanently delete &ldquo;{meeting.title}&rdquo; and all its data including sources, transcript, and action items. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Tabs — shadcn accessible tabs */}

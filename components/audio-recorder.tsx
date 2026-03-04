@@ -208,7 +208,7 @@ export function AudioRecorder({ onProcessing }: Props) {
             <Button
               onClick={handleStart}
               size="lg"
-              className="size-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
+              className="size-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/80"
             >
               <Mic className="size-6" />
               <span className="sr-only">Start recording</span>

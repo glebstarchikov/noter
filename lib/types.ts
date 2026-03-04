@@ -13,6 +13,7 @@ export interface Meeting {
   detailed_notes: string | null
   status: MeetingStatus
   error_message: string | null
+  is_pinned: boolean
   created_at: string
   updated_at: string
 }

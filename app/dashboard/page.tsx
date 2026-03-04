@@ -11,8 +11,9 @@ export default async function DashboardPage() {
 
   const { data: meetings, error } = await supabase
     .from('meetings')
-    .select('id, title, status, created_at, audio_duration, error_message, summary, topics')
+    .select('id, title, status, created_at, audio_duration, error_message, summary, topics, is_pinned')
     .eq('user_id', user.id)
+    .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false })
 
   if (error) {

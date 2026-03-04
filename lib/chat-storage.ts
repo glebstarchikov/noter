@@ -100,3 +100,45 @@ export function clearChatMessages(meetingId: string): void {
     // silent
   }
 }
+
+// --- Global chat storage (separate from meeting chats) ---
+
+const GLOBAL_CHAT_KEY = 'noter-chat-__global__'
+
+export function getGlobalChatMessages(): UIMessage[] | undefined {
+  if (!isLocalStorageAvailable()) return undefined
+
+  try {
+    const raw = localStorage.getItem(GLOBAL_CHAT_KEY)
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      clearGlobalChatMessages()
+      return undefined
+    }
+    return parsed as UIMessage[]
+  } catch {
+    clearGlobalChatMessages()
+    return undefined
+  }
+}
+
+export function saveGlobalChatMessages(messages: UIMessage[]): void {
+  if (!isLocalStorageAvailable()) return
+
+  try {
+    localStorage.setItem(GLOBAL_CHAT_KEY, JSON.stringify(messages))
+  } catch {
+    // Quota exceeded — silent fail
+  }
+}
+
+export function clearGlobalChatMessages(): void {
+  if (!isLocalStorageAvailable()) return
+
+  try {
+    localStorage.removeItem(GLOBAL_CHAT_KEY)
+  } catch {
+    // silent
+  }
+}
