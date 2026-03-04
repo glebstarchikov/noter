@@ -40,27 +40,3 @@ export interface MeetingSource {
   content: string
   created_at: string
 }
-
-export interface Chat {
-  id: string
-  user_id: string
-  title: string
-  source_meeting_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface ChatMessage {
-  id: string
-  chat_id: string
-  user_id: string
-  role: 'user' | 'assistant'
-  content: string
-  created_at: string
-}
-
-export interface ChatListItem {
-  id: string
-  title: string
-  updated_at: string
-}

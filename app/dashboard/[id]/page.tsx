@@ -3,7 +3,6 @@ import { redirect, notFound } from 'next/navigation'
 import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
 import { ProcessingView } from '@/components/processing-view'
 import type { Meeting } from '@/lib/types'
-import { MeetingProvider } from '@/lib/meeting-context'
 
 export default async function MeetingPage({
   params,
@@ -59,8 +58,6 @@ export default async function MeetingPage({
   }
 
   return (
-    <MeetingProvider meetingId={id} meetingTitle={meeting.title ?? 'Untitled Meeting'}>
-      <MeetingDetailWrapper meeting={meeting as Meeting} meetingId={id} />
-    </MeetingProvider>
+    <MeetingDetailWrapper meeting={meeting as Meeting} meetingId={id} />
   )
 }

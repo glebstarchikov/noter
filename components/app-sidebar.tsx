@@ -9,12 +9,10 @@ import {
     Plus,
     ChevronsUpDown,
     PanelLeftIcon,
-    MessageSquare,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Logo } from '@/components/logo'
 import { ThemeToggleInline } from '@/components/theme-toggle'
-import { useChatList } from '@/lib/chat-list-context'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
     DropdownMenu,
@@ -88,7 +86,6 @@ export function AppSidebar() {
     const pathname = usePathname()
     const router = useRouter()
     const [userEmail, setUserEmail] = useState<string | null>(null)
-    const { chats } = useChatList()
 
     useEffect(() => {
         const supabase = createClient()
@@ -150,29 +147,6 @@ export function AppSidebar() {
                                     </SidebarMenuItem>
                                 )
                             })}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-
-
-                <SidebarGroup>
-                    <SidebarGroupLabel>Chats</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {chats.slice(0, 20).map((chat) => (
-                                <SidebarMenuItem key={chat.id}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={pathname === `/dashboard/chats/${chat.id}`}
-                                        tooltip={chat.title}
-                                    >
-                                        <Link href={`/dashboard/chats/${chat.id}`}>
-                                            <MessageSquare />
-                                            <span>{chat.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
