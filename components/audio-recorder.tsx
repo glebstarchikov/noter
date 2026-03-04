@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mic, Square, Pause, Play, RotateCcw, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -49,6 +51,7 @@ export function AudioRecorder({ onProcessing }: Props) {
   } = useAudioRecorder()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const [recordSystemAudio, setRecordSystemAudio] = useState(false)
 
   // Auto-stop at max duration
   useEffect(() => {
@@ -63,7 +66,7 @@ export function AudioRecorder({ onProcessing }: Props) {
 
   const handleStart = async () => {
     try {
-      await startRecording()
+      await startRecording({ recordSystemAudio })
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Could not start recording')
     }
@@ -169,71 +172,87 @@ export function AudioRecorder({ onProcessing }: Props) {
       )}
 
       {/* Controls */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col items-center gap-6">
+        <div className="flex items-center gap-4">
+          {!isRecording && !audioBlob && (
+            <Button
+              onClick={handleStart}
+              size="lg"
+              className="size-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
+            >
+              <Mic className="size-6" />
+              <span className="sr-only">Start recording</span>
+            </Button>
+          )}
+
+          {isRecording && (
+            <>
+              <Button
+                onClick={isPaused ? resumeRecording : pauseRecording}
+                variant="outline"
+                size="lg"
+                className="size-12 rounded-full border-border"
+              >
+                {isPaused ? (
+                  <Play className="size-5" />
+                ) : (
+                  <Pause className="size-5" />
+                )}
+                <span className="sr-only">{isPaused ? 'Resume' : 'Pause'}</span>
+              </Button>
+              <Button
+                onClick={stopRecording}
+                size="lg"
+                className="size-14 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                <Square className="size-5" />
+                <span className="sr-only">Stop recording</span>
+              </Button>
+            </>
+          )}
+
+          {audioBlob && !isRecording && (
+            <>
+              <Button
+                onClick={resetRecording}
+                variant="outline"
+                size="lg"
+                className="size-12 rounded-full border-border"
+              >
+                <RotateCcw className="size-5" />
+                <span className="sr-only">Re-record</span>
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                size="lg"
+                disabled={isSubmitting}
+                className="rounded-lg bg-foreground px-8 text-background hover:bg-foreground/90"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  'Generate notes'
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+
         {!isRecording && !audioBlob && (
-          <Button
-            onClick={handleStart}
-            size="lg"
-            className="size-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
-          >
-            <Mic className="size-6" />
-            <span className="sr-only">Start recording</span>
-          </Button>
-        )}
-
-        {isRecording && (
-          <>
-            <Button
-              onClick={isPaused ? resumeRecording : pauseRecording}
-              variant="outline"
-              size="lg"
-              className="size-12 rounded-full border-border"
-            >
-              {isPaused ? (
-                <Play className="size-5" />
-              ) : (
-                <Pause className="size-5" />
-              )}
-              <span className="sr-only">{isPaused ? 'Resume' : 'Pause'}</span>
-            </Button>
-            <Button
-              onClick={stopRecording}
-              size="lg"
-              className="size-14 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              <Square className="size-5" />
-              <span className="sr-only">Stop recording</span>
-            </Button>
-          </>
-        )}
-
-        {audioBlob && !isRecording && (
-          <>
-            <Button
-              onClick={resetRecording}
-              variant="outline"
-              size="lg"
-              className="size-12 rounded-full border-border"
-            >
-              <RotateCcw className="size-5" />
-              <span className="sr-only">Re-record</span>
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              size="lg"
-              disabled={isSubmitting}
-              className="rounded-lg bg-foreground px-8 text-background hover:bg-foreground/90"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Processing…
-                </>
-              ) : (
-                'Generate notes'
-              )}
-            </Button>
-          </>
+          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-2">
+            <Switch
+              id="system-audio"
+              checked={recordSystemAudio}
+              onCheckedChange={setRecordSystemAudio}
+              className="data-[state=checked]:bg-primary"
+            />
+            <Label htmlFor="system-audio" className="cursor-pointer text-sm font-medium text-foreground">
+              Record meeting audio
+            </Label>
+          </div>
         )}
       </div>
 
