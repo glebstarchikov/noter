@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import OpenAI from 'openai'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { z } from 'zod'
 
 let _openai: OpenAI | null = null
 function getOpenAI() {
@@ -21,31 +22,42 @@ const ratelimit =
 
 export const maxDuration = 120
 
+const transcribeRequestSchema = z.object({
+  meetingId: z.string().trim().min(1),
+  storagePath: z.string().trim().min(1),
+})
+
+function errorResponse(error: string, code: string, status: number) {
+  return NextResponse.json({ error, code }, { status })
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   let meetingId: string | null = null
+  let userId: string | null = null
 
   try {
     // Auth check
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
+    userId = user.id
 
     if (ratelimit) {
       const { success } = await ratelimit.limit(`transcribe_${user.id}`)
       if (!success) {
-        return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 })
+        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
       }
     }
 
-    const body = await request.json()
-    meetingId = body.meetingId
-    const storagePath = body.storagePath as string | undefined
-
-    if (!meetingId) {
-      return NextResponse.json({ error: 'Missing meeting ID' }, { status: 400 })
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = transcribeRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
     }
+    meetingId = parsedBody.data.meetingId
+    const { storagePath } = parsedBody.data
 
     // Verify user owns the meeting
     const { data: meeting } = await supabase
@@ -56,7 +68,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
 
     // Update status to transcribing
@@ -64,10 +76,7 @@ export async function POST(request: NextRequest) {
       .from('meetings')
       .update({ status: 'transcribing' })
       .eq('id', meetingId)
-
-    if (!storagePath) {
-      return NextResponse.json({ error: 'Missing audio storage path' }, { status: 400 })
-    }
+      .eq('user_id', user.id)
 
     // Download audio from Supabase Storage
     const { data: audioData, error: downloadError } = await supabase.storage
@@ -106,13 +115,14 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', meetingId)
+      .eq('user_id', user.id)
 
     return NextResponse.json({ transcript: transcription, meetingId })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Transcription failed'
 
     // Set meeting status to error so it doesn't stay stuck
-    if (meetingId) {
+    if (meetingId && userId) {
       try {
         await supabase
           .from('meetings')
@@ -122,11 +132,12 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', meetingId)
+          .eq('user_id', userId)
       } catch (dbError) {
         console.error('Failed to update meeting error status:', dbError)
       }
     }
 
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(message, 'TRANSCRIPTION_FAILED', 500)
   }
 }

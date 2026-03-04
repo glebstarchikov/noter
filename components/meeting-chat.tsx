@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
@@ -10,9 +10,11 @@ import {
   Send,
   Sparkles,
   Loader2,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getChatMessages, saveChatMessages, clearChatMessages } from '@/lib/chat-storage'
 
 function getMessageText(msg: UIMessage): string {
   if (!msg.parts || !Array.isArray(msg.parts)) return ''
@@ -49,7 +51,33 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
     [meetingId]
   )
 
-  const { messages, sendMessage, status, error } = useChat({ transport })
+  const storedMessages = useMemo(() => getChatMessages(meetingId), [meetingId])
+
+  const { messages, sendMessage, setMessages, status, error } = useChat({
+    id: meetingId,
+    transport,
+    messages: storedMessages,
+  })
+
+  // Persist messages to localStorage (debounced via ref to avoid excessive writes)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (messages.length === 0) return
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = setTimeout(() => {
+      saveChatMessages(meetingId, messages)
+    }, 500)
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [messages, meetingId])
+
+  const handleClearChat = useCallback(() => {
+    clearChatMessages(meetingId)
+    setMessages([])
+  }, [meetingId, setMessages])
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
@@ -69,28 +97,47 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
   if (!isOpen) return null
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={cn(
+        'flex h-full flex-col',
+        variant === 'floating' && 'rounded-xl border border-border bg-card shadow-sm'
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" />
+          <Sparkles className="size-4 text-accent" />
           <span className="text-sm font-medium text-foreground">noter AI</span>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearChat}
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Clear chat history"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Close chat"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label="Chat messages">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
-                <Sparkles className="h-5 w-5 text-accent" />
+                <Sparkles className="size-5 text-accent" />
               </div>
               <p className="text-sm font-medium text-foreground">
                 Ask anything about this meeting
@@ -102,9 +149,11 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
             <div className="flex w-full flex-col gap-2">
               {SUGGESTIONS.map((suggestion) => (
                 <button
+                  type="button"
                   key={suggestion}
                   onClick={() => handleSubmit(suggestion)}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  disabled={isLoading}
+                  className="rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {suggestion}
                 </button>
@@ -152,14 +201,16 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
                   noter AI
                 </span>
                 <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Thinking...</span>
+                  <Loader2 className="size-3 animate-spin" />
+                  <span>{status === 'streaming' ? 'Responding...' : 'Thinking...'}</span>
                 </div>
               </div>
             )}
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                Something went wrong. Please try again.
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+                {error.message?.includes('429') || error.message?.includes('Too Many')
+                  ? "You're sending messages too quickly. Please wait a moment."
+                  : 'Something went wrong. Please try again.'}
               </div>
             )}
           </div>
@@ -187,9 +238,9 @@ export function MeetingChat({ meetingId, isOpen, onClose, variant = 'inline' }: 
             type="submit"
             size="icon"
             disabled={!input.trim() || isLoading}
-            className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-30"
+            className="size-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-30"
           >
-            <Send className="h-4 w-4" />
+            <Send className="size-4" />
             <span className="sr-only">Send message</span>
           </Button>
         </form>

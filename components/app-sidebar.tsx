@@ -3,18 +3,16 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useTheme } from 'next-themes'
 import {
     FileText,
     LogOut,
     Plus,
     ChevronsUpDown,
-    AudioLines,
-    Sun,
-    Moon,
-    Monitor,
+    PanelLeftIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { Logo } from '@/components/logo'
+import { ThemeToggleInline } from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
     DropdownMenu,
@@ -36,16 +34,57 @@ import {
     SidebarMenuItem,
     SidebarMenuButton,
     SidebarRail,
+    useSidebar,
 } from '@/components/ui/sidebar'
 
 const navItems = [
     { href: '/dashboard', label: 'All Notes', icon: FileText },
 ]
 
+function SidebarBrandToggle() {
+    const { state, isMobile, toggleSidebar } = useSidebar()
+    const showExpandedLayout = isMobile || state === 'expanded'
+
+    if (showExpandedLayout) {
+        return (
+            <div className="flex items-center justify-between gap-2">
+                <Link
+                    href="/dashboard"
+                    className="ring-sidebar-ring rounded-md outline-hidden focus-visible:ring-2"
+                    aria-label="Go to dashboard"
+                >
+                    <Logo />
+                </Link>
+                <button
+                    type="button"
+                    onClick={toggleSidebar}
+                    aria-label="Collapse sidebar"
+                    className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex size-8 items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2"
+                >
+                    <PanelLeftIcon className="size-4" />
+                </button>
+            </div>
+        )
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label="Expand sidebar"
+            className="group/brand text-sidebar-foreground ring-sidebar-ring relative flex size-8 items-center justify-center rounded-md outline-hidden focus-visible:ring-2"
+        >
+            <span className="pointer-events-none transition-all duration-150 ease-out motion-reduce:transition-none group-hover/brand:translate-y-0.5 group-hover/brand:opacity-0 group-focus-visible/brand:translate-y-0.5 group-focus-visible/brand:opacity-0">
+                <Logo />
+            </span>
+            <PanelLeftIcon className="pointer-events-none absolute size-4 translate-y-0.5 opacity-0 transition-all duration-150 ease-out motion-reduce:transition-none group-hover/brand:translate-y-0 group-hover/brand:opacity-100 group-focus-visible/brand:translate-y-0 group-focus-visible/brand:opacity-100" />
+        </button>
+    )
+}
+
 export function AppSidebar() {
     const pathname = usePathname()
     const router = useRouter()
-    const { theme, setTheme } = useTheme()
     const [userEmail, setUserEmail] = useState<string | null>(null)
 
     useEffect(() => {
@@ -69,21 +108,7 @@ export function AppSidebar() {
         <Sidebar collapsible="icon">
             {/* Header */}
             <SidebarHeader>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
-                            <Link href="/dashboard">
-                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <AudioLines className="size-4" />
-                                </div>
-                                <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold">noter</span>
-                                    <span className="truncate text-xs">Meeting notes</span>
-                                </div>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
+                <SidebarBrandToggle />
             </SidebarHeader>
 
             {/* Content */}
@@ -177,10 +202,7 @@ export function AppSidebar() {
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                                    {theme === 'dark' ? <Sun /> : <Moon />}
-                                    {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                                </DropdownMenuItem>
+                                <ThemeToggleInline />
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleSignOut}>
                                     <LogOut />

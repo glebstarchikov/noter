@@ -35,12 +35,11 @@ export default function DashboardError({
                 >
                     Try again
                 </Button>
-                <Link
-                    href="/dashboard"
-                    className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90"
-                >
-                    Go to dashboard
-                </Link>
+                <Button asChild>
+                    <Link href="/dashboard">
+                        Go to dashboard
+                    </Link>
+                </Button>
             </div>
         </div>
     )

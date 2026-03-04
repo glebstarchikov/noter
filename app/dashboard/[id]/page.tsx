@@ -33,12 +33,12 @@ export default async function MeetingPage({
             Processing meeting
           </h1>
           <p className="text-sm text-muted-foreground">
-            Your audio is being analyzed by AI. This page will not auto-refresh — please check back in a moment.
+            Your audio is being analyzed by AI.
           </p>
         </div>
         <ProcessingView
           meetingId={id}
-          step={meeting.status as 'transcribing' | 'generating'}
+          step={meeting.status}
         />
       </div>
     )

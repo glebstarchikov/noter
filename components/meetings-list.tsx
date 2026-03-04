@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useId } from 'react'
 import Link from 'next/link'
-import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, Check } from 'lucide-react'
+import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, FileUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -61,6 +62,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
   const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all')
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest')
   const [showFilters, setShowFilters] = useState(false)
+  const filtersPanelId = useId()
 
   const filteredMeetings = useMemo(() => {
     let result = meetings
@@ -105,17 +107,34 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
 
   if (meetings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-20">
-        <p className="text-sm text-muted-foreground">
-          No meetings yet
-        </p>
-        <Link
-          href="/dashboard/new"
-          className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-        >
-          <Plus className="h-4 w-4" />
-          New meeting
-        </Link>
+      <div className="flex flex-col items-center justify-center gap-6 rounded-xl border border-dashed border-border py-20 px-6">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
+          <AudioLines className="size-7 text-muted-foreground" />
+        </div>
+        <div className="flex flex-col items-center gap-2 text-center">
+          <h2 className="text-base font-semibold text-foreground">No meetings yet</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Record a live meeting or upload an audio file to get started. AI will transcribe and extract structured notes automatically.
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-2 sm:flex-row">
+          <Button asChild>
+            <Link href="/dashboard/new">
+              <Plus className="size-4" />
+              New meeting
+            </Link>
+          </Button>
+        </div>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <AudioLines className="h-3.5 w-3.5" />
+            Record live
+          </span>
+          <span className="flex items-center gap-1.5">
+            <FileUp className="h-3.5 w-3.5" />
+            Upload audio
+          </span>
+        </div>
       </div>
     )
   }
@@ -133,13 +152,15 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
               role="searchbox"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by title, summary, or topic..."
+              placeholder="Search by title, summary, or topics…"
               className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             />
             {searchQuery && (
               <button
+                type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -148,9 +169,12 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
 
           {/* Filter toggle */}
           <button
+            type="button"
             onClick={() => setShowFilters(!showFilters)}
+            aria-expanded={showFilters}
+            aria-controls={filtersPanelId}
             className={cn(
-              'flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+              'flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               showFilters || hasActiveFilters
                 ? 'border-accent/40 bg-accent/10 text-foreground'
                 : 'border-border text-muted-foreground hover:border-border hover:text-foreground'
@@ -169,7 +193,8 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                type="button"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowUpDown className="h-3.5 w-3.5" />
                 {currentSortLabel}
@@ -191,15 +216,17 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
 
         {/* Expanded filter row */}
         {showFilters && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
+          <div id={filtersPanelId} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
             <span className="text-xs text-muted-foreground">Status:</span>
             <div className="flex flex-wrap gap-1">
               {STATUS_OPTIONS.map((opt) => (
                 <button
+                  type="button"
                   key={opt.value}
                   onClick={() => setStatusFilter(opt.value)}
+                  aria-pressed={statusFilter === opt.value}
                   className={cn(
-                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     statusFilter === opt.value
                       ? 'bg-secondary text-foreground'
                       : 'text-muted-foreground hover:text-foreground'
@@ -211,11 +238,12 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
             </div>
             {hasActiveFilters && (
               <button
+                type="button"
                 onClick={() => {
                   setSearchQuery('')
                   setStatusFilter('all')
                 }}
-                className="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="ml-auto rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Clear all
               </button>
@@ -239,11 +267,12 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
             No notes match your search
           </p>
           <button
+            type="button"
             onClick={() => {
               setSearchQuery('')
               setStatusFilter('all')
             }}
-            className="text-xs text-accent transition-colors hover:text-accent/80"
+            className="rounded-sm text-xs text-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Clear filters
           </button>
@@ -256,7 +285,7 @@ export function MeetingsList({ meetings }: { meetings: Meeting[] }) {
               <Link
                 key={meeting.id}
                 href={`/dashboard/${meeting.id}`}
-                className="flex items-center justify-between px-5 py-4 transition-colors hover:bg-secondary"
+                className="flex items-center justify-between px-5 py-4 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium text-foreground">

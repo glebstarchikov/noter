@@ -3,10 +3,18 @@
 import { useState, useEffect } from 'react'
 import { Sparkles, PanelRightClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet'
 
 import { cn } from '@/lib/utils'
 import { MeetingDetail } from '@/components/meeting-detail'
 import { MeetingChat } from '@/components/meeting-chat'
+import { useIsMobile } from '@/hooks/use-mobile'
 import type { Meeting } from '@/lib/types'
 
 export function MeetingDetailWrapper({
@@ -17,18 +25,22 @@ export function MeetingDetailWrapper({
     meetingId: string
 }) {
     const [isChatOpen, setIsChatOpen] = useState(false)
+    const isMobile = useIsMobile()
 
-    // Keyboard shortcut: ⌘J to toggle chat
+    // Keyboard shortcuts: ⌘J to toggle chat, Escape to close mobile overlay
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
                 e.preventDefault()
                 setIsChatOpen((prev) => !prev)
             }
+            if (e.key === 'Escape' && isChatOpen) {
+                setIsChatOpen(false)
+            }
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [])
+    }, [isChatOpen])
 
     return (
         <div className="flex h-full">
@@ -46,6 +58,8 @@ export function MeetingDetailWrapper({
                             variant="outline"
                             size="sm"
                             onClick={() => setIsChatOpen(!isChatOpen)}
+                            aria-expanded={isChatOpen}
+                            aria-controls={isMobile ? undefined : 'meeting-chat-panel'}
                             className={cn(
                                 'gap-2 border-border text-muted-foreground transition-colors',
                                 isChatOpen
@@ -54,9 +68,9 @@ export function MeetingDetailWrapper({
                             )}
                         >
                             {isChatOpen ? (
-                                <PanelRightClose className="h-4 w-4" />
+                                <PanelRightClose className="size-4" />
                             ) : (
-                                <Sparkles className="h-4 w-4" />
+                                <Sparkles className="size-4" />
                             )}
                             <span className="hidden sm:inline">
                                 {isChatOpen ? 'Close AI' : 'Ask AI'}
@@ -71,12 +85,12 @@ export function MeetingDetailWrapper({
                 </div>
             </div>
 
-            {/* Chat panel — desktop: side-by-side, mobile: slide-in drawer */}
-            {/* Desktop panel */}
+            {/* Desktop panel — always rendered, uses translate-x for GPU-accelerated slide */}
             <div
+                id="meeting-chat-panel"
                 className={cn(
-                    'hidden border-l border-border bg-background transition-all duration-300 md:flex md:flex-col md:sticky md:top-0 md:h-screen',
-                    isChatOpen ? 'md:w-[420px]' : 'md:w-0 md:overflow-hidden md:border-l-0'
+                    'hidden border-l border-border bg-background transition-transform duration-300 ease-out md:flex md:flex-col md:sticky md:top-0 md:h-screen',
+                    isChatOpen ? 'md:w-[360px] lg:w-[420px] md:translate-x-0' : 'md:w-0 md:translate-x-full md:overflow-hidden md:border-l-0'
                 )}
             >
                 {isChatOpen && (
@@ -89,22 +103,27 @@ export function MeetingDetailWrapper({
                 )}
             </div>
 
-            {/* Mobile: slide-in overlay */}
-            {isChatOpen && (
-                <>
-                    <div
-                        className="fixed inset-0 z-20 bg-background/60 backdrop-blur-sm md:hidden"
-                        onClick={() => setIsChatOpen(false)}
-                    />
-                    <div className="fixed inset-y-0 right-0 z-30 flex w-full flex-col border-l border-border bg-background sm:w-[420px] md:hidden">
+            {/* Mobile: use Radix sheet for focus trap + escape handling */}
+            {isMobile && (
+                <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
+                    <SheetContent
+                        side="right"
+                        className="w-full gap-0 border-l border-border p-0 sm:max-w-[420px] [&>button]:hidden"
+                    >
+                        <SheetHeader className="sr-only">
+                            <SheetTitle>Meeting AI chat</SheetTitle>
+                            <SheetDescription>
+                                Ask questions about this meeting transcript and notes.
+                            </SheetDescription>
+                        </SheetHeader>
                         <MeetingChat
                             meetingId={meetingId}
                             isOpen={isChatOpen}
                             onClose={() => setIsChatOpen(false)}
                             variant="inline"
                         />
-                    </div>
-                </>
+                    </SheetContent>
+                </Sheet>
             )}
         </div>
     )

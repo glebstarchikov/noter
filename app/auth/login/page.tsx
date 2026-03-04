@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -27,6 +29,9 @@ export default function LoginPage() {
         password,
       })
       if (error) throw error
+      toast.success('Signed in successfully')
+      // Vercel guideline: minimum loading-state duration (~400ms) before redirect
+      await new Promise((resolve) => setTimeout(resolve, 400))
       router.push('/dashboard')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
@@ -87,7 +92,14 @@ export default function LoginPage() {
               className="h-11 w-full bg-foreground text-background hover:bg-foreground/90"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                'Sign in'
+              )}
             </Button>
           </form>
 

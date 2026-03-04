@@ -156,7 +156,7 @@ See `lib/types.ts` and SQL scripts in `scripts/`.
 
 `meetings` — core entity with:
 - `id`, `user_id`, `title`, `audio_url`, `audio_duration`
-- `transcript`, `summary` (text fields, nullable)
+- `transcript`, `summary`, `detailed_notes` (text fields, nullable)
 - `action_items`, `key_decisions`, `topics`, `follow_ups` (JSONB arrays)
 - `status` (`MeetingStatus`), `error_message`
 - `created_at`, `updated_at`

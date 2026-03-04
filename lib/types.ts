@@ -10,6 +10,7 @@ export interface Meeting {
   key_decisions: string[]
   topics: string[]
   follow_ups: string[]
+  detailed_notes: string | null
   status: MeetingStatus
   error_message: string | null
   created_at: string

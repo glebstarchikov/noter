@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
 
 export const maxDuration = 30
 
@@ -9,6 +10,23 @@ const ALLOWED_TYPES: Record<string, string> = {
   'text/plain': 'txt',
   'text/markdown': 'md',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+}
+
+const deleteSourceSchema = z.object({
+  sourceId: z.string().trim().min(1),
+})
+
+function errorResponse(error: string, code: string, status: number) {
+  return NextResponse.json({ error, code }, { status })
+}
+
+function isFileLike(value: FormDataEntryValue | null): value is File {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'arrayBuffer' in value &&
+    'name' in value
+  )
 }
 
 async function extractTextFromFile(file: File): Promise<string> {
@@ -74,20 +92,28 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
     const formData = await request.formData()
-    const file = formData.get('file') as File | null
-    const meetingId = formData.get('meetingId') as string | null
+    const fileEntry = formData.get('file')
+    const meetingIdEntry = formData.get('meetingId')
+    const file = isFileLike(fileEntry) ? fileEntry : null
+    const meetingId = typeof meetingIdEntry === 'string' ? meetingIdEntry : null
 
-    if (!file || !meetingId) {
-      return NextResponse.json({ error: 'Missing file or meetingId' }, { status: 400 })
+    if (!file || !meetingId || meetingId.trim().length === 0) {
+      return errorResponse('Missing file or meetingId', 'INVALID_REQUEST', 400)
+    }
+
+    const hasAllowedMime = file.type && Object.keys(ALLOWED_TYPES).includes(file.type)
+    const hasAllowedExtension = /\.(pdf|txt|md|docx)$/i.test(file.name)
+    if (!hasAllowedMime && !hasAllowedExtension) {
+      return errorResponse('Unsupported file type', 'UNSUPPORTED_FILE_TYPE', 400)
     }
 
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File too large. Maximum 10MB.' }, { status: 400 })
+      return errorResponse('File too large. Maximum 10MB.', 'FILE_TOO_LARGE', 400)
     }
 
     // Verify user owns the meeting
@@ -99,7 +125,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
 
     // Extract text from file
@@ -126,7 +152,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ source })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Source upload failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(message, 'SOURCE_UPLOAD_FAILED', 500)
   }
 }
 
@@ -138,12 +164,12 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
     const meetingId = request.nextUrl.searchParams.get('meetingId')
-    if (!meetingId) {
-      return NextResponse.json({ error: 'Missing meetingId' }, { status: 400 })
+    if (!meetingId || meetingId.trim().length === 0) {
+      return errorResponse('Missing meetingId', 'INVALID_REQUEST', 400)
     }
 
     // Verify user owns the meeting
@@ -155,7 +181,7 @@ export async function GET(request: NextRequest) {
       .single()
 
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
 
     const { data: sources, error } = await supabase
@@ -169,7 +195,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sources: sources || [] })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch sources'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(message, 'SOURCES_FETCH_FAILED', 500)
   }
 }
 
@@ -181,13 +207,15 @@ export async function DELETE(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
-    const { sourceId } = await request.json()
-    if (!sourceId) {
-      return NextResponse.json({ error: 'Missing sourceId' }, { status: 400 })
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = deleteSourceSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
     }
+    const { sourceId } = parsedBody.data
 
     const { error } = await supabase
       .from('meeting_sources')
@@ -200,6 +228,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to delete source'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(message, 'SOURCE_DELETE_FAILED', 500)
   }
 }

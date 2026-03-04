@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -10,7 +10,10 @@ import {
   Circle,
   Clock,
   GripHorizontal,
+  Copy,
+  FileText,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -29,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { SourceManager } from '@/components/source-manager'
+import { clearChatMessages } from '@/lib/chat-storage'
 import type { Meeting, ActionItem } from '@/lib/types'
 
 const DEFAULT_PANEL_HEIGHT = 360
@@ -92,9 +96,10 @@ function ScrollablePanel({
           if (e.key === 'ArrowDown') { e.preventDefault(); setHeight(h => Math.max(120, h + step)) }
           if (e.key === 'ArrowUp') { e.preventDefault(); setHeight(h => Math.max(120, h - step)) }
         }}
-        className="flex h-5 cursor-row-resize items-center justify-center border-t border-border transition-colors hover:bg-secondary"
+        className="flex h-5 cursor-row-resize items-center justify-center border-t border-border transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <GripHorizontal className="h-3 w-3 text-muted-foreground" />
+        <GripHorizontal className="size-3 text-muted-foreground" />
+        <span className="sr-only">Use Arrow Up and Arrow Down to resize this panel.</span>
       </div>
     </div>
   )
@@ -119,9 +124,33 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
-  const keyDecisions = meeting.key_decisions ?? []
-  const topics = meeting.topics ?? []
-  const followUps = meeting.follow_ups ?? []
+  const keyDecisions = useMemo(() => meeting.key_decisions ?? [], [meeting.key_decisions])
+  const topics = useMemo(() => meeting.topics ?? [], [meeting.topics])
+  const followUps = useMemo(() => meeting.follow_ups ?? [], [meeting.follow_ups])
+
+  const handleCopyNotes = useCallback(() => {
+    const parts: string[] = []
+    if (meeting.title) parts.push(`# ${meeting.title}\n`)
+    if (meeting.summary) parts.push(`${meeting.summary}\n`)
+    if (meeting.detailed_notes) {
+      parts.push(meeting.detailed_notes)
+    } else {
+      if (keyDecisions.length > 0) {
+        parts.push(`## Key Decisions\n${keyDecisions.map((d) => `- ${d}`).join('\n')}`)
+      }
+    }
+    if (actionItems.length > 0) {
+      parts.push(`## Action Items\n${actionItems.map((a) => `- [${a.done ? 'x' : ' '}] ${a.task}${a.owner ? ` (${a.owner})` : ''}`).join('\n')}`)
+    }
+    if (followUps.length > 0) {
+      parts.push(`## Follow-ups\n${followUps.map((f) => `- ${f}`).join('\n')}`)
+    }
+    navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+      toast.success('Notes copied to clipboard')
+    }).catch(() => {
+      toast.error('Failed to copy notes')
+    })
+  }, [meeting, actionItems, keyDecisions, followUps])
 
   const toggleAction = async (index: number) => {
     const previous = [...actionItems]
@@ -143,29 +172,34 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
   const handleDelete = async () => {
     setIsDeleting(true)
-    const supabase = createClient()
+    try {
+      const response = await fetch(`/api/meetings/${meeting.id}`, {
+        method: 'DELETE',
+      })
 
-    await supabase.from('meeting_sources').delete().eq('meeting_id', meeting.id)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Failed to delete meeting')
+      }
 
-    const { error } = await supabase.from('meetings').delete().eq('id', meeting.id)
-    if (error) {
+      clearChatMessages(meeting.id)
+      router.push('/dashboard')
+    } catch {
       toast.error('Failed to delete meeting')
       setIsDeleting(false)
-      return
     }
-    router.push('/dashboard')
   }
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-2">
           <Link
             href="/dashboard"
-            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ArrowLeft className="h-3 w-3" />
+            <ArrowLeft className="size-3" />
             Back to notes
           </Link>
           <h1 className="text-xl font-semibold text-foreground text-balance">
@@ -173,7 +207,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           </h1>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <Clock className="size-3" />
               {formatDate(meeting.created_at)}
             </span>
             {meeting.audio_duration && (
@@ -193,7 +227,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
               disabled={isDeleting}
               className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="size-4" />
               <span className="sr-only">Delete meeting</span>
             </Button>
           </DialogTrigger>
@@ -222,54 +256,72 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
       {/* Tabs — shadcn accessible tabs */}
       <Tabs defaultValue="summary">
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
+        <TabsList className="w-full justify-start overflow-x-auto">
+          <TabsTrigger value="summary">Notes</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
           <TabsTrigger value="sources">Sources</TabsTrigger>
         </TabsList>
 
+        {/* Copy button — repositioned above content for better flow */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleCopyNotes}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Copy notes to clipboard"
+          >
+            <Copy className="size-3.5" />
+            Copy notes
+          </button>
+        </div>
+
         <TabsContent value="summary">
           <ScrollablePanel>
             <div className="flex flex-col gap-6">
-              {/* Summary text */}
-              <div>
-                {meeting.summary ? (
-                  <p className="text-sm leading-relaxed text-foreground">
-                    {meeting.summary}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No summary available.</p>
-                )}
-              </div>
+              {/* Executive summary */}
+              {meeting.summary && (
+                <p className="text-sm leading-relaxed text-muted-foreground italic">
+                  {meeting.summary}
+                </p>
+              )}
 
               {/* Topics as Badges */}
               {topics.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Topics</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {topics.map((topic, i) => (
-                      <Badge key={i} variant="secondary" className="rounded-full">
-                        {topic}
-                      </Badge>
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {topics.map((topic, i) => (
+                    <Badge key={i} variant="secondary" className="rounded-full">
+                      {topic}
+                    </Badge>
+                  ))}
                 </div>
               )}
 
-              {/* Key Decisions */}
-              {keyDecisions.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Key Decisions</h3>
-                  <div className="flex flex-col gap-2">
-                    {keyDecisions.map((decision, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                        <span className="text-sm leading-relaxed text-foreground">{decision}</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Detailed notes (markdown) or fallback to key decisions */}
+              {meeting.detailed_notes ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none text-foreground [&>h2]:text-base [&>h2]:font-semibold [&>h2]:mt-4 [&>h2]:mb-2 [&>ul]:mb-3 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:mb-3 [&>ol]:list-decimal [&>ol]:pl-5 [&>p]:mb-2 [&>p]:leading-relaxed">
+                  <ReactMarkdown>{meeting.detailed_notes}</ReactMarkdown>
                 </div>
+              ) : (
+                <>
+                  {/* Fallback for old meetings without detailed_notes */}
+                  {keyDecisions.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Key Decisions</h3>
+                      <div className="flex flex-col gap-2">
+                        {keyDecisions.map((decision, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                            <span className="text-sm leading-relaxed text-foreground">{decision}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!meeting.summary && keyDecisions.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No notes available.</p>
+                  )}
+                </>
               )}
             </div>
           </ScrollablePanel>
@@ -283,14 +335,16 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
                 {actionItems.length > 0 ? (
                   actionItems.map((item, i) => (
                     <button
+                      type="button"
                       key={i}
                       onClick={() => toggleAction(i)}
-                      className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary"
+                      aria-pressed={item.done}
+                      className="flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {item.done ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
                       ) : (
-                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       )}
                       <div className="flex flex-col gap-0.5">
                         <span
@@ -339,7 +393,11 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
                 {meeting.transcript}
               </p>
             ) : (
-              <p className="text-sm text-muted-foreground">No transcript available.</p>
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                <FileText className="size-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-muted-foreground">No transcript available</p>
+                <p className="text-xs text-muted-foreground/70">The transcript will appear here once audio has been processed.</p>
+              </div>
             )}
           </ScrollablePanel>
         </TabsContent>
