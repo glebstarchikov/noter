@@ -29,7 +29,7 @@ export function LandingCta() {
         <section ref={sectionRef} className="relative overflow-hidden border-t border-border px-6 py-24 md:px-12 md:py-32">
             {/* Ambient accent glow */}
             <div
-                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[300px] w-[500px] rounded-full bg-accent/[0.06] blur-[100px]"
+                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[300px] w-[500px] rounded-full bg-accent/20 blur-[80px]"
                 aria-hidden="true"
             />
 

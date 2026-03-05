@@ -67,23 +67,7 @@ export function LandingHero() {
           </Button>
         </div>
 
-        {/* Floating glass chatbar preview */}
-        <div
-          className="landing-fade animate-float w-full max-w-md"
-          style={{ animationDelay: '700ms' }}
-          aria-hidden="true"
-        >
-          <div className="flex items-center gap-3 rounded-full border border-black/[0.08] bg-black/[0.03] px-5 py-3 shadow-[0_4px_24px_-4px_oklch(0_0_0/0.08)] backdrop-blur-xl dark:border-white/[0.1] dark:bg-white/[0.06] dark:shadow-[0_4px_24px_-4px_oklch(0_0_0/0.4)]">
-            <Sparkles className="size-4 shrink-0 text-accent" />
-            <span className="flex-1 text-sm text-muted-foreground">
-              Ask across all meetings...
-            </span>
-            <kbd className="hidden rounded-md border border-black/[0.06] bg-black/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground dark:border-white/[0.08] dark:bg-white/[0.06] md:inline-block">
-              ⌘J
-            </kbd>
-            <Send className="size-4 text-accent" />
-          </div>
-        </div>
+
       </div>
     </section>
   )
