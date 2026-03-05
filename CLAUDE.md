@@ -76,7 +76,11 @@ components/
 ├── audio-uploader.tsx       # File upload UI
 ├── processing-view.tsx      # Real-time processing progress
 ├── source-manager.tsx       # Attached document manager
-└── meetings-list.tsx        # Dashboard meetings list
+├── meetings-list.tsx        # Dashboard meetings list
+├── chat-bar.tsx             # Floating chat bar (AI chat shortcut)
+├── landing-cta.tsx          # Landing page CTA section
+├── logo.tsx                 # App logo component
+└── theme-toggle.tsx         # Standalone theme toggle (sun/moon/system)
 
 hooks/
 ├── use-audio-recorder.ts    # Audio recording logic
@@ -197,6 +201,7 @@ recording → uploading → transcribing → generating → done
 - `transcript`, `summary`, `detailed_notes` (nullable text)
 - `action_items`, `key_decisions`, `topics`, `follow_ups` (JSONB arrays)
 - `status` (`MeetingStatus`), `error_message`
+- `is_pinned` (boolean, default false) — pinned meetings sort first per user
 - RLS enabled — users access only their own rows.
 
 ### `meeting_sources` table
@@ -208,7 +213,14 @@ recording → uploading → transcribing → generating → done
 - RLS policies scope access by user folder.
 
 ### Schema changes
-Add a new numbered SQL script in `scripts/` (e.g., `005_*.sql`). Keep app code backward-compatible until the migration is applied.
+Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code backward-compatible until the migration is applied.
+
+**Applied migrations:**
+- `scripts/001_create_meetings_table.sql`
+- `scripts/002_create_storage_bucket.sql`
+- `scripts/003_create_meeting_sources_table.sql`
+- `scripts/004_create_processing_jobs_table.sql`
+- `scripts/005_add_pinned_column.sql` — adds `is_pinned` to `meetings`
 
 ---
 

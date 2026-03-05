@@ -25,6 +25,7 @@ Guidance for AI coding agents working in this repository.
   - `app/dashboard/layout.tsx` — dashboard layout with `SidebarProvider`, `AppSidebar`, and header.
 - `components/`
   - Product-level UI components (meeting detail, chat, recorder, uploader, source manager, processing view, sidebar, meetings list, landing page sections).
+  - Notable components: `chat-bar.tsx` (floating chat shortcut), `landing-cta.tsx` (landing CTA), `logo.tsx` (app logo), `theme-toggle.tsx` (sun/moon/system toggle).
   - `components/ui/` contains reusable UI primitives (shadcn/ui Radix-based, configured via `components.json`).
   - Key UI primitives: `sidebar.tsx`, `scroll-area.tsx`, `collapsible.tsx`, `dropdown-menu.tsx`, `dialog.tsx`, `tabs.tsx`, `badge.tsx`, `button.tsx`.
 - `hooks/`
@@ -160,6 +161,7 @@ See `lib/types.ts` and SQL scripts in `scripts/`.
 - `transcript`, `summary`, `detailed_notes` (text fields, nullable)
 - `action_items`, `key_decisions`, `topics`, `follow_ups` (JSONB arrays)
 - `status` (`MeetingStatus`), `error_message`
+- `is_pinned` (boolean, default false) — pinned meetings sort before unpinned per user
 - `created_at`, `updated_at`
 - RLS enabled — users can only CRUD their own meetings.
 
@@ -177,8 +179,15 @@ See `lib/types.ts` and SQL scripts in `scripts/`.
 - Supports async processing jobs (see `scripts/004_create_processing_jobs_table.sql`).
 
 ### Schema Changes
-- Add a new numbered SQL script in `scripts/` (e.g., `005_*.sql`).
+- Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`).
 - Keep backward compatibility in app code until migration assumptions are safe.
+
+**Applied migrations (run in order):**
+- `scripts/001_create_meetings_table.sql`
+- `scripts/002_create_storage_bucket.sql`
+- `scripts/003_create_meeting_sources_table.sql`
+- `scripts/004_create_processing_jobs_table.sql`
+- `scripts/005_add_pinned_column.sql` — adds `is_pinned boolean` to `meetings`
 
 ## 7) Testing and Validation Expectations
 
@@ -263,8 +272,12 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - Sidebar (navigation + profile): `components/app-sidebar.tsx`
 - Theme provider: `components/theme-provider.tsx`
 - Meetings list: `components/meetings-list.tsx`
+- Floating chat bar: `components/chat-bar.tsx`
 - Landing hero: `components/landing-hero.tsx`
 - Landing features: `components/landing-features.tsx`
+- Landing CTA: `components/landing-cta.tsx`
+- App logo: `components/logo.tsx`
+- Theme toggle: `components/theme-toggle.tsx`
 - Reusable UI primitives: `components/ui/*`
 
 ### Hooks
@@ -289,6 +302,7 @@ When changing AI behavior, keep the model consistent unless the task specificall
 - `scripts/002_create_storage_bucket.sql`
 - `scripts/003_create_meeting_sources_table.sql`
 - `scripts/004_create_processing_jobs_table.sql`
+- `scripts/005_add_pinned_column.sql`
 
 ## 13) Agent Anti-Patterns to Avoid
 - Skipping ownership checks in server routes.
