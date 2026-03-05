@@ -321,13 +321,14 @@ export function AudioRecorder({ onProcessing }: Props) {
               </Label>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                  <Button
+                    variant="ghost-icon"
+                    size="icon-xs"
+                    className="rounded-full"
                     aria-label="What is system audio?"
                   >
                     <Info className="size-3.5" />
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[240px] text-xs">
                   Captures audio playing on your computer (e.g., Zoom, Google Meet). You'll be asked to select a tab or screen to share.

@@ -271,14 +271,14 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
                   >
                     {formatFileType(source.file_type)}
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost-destructive"
+                    size="icon-sm"
                     onClick={() => setDeleteTarget({ id: source.id, name: source.name })}
-                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="size-3.5" />
                     <span className="sr-only">Delete {source.name}</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}

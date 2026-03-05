@@ -196,14 +196,14 @@ export function AudioUploader({ onProcessing }: Props) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
+            <Button
+              variant="ghost-icon"
+              size="icon-sm"
               onClick={(e) => { e.stopPropagation(); setFile(null) }}
-              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Remove file"
             >
               <X className="size-4" />
-            </button>
+            </Button>
           </div>
         </div>
       )}
