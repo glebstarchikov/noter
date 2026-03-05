@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AudioLines } from 'lucide-react'
 import { LandingHero } from '@/components/landing-hero'
@@ -7,13 +10,24 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 
 export default function HomePage() {
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   return (
     <div className="flex min-h-svh flex-col bg-background">
-      {/* Nav */}
-      <header className="flex items-center justify-between px-6 py-5 md:px-12">
+      {/* Sticky glass nav */}
+      <header
+        className={`landing-fade sticky top-0 z-50 flex items-center justify-between px-6 py-4 transition-all duration-300 md:px-12 ${scrolled ? 'glass-nav' : ''
+          }`}
+      >
         <Link
           href="/"
-          className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background">
             <AudioLines className="size-4" />
@@ -26,7 +40,7 @@ export default function HomePage() {
           <ThemeToggle />
           <Link
             href="/auth/login"
-            className="rounded-sm text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hidden rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
           >
             Sign in
           </Link>
@@ -50,7 +64,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="flex items-center justify-between border-t border-border px-6 py-6 md:px-12" aria-label="Site footer">
         <span className="text-xs text-muted-foreground">
-          noter
+          © {new Date().getFullYear()} noter
         </span>
         <span className="text-xs text-muted-foreground">
           Built with care.

@@ -301,15 +301,16 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
         {/* Copy button — repositioned above content for better flow */}
         <div className="flex justify-end">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleCopyNotes}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="gap-1.5 text-xs text-muted-foreground"
             aria-label="Copy notes to clipboard"
           >
             <Copy className="size-3.5" />
             Copy notes
-          </button>
+          </Button>
         </div>
 
         <TabsContent value="summary">

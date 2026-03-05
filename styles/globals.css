@@ -161,6 +161,42 @@
   }
 }
 
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes auth-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 .landing-stagger {
   opacity: 0;
   animation: landing-stagger-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -178,6 +214,48 @@
       transparent 67%);
   background-size: 200% 100%;
   animation: landing-shimmer 3s ease-in-out infinite;
+}
+
+/* Scroll-triggered reveal */
+.reveal-up {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.reveal-up.revealed {
+  animation: reveal-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Gentle float animation */
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Auth card entrance */
+.auth-enter {
+  animation: auth-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Dot grid background */
+.dot-grid {
+  background-image: radial-gradient(circle, oklch(0.45 0 0 / 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .dot-grid {
+  background-image: radial-gradient(circle, oklch(0.6 0 0 / 0.12) 1px, transparent 1px);
+}
+
+/* Glass nav */
+.glass-nav {
+  backdrop-filter: blur(12px) saturate(1.5);
+  background: oklch(0.98 0 0 / 0.8);
+  border-bottom: 1px solid oklch(0 0 0 / 0.06);
+}
+
+.dark .glass-nav {
+  background: oklch(0.09 0 0 / 0.8);
+  border-bottom: 1px solid oklch(1 0 0 / 0.06);
 }
 
 /* Recording waveform animation */

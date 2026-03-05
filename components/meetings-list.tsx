@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, FileUp, Pin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -178,23 +179,25 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
           {/* Search input */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
+            <Input
               type="text"
               role="searchbox"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by title, summary, or topics…"
-              className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              className="w-full rounded-lg bg-card pl-9 pr-9"
             />
             {searchQuery && (
-              <button
+              <Button
                 type="button"
+                variant="ghost-icon"
+                size="icon-xs"
                 onClick={() => setSearchQuery('')}
                 aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
+                <X className="size-3.5" />
+              </Button>
             )}
           </div>
 
@@ -223,13 +226,14 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
           {/* Sort dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 rounded-lg text-xs font-medium text-muted-foreground"
               >
-                <ArrowUpDown className="h-3.5 w-3.5" />
+                <ArrowUpDown className="size-3.5" />
                 {currentSortLabel}
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuLabel>Sort by</DropdownMenuLabel>
@@ -268,16 +272,17 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
               ))}
             </div>
             {hasActiveFilters && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setSearchQuery('')
                   setStatusFilter('all')
                 }}
-                className="ml-auto rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="ml-auto text-xs text-muted-foreground"
               >
                 Clear all
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -297,16 +302,17 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
           <p className="text-sm text-muted-foreground">
             No notes match your search
           </p>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               setSearchQuery('')
               setStatusFilter('all')
             }}
-            className="rounded-sm text-xs text-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="text-xs"
           >
             Clear filters
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-border rounded-xl border border-border">

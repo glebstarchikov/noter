@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Logo } from '@/components/logo'
 import { ThemeToggleInline } from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -56,14 +57,15 @@ function SidebarBrandToggle() {
                 >
                     <Logo />
                 </Link>
-                <button
-                    type="button"
+                <Button
+                    variant="ghost-icon"
+                    size="icon-sm"
                     onClick={toggleSidebar}
                     aria-label="Collapse sidebar"
-                    className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex size-8 items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2"
+                    className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 >
                     <PanelLeftIcon className="size-4" />
-                </button>
+                </Button>
             </div>
         )
     }
