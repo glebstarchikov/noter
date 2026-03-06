@@ -4,15 +4,9 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { MeetingStatus } from '@/lib/types'
-import {
-  readApiError,
-  waitForMeetingCompletion,
-  runLegacyPipeline,
-  type ProcessingState,
-} from '@/lib/meeting-pipeline'
+import { ingestMeetingAudio } from '@/lib/client/meeting-ingestion'
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
@@ -67,65 +61,17 @@ export function AudioUploader({ onProcessing }: Props) {
     let currentMeetingId = ''
 
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      // Create meeting record
-      const { data: meeting, error: insertError } = await supabase
-        .from('meetings')
-        .insert({
-          user_id: user.id,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          status: 'uploading',
-        })
-        .select('id')
-        .single()
-
-      if (insertError || !meeting) throw new Error('Failed to create meeting')
-
-      currentMeetingId = meeting.id
-      onProcessing({ meetingId: meeting.id, step: 'uploading' })
-
-      // Upload audio directly to Supabase Storage (avoids serverless payload limits)
       const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
-      const storagePath = `${user.id}/${meeting.id}.${extension}`
-      const { error: uploadError } = await supabase.storage
-        .from('meeting-audio')
-        .upload(storagePath, file, {
-          contentType: file.type || 'audio/webm',
-        })
-
-      if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
-
-      // Save storage path to DB
-      await supabase
-        .from('meetings')
-        .update({ audio_url: storagePath })
-        .eq('id', meeting.id)
-
-      const processRes = await fetch(`/api/meetings/${meeting.id}/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+      const { meetingId } = await ingestMeetingAudio({
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        audioFile: file,
+        fileExtension: extension,
+        contentType: file.type || 'audio/webm',
+        onProcessing,
       })
 
-      if (!processRes.ok) {
-        const processError = await readApiError(processRes, 'Failed to queue processing')
-        if (processError.code === 'QUEUE_UNAVAILABLE') {
-          await runLegacyPipeline(meeting.id, storagePath, onProcessing)
-          onProcessing({ meetingId: meeting.id, step: 'done' })
-          router.push(`/dashboard/${meeting.id}`)
-          return
-        }
-
-        throw new Error(processError.message)
-      }
-
-      onProcessing({ meetingId: meeting.id, step: 'transcribing' })
-      await waitForMeetingCompletion(meeting.id, onProcessing)
-      onProcessing({ meetingId: meeting.id, step: 'done' })
-      router.push(`/dashboard/${meeting.id}`)
+      currentMeetingId = meetingId
+      router.push(`/dashboard/${meetingId}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       toast.error(message)
