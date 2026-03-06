@@ -188,6 +188,8 @@ recording → uploading → transcribing → generating → done
 ## Testing
 
 - Tests are **colocated** with route handlers: `app/api/*/route.test.ts`. Do not use `__tests__/`.
+- Non-route tests are also **colocated** with implementation files using `*.test.ts` (example: `lib/chat-storage.test.ts`).
+- Use `__tests__/` directories nowhere in this repo.
 - `vitest.setup.ts` mocks `next/server` and sets environment variables automatically.
 - Standard mock targets: `@/lib/supabase/server`, `ai`, `@ai-sdk/openai`, `@upstash/ratelimit`, `@upstash/redis`.
 - When changing API behavior, add or update the colocated `route.test.ts`.
