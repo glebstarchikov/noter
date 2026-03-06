@@ -5,18 +5,15 @@ import {
   UIMessage,
 } from 'ai'
 import { createClient } from '@/lib/supabase/server'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import {
+  createOptionalRatelimit,
+  enforceRateLimit,
+  errorResponse,
+  requireUser,
+} from '@/lib/server/api/route-helpers'
 import { z } from 'zod'
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(10, '10 s'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createOptionalRatelimit(10, '10 s')
 
 export const maxDuration = 60
 
@@ -29,13 +26,6 @@ type ActionItemShape = {
   task: string
   owner: string | null
   done: boolean
-}
-
-function errorResponse(error: string, code: string, status: number) {
-  return new Response(JSON.stringify({ error, code }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -59,18 +49,15 @@ function isActionItemArray(value: unknown): value is ActionItemShape[] {
 export async function POST(req: Request) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
+    const authResult = await requireUser(supabase)
+    if ('response' in authResult) {
+      return authResult.response
     }
+    const { user } = authResult
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`chat_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const rateLimitResponse = await enforceRateLimit(ratelimit, user.id, 'chat')
+    if (rateLimitResponse) {
+      return rateLimitResponse
     }
 
     const rawBody = await req.json().catch(() => null)

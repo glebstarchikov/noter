@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse, requireUser } from '@/lib/server/api/route-helpers'
 import { z } from 'zod'
 
 export const maxDuration = 30
@@ -15,10 +16,6 @@ const ALLOWED_TYPES: Record<string, string> = {
 const deleteSourceSchema = z.object({
   sourceId: z.string().trim().min(1),
 })
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 function isFileLike(value: FormDataEntryValue | null): value is File {
   return (
@@ -88,12 +85,11 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
+    const authResult = await requireUser(supabase)
+    if ('response' in authResult) {
+      return authResult.response
     }
+    const { user } = authResult
 
     const formData = await request.formData()
     const fileEntry = formData.get('file')
@@ -160,12 +156,11 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
+    const authResult = await requireUser(supabase)
+    if ('response' in authResult) {
+      return authResult.response
     }
+    const { user } = authResult
 
     const meetingId = request.nextUrl.searchParams.get('meetingId')
     if (!meetingId || meetingId.trim().length === 0) {
@@ -203,12 +198,11 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
+    const authResult = await requireUser(supabase)
+    if ('response' in authResult) {
+      return authResult.response
     }
+    const { user } = authResult
 
     const rawBody = await request.json().catch(() => null)
     const parsedBody = deleteSourceSchema.safeParse(rawBody)

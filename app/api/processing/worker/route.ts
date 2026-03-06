@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { errorResponse } from '@/lib/server/api/route-helpers'
 import OpenAI from 'openai'
 import { z } from 'zod'
 import type { ActionItem } from '@/lib/types'
@@ -75,10 +76,6 @@ type ProcessingJob = {
   locked_by: string | null
   idempotency_key: string
   last_error: string | null
-}
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
 }
 
 function logEvent(event: string, payload: Record<string, unknown>) {

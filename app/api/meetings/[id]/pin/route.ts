@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse, requireUser } from '@/lib/server/api/route-helpers'
 
 export const maxDuration = 10
-
-function errorResponse(error: string, code: string, status: number) {
-    return NextResponse.json({ error, code }, { status })
-}
 
 export async function PATCH(
     request: Request,
@@ -23,13 +20,11 @@ export async function PATCH(
         }
 
         const supabase = await createClient()
-        const {
-            data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-            return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
+        const authResult = await requireUser(supabase)
+        if ('response' in authResult) {
+            return authResult.response
         }
+        const { user } = authResult
 
         const { data: meeting } = await supabase
             .from('meetings')

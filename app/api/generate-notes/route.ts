@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import OpenAI from 'openai'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import {
+  createOptionalRatelimit,
+  enforceRateLimit,
+  errorResponse,
+  requireUser,
+} from '@/lib/server/api/route-helpers'
 import { z } from 'zod'
 import type { ActionItem } from '@/lib/types'
 
@@ -15,14 +19,7 @@ function getOpenAI() {
   return _openai
 }
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(5, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createOptionalRatelimit(5, '1 m')
 
 export const maxDuration = 60
 
@@ -30,10 +27,6 @@ const generateNotesRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
   transcript: z.string().optional(),
 })
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 const generatedNotesSchema = z.object({
   title: z.string().optional(),
@@ -107,17 +100,16 @@ export async function POST(request: NextRequest) {
 
   try {
     // Auth check
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
+    const authResult = await requireUser(supabase)
+    if ('response' in authResult) {
+      return authResult.response
     }
+    const { user } = authResult
     userId = user.id
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`generate_notes_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const rateLimitResponse = await enforceRateLimit(ratelimit, user.id, 'generate_notes')
+    if (rateLimitResponse) {
+      return rateLimitResponse
     }
 
     const rawBody = await request.json().catch(() => null)
