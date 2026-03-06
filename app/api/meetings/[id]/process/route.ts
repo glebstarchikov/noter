@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -20,10 +21,6 @@ const startProcessingSchema = z.object({
 })
 
 type RouteContext = { params: Promise<{ id: string }> }
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 function isQueueConfigured() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.CRON_SECRET)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 import OpenAI from 'openai'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
@@ -30,10 +31,6 @@ const generateNotesRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
   transcript: z.string().optional(),
 })
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 const generatedNotesSchema = z.object({
   title: z.string().optional(),
