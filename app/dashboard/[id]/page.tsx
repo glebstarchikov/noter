@@ -58,6 +58,6 @@ export default async function MeetingPage({
   }
 
   return (
-    <MeetingDetailWrapper meeting={meeting as Meeting} meetingId={id} />
+    <MeetingDetailWrapper meeting={meeting as Meeting} />
   )
 }

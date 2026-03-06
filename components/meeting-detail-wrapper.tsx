@@ -7,7 +7,6 @@ export function MeetingDetailWrapper({
     meeting,
 }: {
     meeting: Meeting
-    meetingId: string
 }) {
     return (
         <div className="flex h-full">
