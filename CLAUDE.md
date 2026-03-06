@@ -262,3 +262,7 @@ Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code b
 3. Run `pnpm lint` and `pnpm test` — fix any failures.
 4. Verify edge cases: unauthenticated requests, missing IDs, ownership failures, empty data.
 5. Write a clear commit message describing what changed and why.
+
+### Hook location convention
+- Place shared React hooks only in `hooks/` and import them via `@/hooks/*`.
+- Do not add hook files under `components/ui/` (e.g., `use-toast`, `use-mobile`); use the canonical copies in `hooks/`.
