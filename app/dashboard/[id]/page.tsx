@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
 import { ProcessingView } from '@/components/processing-view'
+import { DashboardMeetingTitleSync } from '@/components/dashboard-meeting-title-sync'
 import type { Meeting } from '@/lib/types'
 
 export default async function MeetingPage({
@@ -28,6 +29,7 @@ export default async function MeetingPage({
   if (meeting.status === 'transcribing' || meeting.status === 'generating' || meeting.status === 'recording' || meeting.status === 'uploading') {
     return (
       <div className="flex flex-col gap-6 p-6 md:p-10">
+        <DashboardMeetingTitleSync meetingTitle={meeting.title} />
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-foreground">
             Processing meeting
@@ -48,6 +50,7 @@ export default async function MeetingPage({
   if (meeting.status === 'error') {
     return (
       <div className="flex flex-col gap-6 p-6 md:p-10">
+        <DashboardMeetingTitleSync meetingTitle={meeting.title} />
         <ProcessingView
           meetingId={id}
           step="error"
@@ -58,6 +61,9 @@ export default async function MeetingPage({
   }
 
   return (
-    <MeetingDetailWrapper meeting={meeting as Meeting} meetingId={id} />
+    <>
+      <DashboardMeetingTitleSync meetingTitle={meeting.title} />
+      <MeetingDetailWrapper meeting={meeting as Meeting} meetingId={id} />
+    </>
   )
 }

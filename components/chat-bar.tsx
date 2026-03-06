@@ -14,6 +14,7 @@ import {
     ChevronDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useDashboardMeetingTitle } from '@/components/dashboard-meeting-title-context'
 import {
     getChatMessages,
     saveChatMessages,
@@ -45,17 +46,14 @@ const MEETING_SUGGESTIONS = [
     'Key decisions',
 ]
 
-interface ChatBarProps {
-    meetingTitle?: string
-}
-
-export function ChatBar({ meetingTitle }: ChatBarProps) {
+export function ChatBar() {
     const pathname = usePathname()
     const [isExpanded, setIsExpanded] = useState(false)
     const [input, setInput] = useState('')
     const scrollRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const panelRef = useRef<HTMLDivElement>(null)
+    const { meetingTitle } = useDashboardMeetingTitle()
 
     // Derive context from the current route
     const meetingId = useMemo(() => {
