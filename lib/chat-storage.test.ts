@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { getChatMessages, saveChatMessages, clearChatMessages } from '../chat-storage'
+import { getChatMessages, saveChatMessages, clearChatMessages } from './chat-storage'
 import type { UIMessage } from 'ai'
 
 function makeMessage(id: string, role: 'user' | 'assistant', text: string): UIMessage {
