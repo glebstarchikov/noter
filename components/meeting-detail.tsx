@@ -35,6 +35,7 @@ import { toast } from 'sonner'
 import { SourceManager } from '@/components/source-manager'
 import { clearChatMessages } from '@/lib/chat-storage'
 import type { Meeting, ActionItem } from '@/lib/types'
+import { formatMeetingDate } from '@/lib/presentation/meeting-format'
 
 const DEFAULT_PANEL_HEIGHT = 360
 
@@ -104,20 +105,6 @@ function ScrollablePanel({
       </div>
     </div>
   )
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ]
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 || 12
-  return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at ${hour12}:${m.toString().padStart(2, '0')} ${period}`
 }
 
 export function MeetingDetail({ meeting }: { meeting: Meeting }) {
@@ -226,7 +213,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Clock className="size-3" />
-              {formatDate(meeting.created_at)}
+              {formatMeetingDate(meeting.created_at)}
             </span>
             {meeting.audio_duration && (
               <span>

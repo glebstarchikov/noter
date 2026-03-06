@@ -19,36 +19,15 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Meeting, MeetingStatus } from '@/lib/types'
-
-function statusBadge(status: string) {
-  const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    recording: { label: 'Recording', variant: 'default' },
-    uploading: { label: 'Uploading', variant: 'default' },
-    transcribing: { label: 'Transcribing', variant: 'default' },
-    generating: { label: 'Generating', variant: 'default' },
-    done: { label: 'Complete', variant: 'secondary' },
-    error: { label: 'Error', variant: 'destructive' },
-  }
-  return map[status] || { label: status, variant: 'outline' as const }
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 || 12
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${hour12}:${m.toString().padStart(2, '0')} ${period}`
-}
+import { formatMeetingDate, meetingStatusMeta } from '@/lib/presentation/meeting-format'
 
 const STATUS_OPTIONS: { value: MeetingStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All statuses' },
-  { value: 'done', label: 'Complete' },
-  { value: 'recording', label: 'Recording' },
-  { value: 'transcribing', label: 'Transcribing' },
-  { value: 'generating', label: 'Generating' },
-  { value: 'error', label: 'Error' },
+  { value: 'done', label: meetingStatusMeta.done.label },
+  { value: 'recording', label: meetingStatusMeta.recording.label },
+  { value: 'transcribing', label: meetingStatusMeta.transcribing.label },
+  { value: 'generating', label: meetingStatusMeta.generating.label },
+  { value: 'error', label: meetingStatusMeta.error.label },
 ]
 
 type SortOrder = 'newest' | 'oldest' | 'title-asc' | 'title-desc'
@@ -317,7 +296,7 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
       ) : (
         <div className="flex flex-col divide-y divide-border rounded-xl border border-border">
           {filteredMeetings.map((meeting) => {
-            const status = statusBadge(meeting.status)
+            const status = meetingStatusMeta[meeting.status]
             return (
               <div
                 key={meeting.id}
@@ -331,7 +310,7 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
                     {meeting.title}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatDate(meeting.created_at)}
+                    {formatMeetingDate(meeting.created_at)}
                   </span>
                 </Link>
                 <div className="flex shrink-0 items-center gap-2 pr-5">

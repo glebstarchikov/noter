@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import type { MeetingSource } from '@/lib/types'
+import { formatMeetingDate } from '@/lib/presentation/meeting-format'
 
 const ALLOWED_EXTENSIONS = ['pdf', 'txt', 'md', 'docx']
 const MAX_SIZE_MB = 10
@@ -30,16 +31,6 @@ const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
 function formatFileType(type: string) {
   return type.toUpperCase()
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 || 12
-  return `${months[d.getMonth()]} ${d.getDate()}, ${hour12}:${m.toString().padStart(2, '0')} ${period}`
 }
 
 const TYPE_BADGE_STYLES: Record<string, string> = {
@@ -258,7 +249,7 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
                   <div className="flex flex-col overflow-hidden">
                     <span className="truncate text-sm text-foreground">{source.name}</span>
                     <span className="text-[10px] text-muted-foreground">
-                      {formatDate(source.created_at)}
+                      {formatMeetingDate(source.created_at)}
                     </span>
                   </div>
                 </div>

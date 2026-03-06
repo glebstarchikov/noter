@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import type { MeetingStatus } from '@/lib/types'
+import { meetingStatusMeta } from '@/lib/presentation/meeting-format'
 
 interface Props {
   meetingId: string
@@ -30,46 +31,6 @@ const steps = [
   { key: 'generating', label: 'Generating notes', description: 'AI is extracting structured notes' },
   { key: 'done', label: 'Complete', description: 'Your meeting notes are ready' },
 ]
-
-const statusMeta: Record<
-  MeetingStatus,
-  {
-    stage: 'transcribing' | 'generating' | 'done' | 'error'
-    label: string
-    description: string
-  }
-> = {
-  recording: {
-    stage: 'transcribing',
-    label: 'Recording audio',
-    description: 'Capturing meeting audio in your browser',
-  },
-  uploading: {
-    stage: 'transcribing',
-    label: 'Uploading audio',
-    description: 'Uploading recording to secure storage',
-  },
-  transcribing: {
-    stage: 'transcribing',
-    label: 'Transcribing audio',
-    description: 'Converting speech to text with Whisper',
-  },
-  generating: {
-    stage: 'generating',
-    label: 'Generating notes',
-    description: 'AI is extracting structured notes',
-  },
-  done: {
-    stage: 'done',
-    label: 'Complete',
-    description: 'Your meeting notes are ready',
-  },
-  error: {
-    stage: 'error',
-    label: 'Error',
-    description: 'Something went wrong while processing this meeting',
-  },
-}
 
 export function ProcessingView({ meetingId, step, error }: Props) {
   const router = useRouter()
@@ -194,7 +155,7 @@ export function ProcessingView({ meetingId, step, error }: Props) {
     )
   }
 
-  const currentStage = statusMeta[currentStep].stage
+  const currentStage = meetingStatusMeta[currentStep].stage
   const currentIndex = steps.findIndex((s) => s.key === currentStage)
 
   return (
@@ -204,9 +165,9 @@ export function ProcessingView({ meetingId, step, error }: Props) {
           const isActive = s.key === currentStage
           const isDone = i < currentIndex || currentStage === 'done'
           const isPending = i > currentIndex && currentStage !== 'done'
-          const displayLabel = s.key === currentStage ? statusMeta[currentStep].label : s.label
+          const displayLabel = s.key === currentStage ? meetingStatusMeta[currentStep].label : s.label
           const displayDescription =
-            s.key === currentStage ? statusMeta[currentStep].description : s.description
+            s.key === currentStage ? meetingStatusMeta[currentStep].description : s.description
 
           return (
             <div key={s.key} className="flex items-start gap-4">
