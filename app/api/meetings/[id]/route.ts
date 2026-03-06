@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 
 export const maxDuration = 30
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 export async function GET(
   _request: Request,

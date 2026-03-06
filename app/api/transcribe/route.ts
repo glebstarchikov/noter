@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 import OpenAI from 'openai'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
@@ -26,10 +27,6 @@ const transcribeRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
   storagePath: z.string().trim().min(1),
 })
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()

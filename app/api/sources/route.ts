@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 import { z } from 'zod'
 
 export const maxDuration = 30
@@ -15,10 +16,6 @@ const ALLOWED_TYPES: Record<string, string> = {
 const deleteSourceSchema = z.object({
   sourceId: z.string().trim().min(1),
 })
-
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
 
 function isFileLike(value: FormDataEntryValue | null): value is File {
   return (

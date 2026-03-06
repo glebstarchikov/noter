@@ -5,6 +5,7 @@ import {
     UIMessage,
 } from 'ai'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -20,6 +21,8 @@ const ratelimit =
 
 export const maxDuration = 60
 
+const MAX_GLOBAL_CONTEXT_CHARS = 100_000
+
 const globalChatRequestSchema = z.object({
     messages: z.array(z.unknown()).default([]),
 })
@@ -28,13 +31,6 @@ type ActionItemShape = {
     task: string
     owner: string | null
     done: boolean
-}
-
-function errorResponse(error: string, code: string, status: number) {
-    return new Response(JSON.stringify({ error, code }), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    })
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -104,8 +100,9 @@ export async function POST(req: Request) {
             return errorResponse('No meetings found', 'NO_MEETINGS', 404)
         }
 
-        // Build context from all meetings
+        // Build context from all meetings with truncation safeguard
         let context = `# All Meetings (${meetings.length} total)\n\n`
+        let contextSize = 0
 
         for (const meeting of meetings as MeetingRow[]) {
             const meetingTitle =
@@ -119,47 +116,55 @@ export async function POST(req: Request) {
                 day: 'numeric',
             })
 
-            context += `---\n## ${meetingTitle} (${createdDate})\n\n`
+            let meetingBlock = `---\n## ${meetingTitle} (${createdDate})\n\n`
 
             if (typeof meeting.summary === 'string' && meeting.summary.length > 0) {
-                context += `### Summary\n${meeting.summary}\n\n`
+                meetingBlock += `### Summary\n${meeting.summary}\n\n`
             }
 
             const actionItems = isActionItemArray(meeting.action_items) ? meeting.action_items : []
             if (actionItems.length > 0) {
-                context += `### Action Items\n`
+                meetingBlock += `### Action Items\n`
                 for (const item of actionItems) {
-                    context += `- [${item.done ? 'x' : ' '}] ${item.task}${item.owner ? ` (Owner: ${item.owner})` : ''}\n`
+                    meetingBlock += `- [${item.done ? 'x' : ' '}] ${item.task}${item.owner ? ` (Owner: ${item.owner})` : ''}\n`
                 }
-                context += '\n'
+                meetingBlock += '\n'
             }
 
             const keyDecisions = isStringArray(meeting.key_decisions) ? meeting.key_decisions : []
             if (keyDecisions.length > 0) {
-                context += `### Key Decisions\n`
+                meetingBlock += `### Key Decisions\n`
                 for (const decision of keyDecisions) {
-                    context += `- ${decision}\n`
+                    meetingBlock += `- ${decision}\n`
                 }
-                context += '\n'
+                meetingBlock += '\n'
             }
 
             const topics = isStringArray(meeting.topics) ? meeting.topics : []
             if (topics.length > 0) {
-                context += `### Topics\n`
+                meetingBlock += `### Topics\n`
                 for (const topic of topics) {
-                    context += `- ${topic}\n`
+                    meetingBlock += `- ${topic}\n`
                 }
-                context += '\n'
+                meetingBlock += '\n'
             }
 
             const followUps = isStringArray(meeting.follow_ups) ? meeting.follow_ups : []
             if (followUps.length > 0) {
-                context += `### Follow-ups\n`
+                meetingBlock += `### Follow-ups\n`
                 for (const followUp of followUps) {
-                    context += `- ${followUp}\n`
+                    meetingBlock += `- ${followUp}\n`
                 }
-                context += '\n'
+                meetingBlock += '\n'
             }
+
+            if (contextSize + meetingBlock.length > MAX_GLOBAL_CONTEXT_CHARS) {
+                context += '\n\n[...additional meetings truncated due to context limits]\n'
+                break
+            }
+
+            context += meetingBlock
+            contextSize += meetingBlock.length
         }
 
         const systemPrompt = `You are noter AI, a global meeting assistant. You have access to summaries, action items, key decisions, topics, and follow-ups from ALL the user's meetings.

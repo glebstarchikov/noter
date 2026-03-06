@@ -5,6 +5,7 @@ import {
   UIMessage,
 } from 'ai'
 import { createClient } from '@/lib/supabase/server'
+import { errorResponse } from '@/lib/api-helpers'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -29,13 +30,6 @@ type ActionItemShape = {
   task: string
   owner: string | null
   done: boolean
-}
-
-function errorResponse(error: string, code: string, status: number) {
-  return new Response(JSON.stringify({ error, code }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
 }
 
 function isStringArray(value: unknown): value is string[] {

@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import type { ActionItem } from '@/lib/types'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { errorResponse } from '@/lib/api-helpers'
 
 export const maxDuration = 300
 
@@ -77,10 +78,6 @@ type ProcessingJob = {
   last_error: string | null
 }
 
-function errorResponse(error: string, code: string, status: number) {
-  return NextResponse.json({ error, code }, { status })
-}
-
 function logEvent(event: string, payload: Record<string, unknown>) {
   console.log(JSON.stringify({ scope: 'processing.worker', event, ...payload }))
 }
@@ -118,8 +115,7 @@ function normalizeActionItems(values: z.infer<typeof generatedNotesSchema>['acti
 }
 
 function getBackoffMs(attemptCount: number) {
-  const retriesSoFar = Math.max(0, attemptCount - 1)
-  return Math.min(MAX_RETRY_DELAY_MS, BASE_RETRY_DELAY_MS * 2 ** retriesSoFar)
+  return Math.min(MAX_RETRY_DELAY_MS, BASE_RETRY_DELAY_MS * 2 ** Math.max(0, attemptCount))
 }
 
 function isRetryableError(message: string) {
