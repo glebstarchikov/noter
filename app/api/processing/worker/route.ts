@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { z } from 'zod'
-import type { ActionItem } from '@/lib/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { errorResponse } from '@/lib/api-helpers'
+import { getOpenAI } from '@/lib/openai'
+import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
+import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
+import { generatedNotesSchema } from '@/lib/schemas'
 
 export const maxDuration = 300
 
@@ -15,54 +17,6 @@ const MAX_RETRY_DELAY_MS = 15 * 60 * 1000
 const workerQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(10).default(3),
 })
-
-const generatedNotesSchema = z.object({
-  title: z.string().optional(),
-  summary: z.string().optional(),
-  detailed_notes: z.string().optional(),
-  action_items: z
-    .array(
-      z.object({
-        task: z.string(),
-        owner: z.string().nullable().optional(),
-        done: z.boolean().optional(),
-      })
-    )
-    .optional(),
-  key_decisions: z.array(z.string()).optional(),
-  topics: z.array(z.string()).optional(),
-  follow_ups: z.array(z.string()).optional(),
-})
-
-const SYSTEM_PROMPT = `You are an expert meeting note-taker. Given a meeting transcript, produce structured notes in the following JSON format. Be concise but thorough.
-
-{
-  "title": "A short descriptive title for the meeting",
-  "summary": "A 1-2 sentence executive summary of the meeting",
-  "detailed_notes": "Comprehensive meeting notes in markdown format. Use ## headers for each major topic discussed. Under each header, include detailed bullet points covering: context and background, key discussion points, arguments or perspectives raised, conclusions reached, and any nuances worth capturing. These notes serve as the canonical record of the meeting and should be thorough enough that someone who missed the meeting can fully understand what happened.",
-  "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
-  ],
-  "key_decisions": ["Decision 1", "Decision 2"],
-  "topics": ["Topic 1", "Topic 2"],
-  "follow_ups": ["Follow-up item 1", "Follow-up item 2"]
-}
-
-Rules:
-- Extract ALL action items mentioned, even implicit ones
-- Identify who is responsible for each action item when mentioned
-- List key decisions that were made during the meeting
-- List the main topics/themes discussed
-- List any follow-ups or next steps mentioned
-- The detailed_notes field should be comprehensive markdown with section headers per topic, not a repetition of the summary
-- Keep language clear, professional, and concise
-- Return ONLY valid JSON, nothing else`
-
-let _openai: OpenAI | null = null
-function getOpenAI() {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  return _openai
-}
 
 type ProcessingJob = {
   id: string
@@ -90,29 +44,6 @@ function isWorkerAuthorized(request: NextRequest) {
   return authorization === `Bearer ${secret}`
 }
 
-function normalizeStringArray(values: string[] | undefined): string[] {
-  if (!values) return []
-  return values.map((value) => value.trim()).filter(Boolean)
-}
-
-function normalizeActionItems(values: z.infer<typeof generatedNotesSchema>['action_items']): ActionItem[] {
-  if (!values) return []
-
-  const items: ActionItem[] = []
-  for (const item of values) {
-    const task = item.task.trim()
-    if (!task) continue
-
-    const owner = item.owner?.trim() ?? null
-    items.push({
-      task,
-      owner: owner && owner.length > 0 ? owner : null,
-      done: item.done ?? false,
-    })
-  }
-
-  return items
-}
 
 function getBackoffMs(attemptCount: number) {
   return Math.min(MAX_RETRY_DELAY_MS, BASE_RETRY_DELAY_MS * 2 ** Math.max(0, attemptCount))
@@ -326,7 +257,7 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
   const completion = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: NOTES_GENERATION_PROMPT },
       { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
     ],
     temperature: 0.3,

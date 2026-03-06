@@ -6,6 +6,7 @@ import {
 } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
+import { isStringArray, isActionItemArray } from '@/lib/type-guards'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -25,30 +26,6 @@ const chatRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
   messages: z.array(z.unknown()).default([]),
 })
-
-type ActionItemShape = {
-  task: string
-  owner: string | null
-  done: boolean
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string')
-}
-
-function isActionItemArray(value: unknown): value is ActionItemShape[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof item.task === 'string' &&
-        (item.owner === null || typeof item.owner === 'string') &&
-        typeof item.done === 'boolean'
-    )
-  )
-}
 
 export async function POST(req: Request) {
   try {
