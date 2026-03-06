@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const supabase = await createClient()
     const authResult = await requireUser(supabase)
-    if ('response' in authResult) {
+    if (!authResult.ok) {
       return authResult.response
     }
     const { user } = authResult

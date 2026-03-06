@@ -9,20 +9,24 @@ type SupabaseAuthClient = {
   }
 }
 
+export type RequireUserResult =
+  | { ok: true; user: User }
+  | { ok: false; response: Response }
+
 export function errorResponse(error: string, code: string, status: number) {
   return NextResponse.json({ error, code }, { status })
 }
 
-export async function requireUser(supabase: SupabaseAuthClient) {
+export async function requireUser(supabase: SupabaseAuthClient): Promise<RequireUserResult> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { response: errorResponse('Unauthorized', 'UNAUTHORIZED', 401) }
+    return { ok: false, response: errorResponse('Unauthorized', 'UNAUTHORIZED', 401) }
   }
 
-  return { user }
+  return { ok: true, user }
 }
 
 export function createOptionalRatelimit(limit: number, window: `${number} ${'ms' | 's' | 'm' | 'h' | 'd'}`) {

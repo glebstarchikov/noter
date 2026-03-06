@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
     const authResult = await requireUser(supabase)
-    if ('response' in authResult) {
+    if (!authResult.ok) {
       return authResult.response
     }
     const { user } = authResult
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
     const authResult = await requireUser(supabase)
-    if ('response' in authResult) {
+    if (!authResult.ok) {
       return authResult.response
     }
     const { user } = authResult
@@ -199,7 +199,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient()
     const authResult = await requireUser(supabase)
-    if ('response' in authResult) {
+    if (!authResult.ok) {
       return authResult.response
     }
     const { user } = authResult
