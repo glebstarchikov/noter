@@ -1,32 +1,30 @@
-import { GET } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { NextRequest } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-const mockTranscriptionCreate = vi.fn()
-const mockCompletionCreate = vi.fn()
+const mockTranscriptionCreate = mock(() => {})
+const mockCompletionCreate = mock(() => {})
 
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: vi.fn(),
+mock.module('@/lib/supabase/admin', () => ({
+  createAdminClient: mock(() => {}),
 }))
 
-vi.mock('openai', () => {
-  const MockOpenAI = function () {
-    return {
-      audio: {
-        transcriptions: {
-          create: mockTranscriptionCreate,
-        },
+mock.module('@/lib/openai', () => ({
+  getOpenAI: mock(() => ({
+    audio: {
+      transcriptions: {
+        create: mockTranscriptionCreate,
       },
-      chat: {
-        completions: {
-          create: mockCompletionCreate,
-        },
+    },
+    chat: {
+      completions: {
+        create: mockCompletionCreate,
       },
-    }
-  }
-  return { default: MockOpenAI }
-})
+    },
+  })),
+}))
+
+const { GET } = await import('./route')
+const { createAdminClient } = await import('@/lib/supabase/admin')
+const { NextRequest } = await import('next/server')
 
 function makeRequest(path = 'http://localhost/api/processing/worker?limit=1') {
   return new NextRequest(path, {
@@ -38,20 +36,20 @@ function makeRequest(path = 'http://localhost/api/processing/worker?limit=1') {
 }
 
 function makeNoJobsAdminMock() {
-  const limit = vi.fn().mockResolvedValue({ data: [], error: null })
-  const order = vi.fn().mockReturnValue({ limit })
-  const or = vi.fn().mockReturnValue({ order })
-  const lte = vi.fn().mockReturnValue({ or })
-  const inMock = vi.fn().mockReturnValue({ lte })
-  const select = vi.fn().mockReturnValue({ in: inMock })
+  const limit = mock(() => Promise.resolve({ data: [], error: null }))
+  const order = mock(() => ({ limit }))
+  const or = mock(() => ({ order }))
+  const lte = mock(() => ({ or }))
+  const inMock = mock(() => ({ lte }))
+  const select = mock(() => ({ in: inMock }))
 
   return {
-    from: vi.fn().mockReturnValue({
+    from: mock(() => ({
       select,
-      update: vi.fn(),
-    }),
+      update: mock(() => {}),
+    })),
     storage: {
-      from: vi.fn(),
+      from: mock(() => {}),
     },
   }
 }
@@ -80,42 +78,43 @@ function makeSingleSuccessAdminMock() {
   }
 
   // processing_jobs.select(...).in(...).lte(...).or(...).order(...).limit(...)
-  const limit = vi.fn().mockResolvedValue({ data: [job], error: null })
-  const order = vi.fn().mockReturnValue({ limit })
-  const claimOr = vi.fn().mockReturnValue({ order })
-  const lte = vi.fn().mockReturnValue({ or: claimOr })
-  const inMock = vi.fn().mockReturnValue({ lte })
-  const processingJobsSelect = vi.fn().mockReturnValue({ in: inMock })
+  const limit = mock(() => Promise.resolve({ data: [job], error: null }))
+  const order = mock(() => ({ limit }))
+  const claimOr = mock(() => ({ order }))
+  const lte = mock(() => ({ or: claimOr }))
+  const inMock = mock(() => ({ lte }))
+  const processingJobsSelect = mock(() => ({ in: inMock }))
 
   // first update call -> lock job
-  const lockMaybeSingle = vi.fn().mockResolvedValue({ data: lockedJob, error: null })
-  const lockSelect = vi.fn().mockReturnValue({ maybeSingle: lockMaybeSingle })
-  const lockOr = vi.fn().mockReturnValue({ select: lockSelect })
-  const lockEqStatus = vi.fn().mockReturnValue({ or: lockOr })
-  const lockEqId = vi.fn().mockReturnValue({ eq: lockEqStatus })
+  const lockMaybeSingle = mock(() => Promise.resolve({ data: lockedJob, error: null }))
+  const lockSelect = mock(() => ({ maybeSingle: lockMaybeSingle }))
+  const lockOr = mock(() => ({ select: lockSelect }))
+  const lockEqStatus = mock(() => ({ or: lockOr }))
+  const lockEqId = mock(() => ({ eq: lockEqStatus }))
 
   // second update call -> complete job
-  const completeEqLockedBy = vi.fn().mockResolvedValue({ error: null })
-  const completeEqId = vi.fn().mockReturnValue({ eq: completeEqLockedBy })
+  const completeEqLockedBy = mock(() => Promise.resolve({ error: null }))
+  const completeEqId = mock(() => ({ eq: completeEqLockedBy }))
 
-  const processingJobsUpdate = vi.fn()
+  const processingJobsUpdate = mock(() => {})
+  processingJobsUpdate
     .mockReturnValueOnce({ eq: lockEqId })
     .mockReturnValueOnce({ eq: completeEqId })
 
   // meetings.select(...).eq(...).eq(...).single()
-  const meetingsSingle = vi.fn().mockResolvedValue({
+  const meetingsSingle = mock(() => Promise.resolve({
     data: { id: 'meeting-1', user_id: 'user-1', audio_url: 'user-1/meeting-1.webm' },
-  })
-  const meetingsSelectEqUser = vi.fn().mockReturnValue({ single: meetingsSingle })
-  const meetingsSelectEqId = vi.fn().mockReturnValue({ eq: meetingsSelectEqUser })
-  const meetingsSelect = vi.fn().mockReturnValue({ eq: meetingsSelectEqId })
+  }))
+  const meetingsSelectEqUser = mock(() => ({ single: meetingsSingle }))
+  const meetingsSelectEqId = mock(() => ({ eq: meetingsSelectEqUser }))
+  const meetingsSelect = mock(() => ({ eq: meetingsSelectEqId }))
 
-  const meetingsUpdateEqUser = vi.fn().mockResolvedValue({ error: null })
-  const meetingsUpdateEqId = vi.fn().mockReturnValue({ eq: meetingsUpdateEqUser })
-  const meetingsUpdate = vi.fn().mockReturnValue({ eq: meetingsUpdateEqId })
+  const meetingsUpdateEqUser = mock(() => Promise.resolve({ error: null }))
+  const meetingsUpdateEqId = mock(() => ({ eq: meetingsUpdateEqUser }))
+  const meetingsUpdate = mock(() => ({ eq: meetingsUpdateEqId }))
 
-  const mock = {
-    from: vi.fn((table: string) => {
+  const adminMock = {
+    from: mock((table: string) => {
       if (table === 'processing_jobs') {
         return {
           select: processingJobsSelect,
@@ -133,18 +132,18 @@ function makeSingleSuccessAdminMock() {
       throw new Error(`Unexpected table: ${table}`)
     }),
     storage: {
-      from: vi.fn().mockReturnValue({
-        download: vi.fn().mockResolvedValue({ data: new Blob(['audio']), error: null }),
-      }),
+      from: mock(() => ({
+        download: mock(() => Promise.resolve({ data: new Blob(['audio']), error: null })),
+      })),
     },
   }
 
-  return mock
+  return adminMock
 }
 
 describe('GET /api/processing/worker', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
     process.env.CRON_SECRET = 'cron-secret'
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
     mockTranscriptionCreate.mockResolvedValue('This is a transcript')
@@ -176,7 +175,7 @@ describe('GET /api/processing/worker', () => {
   })
 
   it('returns no-op response when queue has no available jobs', async () => {
-    vi.mocked(createAdminClient).mockReturnValue(makeNoJobsAdminMock() as never)
+    (createAdminClient as any).mockReturnValue(makeNoJobsAdminMock() as never)
 
     const response = await GET(makeRequest())
 
@@ -190,7 +189,7 @@ describe('GET /api/processing/worker', () => {
   })
 
   it('processes a claimed job successfully', async () => {
-    vi.mocked(createAdminClient).mockReturnValue(makeSingleSuccessAdminMock() as never)
+    (createAdminClient as any).mockReturnValue(makeSingleSuccessAdminMock() as never)
 
     const response = await GET(makeRequest())
 

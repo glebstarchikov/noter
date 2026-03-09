@@ -1,10 +1,11 @@
-import { PATCH } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createClient } from '@/lib/supabase/server'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(),
+mock.module('@/lib/supabase/server', () => ({
+  createClient: mock(() => {}),
 }))
+
+const { PATCH } = await import('./route')
+const { createClient } = await import('@/lib/supabase/server')
 
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/meetings/meeting-1/pin', {
@@ -15,30 +16,30 @@ function makeRequest(body: unknown) {
 }
 
 function mockSupabase(user: { id: string } | null, meetingData: unknown = null) {
-  const selectSingle = vi.fn().mockResolvedValue({ data: meetingData })
-  const selectEqUser = vi.fn().mockReturnValue({ single: selectSingle })
-  const selectEqId = vi.fn().mockReturnValue({ eq: selectEqUser })
-  const selectMock = vi.fn().mockReturnValue({ eq: selectEqId })
+  const selectSingle = mock(() => Promise.resolve({ data: meetingData }))
+  const selectEqUser = mock(() => ({ single: selectSingle }))
+  const selectEqId = mock(() => ({ eq: selectEqUser }))
+  const selectMock = mock(() => ({ eq: selectEqId }))
 
-  const updateEqUser = vi.fn().mockResolvedValue({ error: null })
-  const updateEqId = vi.fn().mockReturnValue({ eq: updateEqUser })
-  const updateMock = vi.fn().mockReturnValue({ eq: updateEqId })
+  const updateEqUser = mock(() => Promise.resolve({ error: null }))
+  const updateEqId = mock(() => ({ eq: updateEqUser }))
+  const updateMock = mock(() => ({ eq: updateEqId }))
 
-  const mock = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    from: vi.fn().mockReturnValue({
+  const supabaseMock = {
+    auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
+    from: mock(() => ({
       select: selectMock,
       update: updateMock,
-    }),
-  }
+    })),
+  };
 
-  vi.mocked(createClient).mockResolvedValue(mock as never)
+  (createClient as any).mockResolvedValue(supabaseMock as never)
   return { updateMock, updateEqUser }
 }
 
 describe('PATCH /api/meetings/[id]/pin', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
   })
 
   it('returns 400 if body is missing pinned field', async () => {

@@ -1,48 +1,49 @@
-import { POST, GET, DELETE } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createClient } from '@/lib/supabase/server'
-import { NextRequest } from 'next/server'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(),
+mock.module('@/lib/supabase/server', () => ({
+  createClient: mock(() => {}),
 }))
 
+const { POST, GET, DELETE } = await import('./route')
+const { createClient } = await import('@/lib/supabase/server')
+const { NextRequest } = await import('next/server')
+
 function mockSupabase(user: { id: string } | null, meetingData: any = { id: 'meeting-1' }) {
-  const deleteMock = vi.fn().mockReturnValue({
-    eq: vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    }),
-  })
-  const insertMock = vi.fn().mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
+  const deleteMock = mock(() => ({
+    eq: mock(() => ({
+      eq: mock(() => Promise.resolve({ error: null })),
+    })),
+  }))
+  const insertMock = mock(() => ({
+    select: mock(() => ({
+      single: mock(() => Promise.resolve({
         data: { id: 'source-1', name: 'test.txt', file_type: 'txt', content: 'hello' },
         error: null,
-      }),
-    }),
-  })
-  const selectMock = vi.fn().mockReturnValue({
-    eq: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: meetingData }),
-      }),
-      order: vi.fn().mockResolvedValue({ data: [], error: null }),
-    }),
-  })
-  const mock = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    from: vi.fn().mockReturnValue({
+      })),
+    })),
+  }))
+  const selectMock = mock(() => ({
+    eq: mock(() => ({
+      eq: mock(() => ({
+        single: mock(() => Promise.resolve({ data: meetingData })),
+      })),
+      order: mock(() => Promise.resolve({ data: [], error: null })),
+    })),
+  }))
+  const supabaseMock = {
+    auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
+    from: mock(() => ({
       select: selectMock,
       insert: insertMock,
       delete: deleteMock,
-    }),
-  }
-  vi.mocked(createClient).mockResolvedValue(mock as any)
-  return mock
+    })),
+  };
+  (createClient as any).mockResolvedValue(supabaseMock as any)
+  return supabaseMock
 }
 
 describe('POST /api/sources', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => jest.clearAllMocks())
 
   it('returns 401 if user is not authenticated', async () => {
     mockSupabase(null)
@@ -90,7 +91,7 @@ describe('POST /api/sources', () => {
 })
 
 describe('GET /api/sources', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => jest.clearAllMocks())
 
   it('returns 401 if user is not authenticated', async () => {
     mockSupabase(null)
@@ -112,7 +113,7 @@ describe('GET /api/sources', () => {
 })
 
 describe('DELETE /api/sources', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => jest.clearAllMocks())
 
   it('returns 401 if user is not authenticated', async () => {
     mockSupabase(null)

@@ -2,15 +2,15 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@latest",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "bun --bun next dev",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
     "lint": "eslint app components hooks lib",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",
@@ -67,24 +67,22 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.8.3",
     "@tailwindcss/postcss": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/bun": "^1.3.10",
     "@types/node": "^22",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.2",
-    "@vitejs/plugin-react": "^5.1.4",
-    "@vitest/ui": "^4.0.18",
     "eslint": "^10.0.2",
     "eslint-config-next": "^16.1.6",
-    "jsdom": "^28.1.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "tw-animate-css": "1.3.3",
-    "typescript": "5.7.3",
-    "vitest": "^4.0.18"
+    "typescript": "5.7.3"
   }
 }

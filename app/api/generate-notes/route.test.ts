@@ -1,34 +1,32 @@
-import { POST } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createClient } from '@/lib/supabase/server'
-import { NextRequest } from 'next/server'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-const mockCompletionCreate = vi.fn()
+const mockCompletionCreate = mock(() => {})
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(),
+mock.module('@/lib/supabase/server', () => ({
+  createClient: mock(() => {}),
 }))
 
-vi.mock('openai', () => {
-  const MockOpenAI = function () {
-    return {
-      chat: {
-        completions: {
-          create: mockCompletionCreate,
-        },
+mock.module('@/lib/openai', () => ({
+  getOpenAI: mock(() => ({
+    chat: {
+      completions: {
+        create: mockCompletionCreate,
       },
-    }
-  }
-  return { default: MockOpenAI }
-})
-
-vi.mock('@upstash/ratelimit', () => ({
-  Ratelimit: vi.fn(),
+    },
+  })),
 }))
 
-vi.mock('@upstash/redis', () => ({
-  Redis: { fromEnv: vi.fn() },
+mock.module('@upstash/ratelimit', () => ({
+  Ratelimit: mock(() => {}),
 }))
+
+mock.module('@upstash/redis', () => ({
+  Redis: { fromEnv: mock(() => {}) },
+}))
+
+const { POST } = await import('./route')
+const { createClient } = await import('@/lib/supabase/server')
+const { NextRequest } = await import('next/server')
 
 function makeRequest(body: unknown) {
   return new NextRequest('http://localhost/api/generate-notes', {
@@ -39,31 +37,31 @@ function makeRequest(body: unknown) {
 }
 
 function mockSupabase(user: { id: string } | null, meetingData: unknown = null) {
-  const updateSecondEq = vi.fn().mockResolvedValue({ error: null })
-  const updateFirstEq = vi.fn().mockReturnValue({ eq: updateSecondEq })
-  const updateMock = vi.fn().mockReturnValue({ eq: updateFirstEq })
+  const updateSecondEq = mock(() => Promise.resolve({ error: null }))
+  const updateFirstEq = mock(() => ({ eq: updateSecondEq }))
+  const updateMock = mock(() => ({ eq: updateFirstEq }))
 
-  const mock = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: meetingData }),
-          }),
-        }),
-      }),
+  const supabaseMock = {
+    auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
+    from: mock(() => ({
+      select: mock(() => ({
+        eq: mock(() => ({
+          eq: mock(() => ({
+            single: mock(() => Promise.resolve({ data: meetingData })),
+          })),
+        })),
+      })),
       update: updateMock,
-    }),
-  }
+    })),
+  };
 
-  vi.mocked(createClient).mockResolvedValue(mock as never)
+  (createClient as any).mockResolvedValue(supabaseMock as never)
   return { updateSecondEq }
 }
 
 describe('POST /api/generate-notes', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
     mockCompletionCreate.mockResolvedValue({
       choices: [
         {

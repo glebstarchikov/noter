@@ -29,8 +29,8 @@ Guidance for Claude Code and AI assistants working in this repository.
 | Forms | react-hook-form + Zod |
 | Notifications | sonner (primary) |
 | Rate Limiting | Upstash Redis (optional — conditionally enabled) |
-| Testing | Vitest 4, jsdom, @testing-library/react |
-| Package Manager | **pnpm** (use `pnpm`, not `npm` or `yarn`) |
+| Testing | bun:test, happy-dom, @testing-library/react |
+| Package Manager | **bun** (use `bun`, not `pnpm`, `npm` or `yarn`) |
 | Markdown | react-markdown |
 | Panels | react-resizable-panels |
 | Document Parsing | pdf-parse (PDF text extraction), jszip |
@@ -41,17 +41,16 @@ Guidance for Claude Code and AI assistants working in this repository.
 ## Development Commands
 
 ```bash
-pnpm dev          # Start development server
-pnpm build        # Production build
-pnpm start        # Start production server
-pnpm lint         # ESLint (app/, components/, hooks/, lib/)
-pnpm typecheck    # tsc --noEmit
-pnpm test         # Run all Vitest tests once
-pnpm test:watch   # Vitest in watch mode
-pnpm test:ui      # Vitest UI dashboard
+bun run dev          # Start development server
+bun run build        # Production build
+bun run start        # Start production server
+bun run lint         # ESLint (app/, components/, hooks/, lib/)
+bun run typecheck    # tsc --noEmit
+bun run test         # Run all tests once (bun:test)
+bun run test:watch   # Tests in watch mode
 ```
 
-**Always run `pnpm lint` and `pnpm test` before considering a task complete.**
+**Always run `bun run lint` and `bun run test` before considering a task complete.**
 
 ---
 
@@ -130,8 +129,9 @@ styles/
 
 scripts/                           # SQL migrations (run in numbered order)
 proxy.ts                           # Next.js middleware (session refresh + /dashboard auth redirect)
-vitest.config.ts                   # Vitest config: jsdom environment, @vitejs/plugin-react
-vitest.setup.ts                    # Global test setup: next/server mocks, env vars
+bunfig.toml                        # Bun config: test preload files
+happydom.ts                        # DOM globals registration for bun:test
+test.setup.ts                      # Global test setup: next/server mocks, env vars
 ```
 
 ---
@@ -250,8 +250,9 @@ Chat messages are persisted client-side in **localStorage** via `lib/chat-storag
 
 - Tests are **colocated** with route handlers: `app/api/*/route.test.ts`. Do not use `__tests__/` for API tests.
 - Lib utility tests live in `lib/__tests__/`.
-- `vitest.setup.ts` mocks `next/server` and sets environment variables automatically.
-- Standard mock targets: `@/lib/supabase/server`, `ai`, `@ai-sdk/openai`, `@upstash/ratelimit`, `@upstash/redis`.
+- `test.setup.ts` mocks `next/server` and sets environment variables automatically (preloaded via `bunfig.toml`).
+- `happydom.ts` registers DOM globals (preloaded via `bunfig.toml`).
+- Use `mock.module()` and `mock()` from `bun:test` for mocking. Standard mock targets: `@/lib/supabase/server`, `@/lib/openai`, `ai`, `@ai-sdk/openai`, `@upstash/ratelimit`, `@upstash/redis`.
 - When changing API behavior, add or update the colocated `route.test.ts`.
 
 ---
@@ -327,6 +328,6 @@ Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code b
 
 1. Read the relevant source files before making any changes.
 2. Implement the smallest correct change for the task.
-3. Run `pnpm lint` and `pnpm test` — fix any failures.
+3. Run `bun run lint` and `bun run test` — fix any failures.
 4. Verify edge cases: unauthenticated requests, missing IDs, ownership failures, empty data.
 5. Write a clear commit message describing what changed and why.

@@ -1,29 +1,30 @@
-import { POST } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createClient } from '@/lib/supabase/server'
-import { streamText } from 'ai'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(),
+mock.module('@/lib/supabase/server', () => ({
+  createClient: mock(() => {}),
 }))
 
-vi.mock('ai', () => ({
-  streamText: vi.fn(),
-  convertToModelMessages: vi.fn().mockResolvedValue([]),
-  UIMessage: vi.fn(),
+mock.module('ai', () => ({
+  streamText: mock(() => {}),
+  convertToModelMessages: mock(() => Promise.resolve([])),
+  UIMessage: mock(() => {}),
 }))
 
-vi.mock('@ai-sdk/openai', () => ({
-  createOpenAI: vi.fn().mockReturnValue(vi.fn()),
+mock.module('@ai-sdk/openai', () => ({
+  createOpenAI: mock(() => mock(() => {})),
 }))
 
-vi.mock('@upstash/ratelimit', () => ({
-  Ratelimit: vi.fn(),
+mock.module('@upstash/ratelimit', () => ({
+  Ratelimit: mock(() => {}),
 }))
 
-vi.mock('@upstash/redis', () => ({
-  Redis: { fromEnv: vi.fn() },
+mock.module('@upstash/redis', () => ({
+  Redis: { fromEnv: mock(() => {}) },
 }))
+
+const { POST } = await import('./route')
+const { createClient } = await import('@/lib/supabase/server')
+const { streamText } = await import('ai')
 
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/chat', {
@@ -34,35 +35,35 @@ function makeRequest(body: unknown) {
 }
 
 function mockSupabase(user: { id: string } | null, meetingData: unknown, sourcesData: unknown[] = []) {
-  const meetingSingle = vi.fn().mockResolvedValue({ data: meetingData })
-  const meetingEqUser = vi.fn().mockReturnValue({ single: meetingSingle })
-  const meetingEqId = vi.fn().mockReturnValue({ eq: meetingEqUser })
-  const meetingSelect = vi.fn().mockReturnValue({ eq: meetingEqId })
+  const meetingSingle = mock(() => Promise.resolve({ data: meetingData }))
+  const meetingEqUser = mock(() => ({ single: meetingSingle }))
+  const meetingEqId = mock(() => ({ eq: meetingEqUser }))
+  const meetingSelect = mock(() => ({ eq: meetingEqId }))
 
-  const sourcesEqUser = vi.fn().mockResolvedValue({ data: sourcesData })
-  const sourcesEqMeeting = vi.fn().mockReturnValue({ eq: sourcesEqUser })
-  const sourcesSelect = vi.fn().mockReturnValue({ eq: sourcesEqMeeting })
+  const sourcesEqUser = mock(() => Promise.resolve({ data: sourcesData }))
+  const sourcesEqMeeting = mock(() => ({ eq: sourcesEqUser }))
+  const sourcesSelect = mock(() => ({ eq: sourcesEqMeeting }))
 
-  const from = vi.fn((table: string) => {
+  const from = mock((table: string) => {
     if (table === 'meetings') {
       return { select: meetingSelect }
     }
     return { select: sourcesSelect }
   })
 
-  const mock = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
+  const supabaseMock = {
+    auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
     from,
-  }
+  };
 
-  vi.mocked(createClient).mockResolvedValue(mock as never)
+  (createClient as any).mockResolvedValue(supabaseMock as never)
   return { sourcesEqUser }
 }
 
 describe('POST /api/chat', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(streamText).mockReturnValue({
+    jest.clearAllMocks();
+    (streamText as any).mockReturnValue({
       toUIMessageStreamResponse: () => new Response('ok', { status: 200 }),
     } as never)
   })

@@ -1,44 +1,45 @@
-import { GET, DELETE } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createClient } from '@/lib/supabase/server'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(),
+mock.module('@/lib/supabase/server', () => ({
+  createClient: mock(() => {}),
 }))
 
+const { GET, DELETE } = await import('./route')
+const { createClient } = await import('@/lib/supabase/server')
+
 function mockSupabase(user: { id: string } | null, meetingData: unknown = null) {
-  const selectSingle = vi.fn().mockResolvedValue({ data: meetingData })
-  const selectEqUser = vi.fn().mockReturnValue({ single: selectSingle })
-  const selectEqId = vi.fn().mockReturnValue({ eq: selectEqUser })
-  const selectMock = vi.fn().mockReturnValue({ eq: selectEqId })
+  const selectSingle = mock(() => Promise.resolve({ data: meetingData }))
+  const selectEqUser = mock(() => ({ single: selectSingle }))
+  const selectEqId = mock(() => ({ eq: selectEqUser }))
+  const selectMock = mock(() => ({ eq: selectEqId }))
 
-  const deleteEqUser = vi.fn().mockResolvedValue({ error: null })
-  const deleteEqId = vi.fn().mockReturnValue({ eq: deleteEqUser })
-  const deleteMock = vi.fn().mockReturnValue({ eq: deleteEqId })
+  const deleteEqUser = mock(() => Promise.resolve({ error: null }))
+  const deleteEqId = mock(() => ({ eq: deleteEqUser }))
+  const deleteMock = mock(() => ({ eq: deleteEqId }))
 
-  const removeMock = vi.fn().mockResolvedValue({ error: null })
+  const removeMock = mock(() => Promise.resolve({ error: null }))
   const storageMock = {
-    from: vi.fn().mockReturnValue({
+    from: mock(() => ({
       remove: removeMock,
-    }),
+    })),
   }
 
-  const mock = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    from: vi.fn().mockReturnValue({
+  const supabaseMock = {
+    auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
+    from: mock(() => ({
       select: selectMock,
       delete: deleteMock,
-    }),
+    })),
     storage: storageMock,
-  }
+  };
 
-  vi.mocked(createClient).mockResolvedValue(mock as never)
+  (createClient as any).mockResolvedValue(supabaseMock as never)
   return { removeMock, deleteEqUser }
 }
 
 describe('DELETE /api/meetings/[id]', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
   })
 
   it('returns 401 if user is not authenticated', async () => {
@@ -84,7 +85,7 @@ describe('DELETE /api/meetings/[id]', () => {
 
 describe('GET /api/meetings/[id]', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
   })
 
   it('returns 401 if user is not authenticated', async () => {

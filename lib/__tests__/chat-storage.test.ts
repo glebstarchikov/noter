@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'bun:test'
 import { getChatMessages, saveChatMessages, clearChatMessages } from '../chat-storage'
 import type { UIMessage } from 'ai'
 

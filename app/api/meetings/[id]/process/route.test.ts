@@ -1,11 +1,12 @@
-import { POST } from './route'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createClient } from '@/lib/supabase/server'
-import { NextRequest } from 'next/server'
+import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(),
+mock.module('@/lib/supabase/server', () => ({
+  createClient: mock(() => {}),
 }))
+
+const { POST } = await import('./route')
+const { createClient } = await import('@/lib/supabase/server')
+const { NextRequest } = await import('next/server')
 
 function makeRequest(body: unknown = {}) {
   return new NextRequest('http://localhost/api/meetings/meeting-1/process', {
@@ -26,21 +27,21 @@ function mockSupabase({
   existingJob?: unknown
   upsertError?: { message: string } | null
 }) {
-  const meetingsSelectSingle = vi.fn().mockResolvedValue({ data: meeting })
-  const meetingsSelectEqUser = vi.fn().mockReturnValue({ single: meetingsSelectSingle })
-  const meetingsSelectEqId = vi.fn().mockReturnValue({ eq: meetingsSelectEqUser })
-  const meetingsSelect = vi.fn().mockReturnValue({ eq: meetingsSelectEqId })
+  const meetingsSelectSingle = mock(() => Promise.resolve({ data: meeting }))
+  const meetingsSelectEqUser = mock(() => ({ single: meetingsSelectSingle }))
+  const meetingsSelectEqId = mock(() => ({ eq: meetingsSelectEqUser }))
+  const meetingsSelect = mock(() => ({ eq: meetingsSelectEqId }))
 
-  const meetingsUpdateEqUser = vi.fn().mockResolvedValue({ error: null })
-  const meetingsUpdateEqId = vi.fn().mockReturnValue({ eq: meetingsUpdateEqUser })
-  const meetingsUpdate = vi.fn().mockReturnValue({ eq: meetingsUpdateEqId })
+  const meetingsUpdateEqUser = mock(() => Promise.resolve({ error: null }))
+  const meetingsUpdateEqId = mock(() => ({ eq: meetingsUpdateEqUser }))
+  const meetingsUpdate = mock(() => ({ eq: meetingsUpdateEqId }))
 
-  const jobsMaybeSingle = vi.fn().mockResolvedValue({ data: existingJob })
-  const jobsEqMeeting = vi.fn().mockReturnValue({ maybeSingle: jobsMaybeSingle })
-  const jobsSelect = vi.fn().mockReturnValue({ eq: jobsEqMeeting })
-  const jobsUpsert = vi.fn().mockResolvedValue({ error: upsertError })
+  const jobsMaybeSingle = mock(() => Promise.resolve({ data: existingJob }))
+  const jobsEqMeeting = mock(() => ({ maybeSingle: jobsMaybeSingle }))
+  const jobsSelect = mock(() => ({ eq: jobsEqMeeting }))
+  const jobsUpsert = mock(() => Promise.resolve({ error: upsertError }))
 
-  const from = vi.fn((table: string) => {
+  const from = mock((table: string) => {
     if (table === 'meetings') {
       return {
         select: meetingsSelect,
@@ -58,21 +59,21 @@ function mockSupabase({
     throw new Error(`Unexpected table: ${table}`)
   })
 
-  const mock = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
+  const supabaseMock = {
+    auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
     from,
-  }
+  };
 
-  vi.mocked(createClient).mockResolvedValue(mock as never)
+  (createClient as any).mockResolvedValue(supabaseMock as never)
   return { jobsUpsert, meetingsUpdateEqUser }
 }
 
 describe('POST /api/meetings/[id]/process', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
     process.env.CRON_SECRET = 'cron-secret'
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })))
+    globalThis.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 }))) as any
   })
 
   it('returns 401 when user is not authenticated', async () => {
@@ -138,6 +139,6 @@ describe('POST /api/meetings/[id]/process', () => {
       success: true,
       queued: true,
     })
-    expect((global.fetch as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(globalThis.fetch).toHaveBeenCalled()
   })
 })
