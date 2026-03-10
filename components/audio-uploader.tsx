@@ -23,9 +23,10 @@ interface Props {
     step: MeetingStatus
     error?: string
   }) => void
+  templateId?: string
 }
 
-export function AudioUploader({ onProcessing }: Props) {
+export function AudioUploader({ onProcessing, templateId }: Props) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -78,6 +79,7 @@ export function AudioUploader({ onProcessing }: Props) {
           user_id: user.id,
           title: file.name.replace(/\.[^/.]+$/, ''),
           status: 'uploading',
+          ...(templateId ? { template_id: templateId } : {}),
         })
         .select('id')
         .single()

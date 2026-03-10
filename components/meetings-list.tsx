@@ -3,8 +3,7 @@
 import { useState, useMemo, useId, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, FileUp, Pin } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Search, X, SlidersHorizontal, ArrowUpDown, AudioLines, Pin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -20,26 +19,80 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Meeting, MeetingStatus } from '@/lib/types'
 
-function statusBadge(status: string) {
-  const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    recording: { label: 'Recording', variant: 'default' },
-    uploading: { label: 'Uploading', variant: 'default' },
-    transcribing: { label: 'Transcribing', variant: 'default' },
-    generating: { label: 'Generating', variant: 'default' },
-    done: { label: 'Complete', variant: 'secondary' },
-    error: { label: 'Error', variant: 'destructive' },
+type StatusMeta = { label: string; dot: 'active' | 'done' | 'error' | 'idle' }
+
+function statusMeta(status: string): StatusMeta {
+  const map: Record<string, StatusMeta> = {
+    recording:   { label: 'Recording',   dot: 'active' },
+    uploading:   { label: 'Uploading',   dot: 'active' },
+    transcribing:{ label: 'Transcribing',dot: 'active' },
+    generating:  { label: 'Generating', dot: 'active' },
+    done:        { label: 'Complete',    dot: 'done'   },
+    error:       { label: 'Error',       dot: 'error'  },
   }
-  return map[status] || { label: status, variant: 'outline' as const }
+  return map[status] ?? { label: status, dot: 'idle' }
 }
 
-function formatDate(dateStr: string) {
+function StatusDot({ status }: { status: string }) {
+  const meta = statusMeta(status)
+  if (meta.dot === 'active') {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+        <span className="relative flex size-1.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-60" />
+          <span className="relative inline-flex size-1.5 rounded-full bg-accent" />
+        </span>
+        {meta.label}
+      </span>
+    )
+  }
+  if (meta.dot === 'done') {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        {meta.label}
+      </span>
+    )
+  }
+  if (meta.dot === 'error') {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px] text-destructive tabular-nums">
+        <span className="size-1.5 rounded-full bg-destructive" />
+        {meta.label}
+      </span>
+    )
+  }
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+      <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+      {meta.label}
+    </span>
+  )
+}
+
+function formatRelativeDate(dateStr: string): string {
   const d = new Date(dateStr)
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterdayStart = new Date(todayStart.getTime() - 86400000)
   const h = d.getHours()
   const m = d.getMinutes()
   const period = h >= 12 ? 'PM' : 'AM'
   const hour12 = h % 12 || 12
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${hour12}:${m.toString().padStart(2, '0')} ${period}`
+  const time = `${hour12}:${m.toString().padStart(2, '0')} ${period}`
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+  if (d >= todayStart) return `Today at ${time}`
+  if (d >= yesterdayStart) return `Yesterday`
+
+  const weekAgo = new Date(todayStart.getTime() - 6 * 86400000)
+  if (d >= weekAgo) return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`
+
+  const thisYear = now.getFullYear()
+  if (d.getFullYear() === thisYear) return `${months[d.getMonth()]} ${d.getDate()}`
+
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
 const STATUS_OPTIONS: { value: MeetingStatus | 'all'; label: string }[] = [
@@ -139,34 +192,23 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
 
   if (meetings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 rounded-xl border border-dashed border-border py-20 px-6">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
-          <AudioLines className="size-7 text-muted-foreground" />
-        </div>
-        <div className="flex flex-col items-center gap-2 text-center">
-          <h2 className="text-base font-semibold text-foreground">No meetings yet</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Record a live meeting or upload an audio file to get started. AI will transcribe and extract structured notes automatically.
+      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+        <AudioLines className="size-8 text-muted-foreground" />
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-sm font-semibold text-foreground">Record your first meeting</h2>
+          <p className="text-sm text-muted-foreground">
+            Speak freely — noter will structure your notes
           </p>
         </div>
-        <div className="flex flex-col items-center gap-2 sm:flex-row">
-          <Button asChild>
-            <Link href="/dashboard/new">
-              <Plus className="size-4" />
-              New meeting
-            </Link>
-          </Button>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <AudioLines className="h-3.5 w-3.5" />
-            Record live
-          </span>
-          <span className="flex items-center gap-1.5">
-            <FileUp className="h-3.5 w-3.5" />
-            Upload audio
-          </span>
-        </div>
+        <Button asChild>
+          <Link href="/dashboard/new">Start recording</Link>
+        </Button>
+        <Link
+          href="/dashboard/new"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          or drop an audio file to upload
+        </Link>
       </div>
     )
   }
@@ -298,7 +340,7 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
 
       {/* Meetings list */}
       {filteredMeetings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16">
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
           <p className="text-sm text-muted-foreground">
             No notes match your search
           </p>
@@ -315,49 +357,52 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col divide-y divide-border rounded-xl border border-border">
-          {filteredMeetings.map((meeting) => {
-            const status = statusBadge(meeting.status)
-            return (
-              <div
-                key={meeting.id}
-                className="group flex items-center transition-colors hover:bg-secondary"
+        <div className="flex flex-col">
+          {filteredMeetings.map((meeting) => (
+            <div
+              key={meeting.id}
+              className="group flex min-h-[56px] items-center border-b border-border/60 last:border-b-0 transition-colors hover:bg-muted/60"
+            >
+              {/* Pinned indicator */}
+              {meeting.is_pinned && (
+                <span className="ml-4 size-1.5 shrink-0 rounded-full bg-accent" />
+              )}
+
+              <Link
+                href={`/dashboard/${meeting.id}`}
+                className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
-                <Link
-                  href={`/dashboard/${meeting.id}`}
-                  className="flex min-w-0 flex-1 flex-col gap-1 px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                >
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {meeting.title}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDate(meeting.created_at)}
-                  </span>
-                </Link>
-                <div className="flex shrink-0 items-center gap-2 pr-5">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      togglePin(meeting.id, meeting.is_pinned)
-                    }}
-                    aria-label={meeting.is_pinned ? 'Unpin note' : 'Pin note'}
-                    className={cn(
-                      'rounded-md p-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      meeting.is_pinned
-                        ? 'text-primary hover:bg-primary/10'
-                        : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground'
-                    )}
-                  >
-                    <Pin className={cn('size-3.5', meeting.is_pinned && 'rotate-45')} />
-                  </button>
-                  <Badge variant={status.variant} className="shrink-0">
-                    {status.label}
-                  </Badge>
-                </div>
-              </div>
-            )
-          })}
+                {/* Relative time */}
+                <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground tabular-nums">
+                  {formatRelativeDate(meeting.created_at)}
+                </span>
+                {/* Title */}
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {meeting.title}
+                </span>
+                {/* Status dot */}
+                <StatusDot status={meeting.status} />
+              </Link>
+
+              {/* Pin button — visible on hover or when pinned */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  togglePin(meeting.id, meeting.is_pinned)
+                }}
+                aria-label={meeting.is_pinned ? 'Unpin note' : 'Pin note'}
+                className={cn(
+                  'mr-4 rounded-md p-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  meeting.is_pinned
+                    ? 'text-foreground'
+                    : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground'
+                )}
+              >
+                <Pin className={cn('size-3.5', meeting.is_pinned && 'fill-current')} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>

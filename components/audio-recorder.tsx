@@ -40,9 +40,10 @@ interface Props {
     step: MeetingStatus
     error?: string
   }) => void
+  templateId?: string
 }
 
-export function AudioRecorder({ onProcessing }: Props) {
+export function AudioRecorder({ onProcessing, templateId }: Props) {
   const router = useRouter()
   const {
     isRecording,
@@ -113,6 +114,7 @@ export function AudioRecorder({ onProcessing }: Props) {
           title: 'Processing...',
           status: 'uploading',
           audio_duration: duration,
+          ...(templateId ? { template_id: templateId } : {}),
         })
         .select('id')
         .single()

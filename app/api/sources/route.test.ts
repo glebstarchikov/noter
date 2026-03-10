@@ -1,12 +1,26 @@
-import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
+import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:test'
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
 }))
 
-const { POST, GET, DELETE } = await import('./route')
-const { createClient } = await import('@/lib/supabase/server')
-const { NextRequest } = await import('next/server')
+let POST: typeof import('./route').POST
+let GET: typeof import('./route').GET
+let DELETE: typeof import('./route').DELETE
+let createClient: typeof import('@/lib/supabase/server').createClient
+let NextRequest: typeof import('next/server').NextRequest
+
+beforeAll(async () => {
+  const routeModule = await import('./route')
+  const supabaseModule = await import('@/lib/supabase/server')
+  const nextServerModule = await import('next/server')
+
+  POST = routeModule.POST
+  GET = routeModule.GET
+  DELETE = routeModule.DELETE
+  createClient = supabaseModule.createClient
+  NextRequest = nextServerModule.NextRequest
+})
 
 function mockSupabase(user: { id: string } | null, meetingData: any = { id: 'meeting-1' }) {
   const deleteMock = mock(() => ({

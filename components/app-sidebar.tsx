@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
     FileText,
+    LayoutTemplate,
     LogOut,
     Plus,
     ChevronsUpDown,
@@ -29,7 +30,6 @@ import {
     SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
-    SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuItem,
@@ -40,6 +40,7 @@ import {
 
 const navItems = [
     { href: '/dashboard', label: 'All Notes', icon: FileText },
+    { href: '/dashboard/templates', label: 'Templates', icon: LayoutTemplate },
 ]
 
 
@@ -134,11 +135,12 @@ export function AppSidebar() {
 
                 {/* Navigation */}
                 <SidebarGroup>
-                    <SidebarGroupLabel>Navigation</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
                             {navItems.map((item) => {
-                                const isActive = pathname === item.href
+                                const isActive = item.href === '/dashboard'
+                                    ? pathname === '/dashboard'
+                                    : pathname.startsWith(item.href)
                                 return (
                                     <SidebarMenuItem key={item.href}>
                                         <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
@@ -165,8 +167,8 @@ export function AppSidebar() {
                                     size="lg"
                                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
-                                    <Avatar className="h-8 w-8 rounded-lg">
-                                        <AvatarFallback className="rounded-lg text-[10px] font-medium">
+                                    <Avatar className="h-8 w-8 rounded-full">
+                                        <AvatarFallback className="rounded-full text-[10px] font-medium">
                                             {initials}
                                         </AvatarFallback>
                                     </Avatar>
@@ -189,8 +191,8 @@ export function AppSidebar() {
                             >
                                 <DropdownMenuLabel className="p-0 font-normal">
                                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                                        <Avatar className="h-8 w-8 rounded-lg">
-                                            <AvatarFallback className="rounded-lg text-[10px] font-medium">
+                                        <Avatar className="h-8 w-8 rounded-full">
+                                            <AvatarFallback className="rounded-full text-[10px] font-medium">
                                                 {initials}
                                             </AvatarFallback>
                                         </Avatar>

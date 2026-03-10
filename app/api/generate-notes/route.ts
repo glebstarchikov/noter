@@ -5,6 +5,7 @@ import { getOpenAI } from '@/lib/openai'
 import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
 import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
 import { generatedNotesSchema } from '@/lib/schemas'
+import { generatedNotesToTiptap, mergeTiptapDocuments } from '@/lib/tiptap-converter'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     // Verify user owns the meeting
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('id, transcript')
+      .select('id, transcript, document_content')
       .eq('id', meetingId)
       .eq('user_id', user.id)
       .single()
@@ -124,6 +125,8 @@ export async function POST(request: NextRequest) {
       topics: normalizeStringArray(parsedNotes.data.topics),
       follow_ups: normalizeStringArray(parsedNotes.data.follow_ups),
     }
+    const generatedDocument = generatedNotesToTiptap(normalizedNotes)
+    const documentContent = mergeTiptapDocuments(meeting.document_content, generatedDocument)
 
     // Save notes to database
     await supabase
@@ -136,6 +139,7 @@ export async function POST(request: NextRequest) {
         key_decisions: normalizedNotes.key_decisions,
         topics: normalizedNotes.topics,
         follow_ups: normalizedNotes.follow_ups,
+        document_content: documentContent,
         status: 'done',
         updated_at: new Date().toISOString(),
       })

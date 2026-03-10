@@ -19,8 +19,8 @@ export default async function DashboardPage() {
   if (error) {
     return (
       <div className="flex flex-col gap-6 p-6 md:p-10">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-foreground">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
             All Notes
           </h1>
           <p className="text-sm text-destructive">
@@ -33,13 +33,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6 md:p-10">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
           All Notes
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Your recorded and uploaded notes.
-        </p>
       </div>
 
       <MeetingsList meetings={(meetings as Meeting[]) || []} />

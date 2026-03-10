@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
+import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:test'
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
@@ -22,9 +22,19 @@ mock.module('@upstash/redis', () => ({
   Redis: { fromEnv: mock(() => {}) },
 }))
 
-const { POST } = await import('./route')
-const { createClient } = await import('@/lib/supabase/server')
-const { streamText } = await import('ai')
+let POST: typeof import('./route').POST
+let createClient: typeof import('@/lib/supabase/server').createClient
+let streamText: typeof import('ai').streamText
+
+beforeAll(async () => {
+  const routeModule = await import('./route')
+  const supabaseModule = await import('@/lib/supabase/server')
+  const aiModule = await import('ai')
+
+  POST = routeModule.POST
+  createClient = supabaseModule.createClient
+  streamText = aiModule.streamText
+})
 
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/chat/global', {

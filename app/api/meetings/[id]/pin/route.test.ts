@@ -1,11 +1,19 @@
-import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
+import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:test'
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
 }))
 
-const { PATCH } = await import('./route')
-const { createClient } = await import('@/lib/supabase/server')
+let PATCH: typeof import('./route').PATCH
+let createClient: typeof import('@/lib/supabase/server').createClient
+
+beforeAll(async () => {
+  const routeModule = await import('./route')
+  const supabaseModule = await import('@/lib/supabase/server')
+
+  PATCH = routeModule.PATCH
+  createClient = supabaseModule.createClient
+})
 
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/meetings/meeting-1/pin', {

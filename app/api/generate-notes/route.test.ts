@@ -37,9 +37,18 @@ function makeRequest(body: unknown) {
 }
 
 function mockSupabase(user: { id: string } | null, meetingData: unknown = null) {
-  const updateSecondEq = mock(() => Promise.resolve({ error: null }))
-  const updateFirstEq = mock(() => ({ eq: updateSecondEq }))
-  const updateMock = mock(() => ({ eq: updateFirstEq }))
+  const updateCalls: unknown[] = []
+  const updateEqUsers: ReturnType<typeof mock>[] = []
+
+  const updateMock = mock((payload: unknown) => {
+    updateCalls.push(payload)
+
+    const eqUser = mock(() => Promise.resolve({ error: null }))
+    const eqId = mock(() => ({ eq: eqUser }))
+    updateEqUsers.push(eqUser)
+
+    return { eq: eqId }
+  })
 
   const supabaseMock = {
     auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
@@ -53,23 +62,25 @@ function mockSupabase(user: { id: string } | null, meetingData: unknown = null) 
       })),
       update: updateMock,
     })),
-  };
+  }
 
-  (createClient as any).mockResolvedValue(supabaseMock as never)
-  return { updateSecondEq }
+  ;(createClient as typeof createClient & { mockResolvedValue: (value: unknown) => void })
+    .mockResolvedValue(supabaseMock)
+
+  return { updateCalls, updateEqUsers }
 }
 
 describe('POST /api/generate-notes', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockCompletionCreate.mockResolvedValue({
+    ;(mockCompletionCreate as unknown as { mockResolvedValue: (value: unknown) => void }).mockResolvedValue({
       choices: [
         {
           message: {
             content: JSON.stringify({
               title: 'Weekly sync',
               summary: 'Summary text',
-              detailed_notes: '## Notes',
+              detailed_notes: '## Notes\n- Follow up with finance',
               action_items: [{ task: 'Do X', owner: 'Alice', done: false }],
               key_decisions: ['Ship'],
               topics: ['Planning'],
@@ -109,7 +120,7 @@ describe('POST /api/generate-notes', () => {
   })
 
   it('returns 400 if transcript is missing in DB and request', async () => {
-    mockSupabase({ id: 'user-1' }, { id: 'meeting-1', transcript: null })
+    mockSupabase({ id: 'user-1' }, { id: 'meeting-1', transcript: null, document_content: null })
     const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
     expect(res.status).toBe(400)
     const payload = await res.json()
@@ -117,15 +128,68 @@ describe('POST /api/generate-notes', () => {
     expect(payload.code).toBe('MISSING_TRANSCRIPT')
   })
 
-  it('uses DB transcript fallback and applies ownership filter on updates', async () => {
-    const { updateSecondEq } = mockSupabase(
+  it('merges existing document_content with generated notes and applies ownership filter on updates', async () => {
+    const typedNotesDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Typed note from recording' }],
+        },
+      ],
+    }
+
+    const { updateCalls, updateEqUsers } = mockSupabase(
       { id: 'user-1' },
-      { id: 'meeting-1', transcript: 'Transcript from DB' }
+      { id: 'meeting-1', transcript: 'Transcript from DB', document_content: typedNotesDocument }
     )
 
     const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
     expect(res.status).toBe(200)
     expect(mockCompletionCreate).toHaveBeenCalled()
-    expect(updateSecondEq).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(updateEqUsers[0]).toHaveBeenCalledWith('user_id', 'user-1')
+
+    const finalUpdate = updateCalls[1] as {
+      document_content: {
+        type: string
+        content: Array<{ type: string; attrs?: Record<string, unknown>; content?: unknown[] }>
+      }
+      status: string
+    }
+
+    expect(finalUpdate.status).toBe('done')
+    expect(finalUpdate.document_content.type).toBe('doc')
+    expect(finalUpdate.document_content.content[0]).toEqual(typedNotesDocument.content[0])
+    expect(finalUpdate.document_content.content).toContainEqual({
+      type: 'heading',
+      attrs: { level: 2 },
+      content: [{ type: 'text', text: 'Summary' }],
+    })
+    expect(finalUpdate.document_content.content).toContainEqual({
+      type: 'heading',
+      attrs: { level: 2 },
+      content: [{ type: 'text', text: 'Action Items' }],
+    })
+  })
+
+  it('persists meeting error state when note generation throws', async () => {
+    ;(mockCompletionCreate as unknown as { mockRejectedValueOnce: (value: unknown) => void })
+      .mockRejectedValueOnce(new Error('OpenAI unavailable'))
+
+    const { updateCalls } = mockSupabase(
+      { id: 'user-1' },
+      { id: 'meeting-1', transcript: 'Transcript from DB', document_content: null }
+    )
+
+    const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
+    expect(res.status).toBe(500)
+
+    const payload = await res.json()
+    expect(payload.error).toBe('OpenAI unavailable')
+    expect(payload.code).toBe('NOTES_GENERATION_FAILED')
+
+    const errorUpdate = updateCalls[1] as { status: string; error_message: string }
+    expect(errorUpdate.status).toBe('error')
+    expect(errorUpdate.error_message).toBe('OpenAI unavailable')
   })
 })

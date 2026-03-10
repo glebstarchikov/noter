@@ -191,7 +191,7 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
 
   const { data: meeting } = await admin
     .from('meetings')
-    .select('id, user_id, audio_url')
+    .select('id, user_id, audio_url, transcript, diarized_transcript')
     .eq('id', job.meeting_id)
     .eq('user_id', job.user_id)
     .single()
@@ -201,54 +201,63 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
   }
 
   const storagePath = typeof meeting.audio_url === 'string' ? meeting.audio_url : null
-  if (!storagePath) {
-    throw new Error('Meeting audio path is missing')
-  }
 
-  await admin
-    .from('meetings')
-    .update({
-      status: 'transcribing',
-      error_message: null,
-      updated_at: nowIso,
+  let transcript: string
+
+  // Skip Whisper if we already have a Deepgram diarized transcript
+  if (meeting.diarized_transcript && meeting.transcript) {
+    logEvent('whisper_skipped', { workerId, meetingId: job.meeting_id, reason: 'deepgram_transcript_present' })
+    transcript = meeting.transcript as string
+
+    await admin
+      .from('meetings')
+      .update({ status: 'generating', error_message: null, updated_at: nowIso })
+      .eq('id', job.meeting_id)
+      .eq('user_id', job.user_id)
+  } else {
+    if (!storagePath) throw new Error('Meeting audio path is missing')
+
+    await admin
+      .from('meetings')
+      .update({ status: 'transcribing', error_message: null, updated_at: nowIso })
+      .eq('id', job.meeting_id)
+      .eq('user_id', job.user_id)
+
+    const { data: audioData, error: downloadError } = await admin.storage
+      .from('meeting-audio')
+      .download(storagePath)
+
+    if (downloadError || !audioData) {
+      throw new Error('Failed to download audio from storage')
+    }
+
+    const extension = storagePath.split('.').pop() || 'webm'
+    const mimeType = extension === 'webm' ? 'audio/webm'
+      : extension === 'mp3' ? 'audio/mpeg'
+        : extension === 'wav' ? 'audio/wav'
+          : extension === 'm4a' ? 'audio/mp4'
+            : extension === 'ogg' ? 'audio/ogg'
+              : 'audio/webm'
+
+    const audioFile = new File([audioData], `audio.${extension}`, { type: mimeType })
+
+    transcript = await getOpenAI().audio.transcriptions.create({
+      file: audioFile,
+      model: 'whisper-1',
+      response_format: 'text',
     })
-    .eq('id', job.meeting_id)
-    .eq('user_id', job.user_id)
 
-  const { data: audioData, error: downloadError } = await admin.storage
-    .from('meeting-audio')
-    .download(storagePath)
-
-  if (downloadError || !audioData) {
-    throw new Error('Failed to download audio from storage')
+    await admin
+      .from('meetings')
+      .update({
+        transcript,
+        status: 'generating',
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', job.meeting_id)
+      .eq('user_id', job.user_id)
   }
-
-  const extension = storagePath.split('.').pop() || 'webm'
-  const mimeType = extension === 'webm' ? 'audio/webm'
-    : extension === 'mp3' ? 'audio/mpeg'
-      : extension === 'wav' ? 'audio/wav'
-        : extension === 'm4a' ? 'audio/mp4'
-          : extension === 'ogg' ? 'audio/ogg'
-            : 'audio/webm'
-
-  const audioFile = new File([audioData], `audio.${extension}`, { type: mimeType })
-
-  const transcript = await getOpenAI().audio.transcriptions.create({
-    file: audioFile,
-    model: 'whisper-1',
-    response_format: 'text',
-  })
-
-  await admin
-    .from('meetings')
-    .update({
-      transcript,
-      status: 'generating',
-      error_message: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', job.meeting_id)
-    .eq('user_id', job.user_id)
 
   const truncatedTranscript = transcript.length > MAX_TRANSCRIPT_CHARS
     ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'

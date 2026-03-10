@@ -24,34 +24,25 @@ export default async function MeetingPage({
 
   if (!meeting) notFound()
 
-  // If the meeting is still being processed, show the processing view
-  if (meeting.status === 'transcribing' || meeting.status === 'generating' || meeting.status === 'recording' || meeting.status === 'uploading') {
+  // Recording status: the meeting page IS the recording surface
+  if (meeting.status === 'recording') {
+    return <MeetingDetailWrapper meeting={meeting as Meeting} />
+  }
+
+  if (
+    meeting.status === 'uploading' ||
+    meeting.status === 'transcribing' ||
+    meeting.status === 'generating' ||
+    meeting.status === 'error'
+  ) {
     return (
-      <div className="flex flex-col gap-6 p-6 md:p-10">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-foreground">
-            Processing meeting
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Your audio is being analyzed by AI.
-          </p>
-        </div>
+      <div className="p-6 md:p-10">
         <ProcessingView
           meetingId={id}
           step={meeting.status}
-        />
-      </div>
-    )
-  }
-
-  // If the meeting errored, show the error state with retry/delete options
-  if (meeting.status === 'error') {
-    return (
-      <div className="flex flex-col gap-6 p-6 md:p-10">
-        <ProcessingView
-          meetingId={id}
-          step="error"
-          error={meeting.error_message || 'An unexpected error occurred during processing.'}
+          error={meeting.status === 'error'
+            ? meeting.error_message || 'An unexpected error occurred during processing.'
+            : undefined}
         />
       </div>
     )

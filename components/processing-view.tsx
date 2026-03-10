@@ -25,50 +25,59 @@ interface Props {
   error?: string
 }
 
-const steps = [
-  { key: 'transcribing', label: 'Transcribing audio', description: 'Converting speech to text with Whisper' },
-  { key: 'generating', label: 'Generating notes', description: 'AI is extracting structured notes' },
-  { key: 'done', label: 'Complete', description: 'Your meeting notes are ready' },
-]
+type StepState = 'done' | 'active' | 'pending'
 
-const statusMeta: Record<
-  MeetingStatus,
-  {
-    stage: 'transcribing' | 'generating' | 'done' | 'error'
-    label: string
-    description: string
+function buildDisplaySteps(currentStep: MeetingStatus) {
+  switch (currentStep) {
+    case 'uploading':
+      return [
+        { label: 'Uploading audio…', state: 'active' as const },
+        { label: 'Generating notes', state: 'pending' as const },
+        { label: 'Complete', state: 'pending' as const },
+      ]
+    case 'transcribing':
+      return [
+        { label: 'Audio uploaded', state: 'done' as const },
+        { label: 'Transcribing audio…', state: 'active' as const },
+        { label: 'Complete', state: 'pending' as const },
+      ]
+    case 'generating':
+      return [
+        { label: 'Audio uploaded', state: 'done' as const },
+        { label: 'Generating notes…', state: 'active' as const },
+        { label: 'Complete', state: 'pending' as const },
+      ]
+    case 'done':
+      return [
+        { label: 'Audio uploaded', state: 'done' as const },
+        { label: 'Generating notes', state: 'done' as const },
+        { label: 'Complete', state: 'done' as const },
+      ]
+    case 'recording':
+      return [
+        { label: 'Recording audio…', state: 'active' as const },
+        { label: 'Generating notes', state: 'pending' as const },
+        { label: 'Complete', state: 'pending' as const },
+      ]
+    default:
+      return [
+        { label: 'Audio uploaded', state: 'done' as const },
+        { label: 'Generating notes', state: 'pending' as const },
+        { label: 'Complete', state: 'pending' as const },
+      ]
   }
-> = {
-  recording: {
-    stage: 'transcribing',
-    label: 'Recording audio',
-    description: 'Capturing meeting audio in your browser',
-  },
-  uploading: {
-    stage: 'transcribing',
-    label: 'Uploading audio',
-    description: 'Uploading recording to secure storage',
-  },
-  transcribing: {
-    stage: 'transcribing',
-    label: 'Transcribing audio',
-    description: 'Converting speech to text with Whisper',
-  },
-  generating: {
-    stage: 'generating',
-    label: 'Generating notes',
-    description: 'AI is extracting structured notes',
-  },
-  done: {
-    stage: 'done',
-    label: 'Complete',
-    description: 'Your meeting notes are ready',
-  },
-  error: {
-    stage: 'error',
-    label: 'Error',
-    description: 'Something went wrong while processing this meeting',
-  },
+}
+
+function StepIcon({ state }: { state: StepState }) {
+  if (state === 'done') {
+    return <CheckCircle2 className="size-4 text-accent" />
+  }
+
+  if (state === 'active') {
+    return <Loader2 className="size-4 animate-spin text-foreground" />
+  }
+
+  return <span className="size-3 rounded-full border border-muted-foreground/30" />
 }
 
 export function ProcessingView({ meetingId, step, error }: Props) {
@@ -97,8 +106,7 @@ export function ProcessingView({ meetingId, step, error }: Props) {
         const nextStep = payload?.meeting?.status as MeetingStatus | undefined
         const nextError = payload?.meeting?.error_message as string | null | undefined
 
-        if (!nextStep) return
-        if (cancelled) return
+        if (!nextStep || cancelled) return
 
         setCurrentStep(nextStep)
         setCurrentError(nextStep === 'error' ? nextError ?? undefined : undefined)
@@ -115,6 +123,14 @@ export function ProcessingView({ meetingId, step, error }: Props) {
       clearInterval(interval)
     }
   }, [meetingId, currentStep])
+
+  useEffect(() => {
+    if (!meetingId || currentStep !== 'done') return
+
+    const href = `/dashboard/${meetingId}`
+    router.push(href)
+    router.refresh()
+  }, [currentStep, meetingId, router])
 
   const handleDelete = async () => {
     setIsDeleting(true)
@@ -137,37 +153,50 @@ export function ProcessingView({ meetingId, step, error }: Props) {
   if (currentStep === 'error') {
     return (
       <>
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-card px-6 py-16">
-          <AlertCircle className="size-8 text-destructive" />
-          <div className="flex flex-col items-center gap-1 text-center">
-            <p className="text-sm font-medium text-foreground">Something went wrong</p>
-            <p className="text-xs text-muted-foreground max-w-md">{currentError || 'An unexpected error occurred'}</p>
+        <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
+              Processing meeting
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              We couldn&apos;t finish preparing this meeting.
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button asChild>
-              <Link href="/dashboard/new">
-                Try again
-              </Link>
-            </Button>
-            {meetingId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-                disabled={isDeleting}
-                className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
-              >
-                <Trash2 className="mr-1 size-3.5" />
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Deleting…
-                  </>
-                ) : (
-                  'Delete meeting'
-                )}
+
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-card px-6 py-16">
+            <AlertCircle className="size-8 text-destructive" />
+            <div className="flex flex-col items-center gap-1 text-center">
+              <p className="text-sm font-medium text-foreground">Something went wrong</p>
+              <p className="max-w-md text-xs text-muted-foreground">
+                {currentError || 'An unexpected error occurred'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button asChild>
+                <Link href="/dashboard/new">
+                  Try again
+                </Link>
               </Button>
-            )}
+              {meetingId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isDeleting}
+                  className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+                >
+                  <Trash2 className="mr-1 size-3.5" />
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Deleting…
+                    </>
+                  ) : (
+                    'Delete meeting'
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -194,69 +223,54 @@ export function ProcessingView({ meetingId, step, error }: Props) {
     )
   }
 
-  const currentStage = statusMeta[currentStep].stage
-  const currentIndex = steps.findIndex((s) => s.key === currentStage)
+  const displaySteps = buildDisplaySteps(currentStep)
 
   return (
     <>
-      <div className="flex flex-col gap-6 rounded-xl border border-border bg-card px-6 py-12">
-        {steps.map((s, i) => {
-          const isActive = s.key === currentStage
-          const isDone = i < currentIndex || currentStage === 'done'
-          const isPending = i > currentIndex && currentStage !== 'done'
-          const displayLabel = s.key === currentStage ? statusMeta[currentStep].label : s.label
-          const displayDescription =
-            s.key === currentStage ? statusMeta[currentStep].description : s.description
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
+            Processing meeting
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Your notes are being prepared.
+          </p>
+        </div>
 
-          return (
-            <div key={s.key} className="flex items-start gap-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center">
-                {isDone ? (
-                  <CheckCircle2 className="size-5 text-accent" />
-                ) : isActive ? (
-                  <Loader2 className="size-5 animate-spin text-accent" />
-                ) : (
-                  <div className={cn(
-                    'h-2 w-2 rounded-full',
-                    isPending ? 'bg-muted-foreground/30' : 'bg-accent'
-                  )} />
+        <div className="flex flex-col gap-4">
+          {displaySteps.map((stepItem) => (
+            <div key={stepItem.label} className="flex items-center gap-3">
+              <div className="flex size-6 shrink-0 items-center justify-center">
+                <StepIcon state={stepItem.state} />
+              </div>
+              <span
+                className={cn(
+                  stepItem.state === 'active' && 'text-base font-semibold text-foreground',
+                  stepItem.state === 'done' && 'text-sm font-medium text-accent',
+                  stepItem.state === 'pending' && 'text-sm text-muted-foreground/40'
                 )}
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className={cn(
-                  'text-sm font-medium',
-                  isActive || isDone ? 'text-foreground' : 'text-muted-foreground'
-                )}>
-                  {displayLabel}
-                </span>
-                <span className="text-xs text-muted-foreground">{displayDescription}</span>
-              </div>
+              >
+                {stepItem.label}
+              </span>
             </div>
-          )
-        })}
+          ))}
+        </div>
 
-        {currentStep === 'done' && meetingId && (
-          <div className="mt-4 flex justify-center">
-            <Button asChild>
-              <Link href={`/dashboard/${meetingId}`}>
-                View meeting notes
-              </Link>
-            </Button>
-          </div>
-        )}
-
-        {/* Delete option for stuck processing states */}
-        {(currentStep === 'recording' || currentStep === 'uploading' || currentStep === 'transcribing' || currentStep === 'generating') && meetingId && (
-          <div className="mt-2 flex justify-center">
+        {(currentStep === 'recording' ||
+          currentStep === 'uploading' ||
+          currentStep === 'transcribing' ||
+          currentStep === 'generating') &&
+          meetingId && (
+          <div className="flex">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowDeleteDialog(true)}
               disabled={isDeleting}
-              className="text-xs text-muted-foreground hover:text-destructive"
+              className="px-0 text-xs text-muted-foreground hover:text-destructive"
             >
               <Trash2 className="mr-1 h-3 w-3" />
-              {isDeleting ? 'Deleting...' : 'Cancel and delete'}
+              {isDeleting ? 'Deleting…' : 'Cancel and delete'}
             </Button>
           </div>
         )}
