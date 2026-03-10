@@ -17,6 +17,8 @@ export interface Meeting {
   document_content: Record<string, unknown> | null
   template_id: string | null
   diarized_transcript: DiarizedSegment[] | null
+  enhancement_status: EnhancementStatus
+  enhancement_state: EnhancementState | null
   created_at: string
   updated_at: string
 }
@@ -61,6 +63,32 @@ export type MeetingStatus =
   | 'generating'
   | 'done'
   | 'error'
+
+export type EnhancementStatus =
+  | 'idle'
+  | 'generating'
+  | 'reviewing'
+  | 'complete'
+  | 'error'
+
+export interface EnhancementSuggestion {
+  id: string
+  title: string
+  summary: string
+  beforeExcerpt: string
+  afterExcerpt: string
+  proposed_document_content: Record<string, unknown>
+}
+
+export interface EnhancementState {
+  sessionId: string
+  step: number
+  acceptedCount: number
+  skippedCount: number
+  maxSuggestions: number
+  currentSuggestion: EnhancementSuggestion | null
+  lastError: string | null
+}
 
 export interface MeetingSource {
   id: string

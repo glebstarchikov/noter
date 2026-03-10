@@ -6,41 +6,39 @@ import { AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export default function DashboardError({
-    error,
-    reset,
+  error,
+  reset,
 }: {
-    error: Error & { digest?: string }
-    reset: () => void
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
-    useEffect(() => {
-        console.error('Dashboard error:', error)
-    }, [error])
+  useEffect(() => {
+    console.error('Dashboard error:', error)
+  }, [error])
 
-    return (
-        <div className="flex flex-col items-center justify-center gap-6 p-6 md:p-10" style={{ minHeight: '50vh' }}>
-            <AlertCircle className="h-10 w-10 text-destructive" />
-            <div className="flex flex-col items-center gap-2 text-center">
-                <h2 className="text-lg font-semibold text-foreground">
-                    Something went wrong
-                </h2>
-                <p className="max-w-md text-sm text-muted-foreground">
-                    An error occurred while loading the dashboard. Please try again or go back to the home page.
-                </p>
-            </div>
-            <div className="flex items-center gap-3">
-                <Button
-                    onClick={reset}
-                    variant="outline"
-                    className="border-border"
-                >
-                    Try again
-                </Button>
-                <Button asChild>
-                    <Link href="/dashboard">
-                        Go to dashboard
-                    </Link>
-                </Button>
-            </div>
+  return (
+    <div className="flex items-center justify-center p-6 md:p-10" style={{ minHeight: '50vh' }}>
+      <div className="surface-utility flex max-w-xl flex-col items-center gap-5 px-8 py-10 text-center">
+        <AlertCircle className="size-9 text-destructive" />
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            We couldn&apos;t load your notes
+          </h2>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Please try again. If the problem keeps happening, head back to your workspace and reopen the page.
+          </p>
         </div>
-    )
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button onClick={reset} variant="outline" className="border-border/70 shadow-none">
+            Try again
+          </Button>
+          <Button asChild>
+            <Link href="/dashboard">
+              Back to notes
+            </Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 }

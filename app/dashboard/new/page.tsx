@@ -1,13 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Mic, Upload, Loader2 } from 'lucide-react'
+import { Mic, Upload, Loader2, ChevronDown } from 'lucide-react'
 import { AudioUploader } from '@/components/audio-uploader'
 import { ProcessingView } from '@/components/processing-view'
-import { cn } from '@/lib/utils'
-import { BUILTIN_TEMPLATES, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu'
 import { createClient } from '@/lib/supabase/client'
+import { BUILTIN_TEMPLATES, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { toast } from 'sonner'
 import type { MeetingStatus } from '@/lib/types'
 
@@ -24,15 +33,19 @@ export default function NewMeetingPage() {
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID)
   const [isCreating, setIsCreating] = useState(false)
 
-  const selectedTemplate = BUILTIN_TEMPLATES.find((t) => t.id === templateId) ?? BUILTIN_TEMPLATES[0]
+  const selectedTemplate =
+    BUILTIN_TEMPLATES.find((template) => template.id === templateId) ?? BUILTIN_TEMPLATES[0]
 
-  // "Record live" — create meeting with status 'recording', navigate to meeting page
   const handleStartRecording = async () => {
     if (isCreating) return
     setIsCreating(true)
+
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
       if (!user) throw new Error('Not authenticated')
 
       const { data: meeting, error } = await supabase
@@ -56,7 +69,7 @@ export default function NewMeetingPage() {
 
   if (processing) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-8 md:px-10 md:py-10">
+      <div className="mx-auto max-w-3xl px-6 py-8 md:px-10 md:py-12">
         <ProcessingView
           meetingId={processing.meetingId}
           step={processing.step}
@@ -67,81 +80,105 @@ export default function NewMeetingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8 md:px-10 md:py-10">
-      <div className="mb-8 flex flex-col gap-1">
-        <h1 className="text-[26px] font-semibold tracking-tight text-foreground">New meeting</h1>
-        <p className="text-sm text-muted-foreground">Record live audio or upload an existing file.</p>
-      </div>
-
-      {/* Template selector */}
-      <div className="mb-6">
-        <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Template
+    <div className="mx-auto max-w-3xl px-6 py-8 md:px-10 md:py-12">
+      <div className="mb-8 flex flex-col gap-2">
+        <h1 className="text-[30px] font-semibold tracking-tight text-foreground">Start a meeting</h1>
+        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+          Capture a live conversation or bring in an existing recording. noter will shape the notes for you.
         </p>
-        <div className="flex flex-wrap gap-2">
-          {BUILTIN_TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTemplateId(t.id)}
-              className={cn(
-                'rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                templateId === t.id
-                  ? 'border-foreground bg-foreground text-background'
-                  : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
-              )}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-        {selectedTemplate.description && (
-          <p className="mt-2 text-[11px] text-muted-foreground">{selectedTemplate.description}</p>
-        )}
       </div>
 
-      {/* Two cards — choose record or upload */}
+      <div className="surface-utility mb-8 flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Note format</p>
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground">{selectedTemplate.name}</span>
+            {selectedTemplate.description ? ` · ${selectedTemplate.description}` : ''}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="rounded-full border-border/70 bg-card px-4 shadow-none">
+                {selectedTemplate.name}
+                <ChevronDown className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>Choose a format</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={templateId}
+                onValueChange={(value) => setTemplateId(value)}
+              >
+                {BUILTIN_TEMPLATES.map((template) => (
+                  <DropdownMenuRadioItem key={template.id} value={template.id}>
+                    {template.name}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button asChild variant="ghost" className="rounded-full px-4 text-muted-foreground">
+            <Link href="/dashboard/templates">Browse formats</Link>
+          </Button>
+        </div>
+      </div>
+
       {activeCard === null && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <button
             type="button"
             onClick={handleStartRecording}
             disabled={isCreating}
-            className="flex flex-col items-start gap-5 rounded-xl border border-border bg-card p-9 text-left transition-transform duration-200 hover:scale-[1.01] hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
+            className="surface-document flex flex-col items-start gap-5 px-7 py-8 text-left transition-transform duration-200 hover:scale-[1.01] hover:bg-secondary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
           >
-            {isCreating ? (
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            ) : (
-              <Mic className="size-6 text-muted-foreground" />
-            )}
-            <div className="flex flex-col gap-1">
-              <span className="text-[15px] font-semibold text-foreground">Record live</span>
-              <span className="text-sm text-muted-foreground">
-                Capture audio from your microphone in real time.
-              </span>
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-accent/12 text-accent">
+              {isCreating ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <Mic className="size-5" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <p className="text-lg font-semibold tracking-tight text-foreground">Record live</p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Start with your microphone and build notes as the conversation happens.
+              </p>
             </div>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveCard('upload')}
-            className="flex flex-col items-start gap-5 rounded-xl border border-border bg-card p-9 text-left transition-transform duration-200 hover:scale-[1.01] hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="surface-document flex flex-col items-start gap-5 px-7 py-8 text-left transition-transform duration-200 hover:scale-[1.01] hover:bg-secondary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Upload className="size-6 text-muted-foreground" />
-            <div className="flex flex-col gap-1">
-              <span className="text-[15px] font-semibold text-foreground">Upload audio</span>
-              <span className="text-sm text-muted-foreground">
-                Import an existing recording — MP3, WAV, M4A, or WebM.
-              </span>
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-secondary text-foreground">
+              <Upload className="size-5" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-lg font-semibold tracking-tight text-foreground">Upload audio</p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Bring in a saved recording and let noter turn it into structured notes.
+              </p>
             </div>
           </button>
         </div>
       )}
 
-      {/* Upload card */}
       {activeCard === 'upload' && (
-        <div className="rounded-xl border border-border bg-card p-9">
-          <AudioUploader onProcessing={setProcessing} templateId={templateId} />
+        <div className="space-y-4">
+          <Button
+            variant="ghost"
+            onClick={() => setActiveCard(null)}
+            className="px-0 text-sm text-muted-foreground hover:text-foreground"
+          >
+            Back
+          </Button>
+          <div className="surface-document px-7 py-8">
+            <AudioUploader onProcessing={setProcessing} templateId={templateId} />
+          </div>
         </div>
       )}
     </div>

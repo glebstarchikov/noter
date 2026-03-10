@@ -29,12 +29,13 @@ export default async function MeetingPage({
     return <MeetingDetailWrapper meeting={meeting as Meeting} />
   }
 
-  if (
-    meeting.status === 'uploading' ||
-    meeting.status === 'transcribing' ||
-    meeting.status === 'generating' ||
-    meeting.status === 'error'
-  ) {
+  const isInlineWorkspaceMeeting =
+    meeting.status === 'done' ||
+    meeting.status === 'recording' ||
+    ((meeting.status === 'generating' || meeting.status === 'error') &&
+      Boolean(meeting.diarized_transcript))
+
+  if (!isInlineWorkspaceMeeting) {
     return (
       <div className="p-6 md:p-10">
         <ProcessingView

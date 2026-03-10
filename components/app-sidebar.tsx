@@ -39,8 +39,8 @@ import {
 } from '@/components/ui/sidebar'
 
 const navItems = [
-    { href: '/dashboard', label: 'All Notes', icon: FileText },
-    { href: '/dashboard/templates', label: 'Templates', icon: LayoutTemplate },
+    { href: '/dashboard', label: 'Notes', icon: FileText },
+    { href: '/dashboard/templates', label: 'Formats', icon: LayoutTemplate },
 ]
 
 
@@ -53,10 +53,13 @@ function SidebarBrandToggle() {
             <div className="flex items-center justify-between gap-2">
                 <Link
                     href="/dashboard"
-                    className="ring-sidebar-ring rounded-md outline-hidden focus-visible:ring-2"
+                    className="ring-sidebar-ring flex items-center gap-3 rounded-md outline-hidden focus-visible:ring-2"
                     aria-label="Go to dashboard"
                 >
                     <Logo />
+                    <span className="text-base font-semibold tracking-tight text-sidebar-foreground">
+                        noter
+                    </span>
                 </Link>
                 <Button
                     variant="ghost-icon"
@@ -107,9 +110,10 @@ export function AppSidebar() {
     const initials = userEmail
         ? userEmail.substring(0, 2).toUpperCase()
         : '?'
+    const displayName = userEmail?.split('@')[0]?.replace(/[._-]+/g, ' ') ?? 'Your workspace'
 
     return (
-        <Sidebar collapsible="icon">
+        <Sidebar collapsible="icon" variant="floating">
             {/* Header */}
             <SidebarHeader>
                 <SidebarBrandToggle />
@@ -122,7 +126,11 @@ export function AppSidebar() {
                     <SidebarGroupContent>
                         <SidebarMenu>
                             <SidebarMenuItem>
-                                <SidebarMenuButton asChild tooltip="New meeting">
+                                <SidebarMenuButton
+                                    asChild
+                                    tooltip="New meeting"
+                                    className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground"
+                                >
                                     <Link href="/dashboard/new">
                                         <Plus />
                                         <span>New meeting</span>
@@ -174,10 +182,10 @@ export function AppSidebar() {
                                     </Avatar>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
                                         <span className="truncate font-medium">
-                                            {userEmail ?? 'User'}
+                                            {displayName}
                                         </span>
                                         <span className="truncate text-xs text-muted-foreground">
-                                            {userEmail ?? ''}
+                                            {userEmail ?? 'Signed in'}
                                         </span>
                                     </div>
                                     <ChevronsUpDown className="ml-auto size-4" />
@@ -198,10 +206,10 @@ export function AppSidebar() {
                                         </Avatar>
                                         <div className="grid flex-1 text-left text-sm leading-tight">
                                             <span className="truncate font-medium">
-                                                {userEmail ?? 'User'}
+                                                {displayName}
                                             </span>
                                             <span className="truncate text-xs text-muted-foreground">
-                                                {userEmail ?? ''}
+                                                {userEmail ?? 'Signed in'}
                                             </span>
                                         </div>
                                     </div>

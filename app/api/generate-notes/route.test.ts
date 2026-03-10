@@ -128,7 +128,7 @@ describe('POST /api/generate-notes', () => {
     expect(payload.code).toBe('MISSING_TRANSCRIPT')
   })
 
-  it('merges existing document_content with generated notes and applies ownership filter on updates', async () => {
+  it('keeps existing document_content intact and applies ownership filter on updates', async () => {
     const typedNotesDocument = {
       type: 'doc',
       content: [
@@ -149,27 +149,12 @@ describe('POST /api/generate-notes', () => {
     expect(mockCompletionCreate).toHaveBeenCalled()
     expect(updateEqUsers[0]).toHaveBeenCalledWith('user_id', 'user-1')
 
-    const finalUpdate = updateCalls[1] as {
-      document_content: {
-        type: string
-        content: Array<{ type: string; attrs?: Record<string, unknown>; content?: unknown[] }>
-      }
-      status: string
-    }
+    const finalUpdate = updateCalls[1] as Record<string, unknown>
 
     expect(finalUpdate.status).toBe('done')
-    expect(finalUpdate.document_content.type).toBe('doc')
-    expect(finalUpdate.document_content.content[0]).toEqual(typedNotesDocument.content[0])
-    expect(finalUpdate.document_content.content).toContainEqual({
-      type: 'heading',
-      attrs: { level: 2 },
-      content: [{ type: 'text', text: 'Summary' }],
-    })
-    expect(finalUpdate.document_content.content).toContainEqual({
-      type: 'heading',
-      attrs: { level: 2 },
-      content: [{ type: 'text', text: 'Action Items' }],
-    })
+    expect(finalUpdate.document_content).toBeUndefined()
+    expect(finalUpdate.title).toBe('Weekly sync')
+    expect(finalUpdate.summary).toBe('Summary text')
   })
 
   it('persists meeting error state when note generation throws', async () => {

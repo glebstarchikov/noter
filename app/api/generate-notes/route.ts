@@ -5,7 +5,8 @@ import { getOpenAI } from '@/lib/openai'
 import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
 import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
 import { generatedNotesSchema } from '@/lib/schemas'
-import { generatedNotesToTiptap, mergeTiptapDocuments } from '@/lib/tiptap-converter'
+import { generatedNotesToTiptap, hasTiptapContent } from '@/lib/tiptap-converter'
+import { METADATA_MODEL } from '@/lib/ai-models'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // Generate notes with GPT
     const completion = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: METADATA_MODEL,
       messages: [
         { role: 'system', content: NOTES_GENERATION_PROMPT },
         { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       follow_ups: normalizeStringArray(parsedNotes.data.follow_ups),
     }
     const generatedDocument = generatedNotesToTiptap(normalizedNotes)
-    const documentContent = mergeTiptapDocuments(meeting.document_content, generatedDocument)
+    const shouldSeedDocument = !hasTiptapContent(meeting.document_content)
 
     // Save notes to database
     await supabase
@@ -139,8 +140,9 @@ export async function POST(request: NextRequest) {
         key_decisions: normalizedNotes.key_decisions,
         topics: normalizedNotes.topics,
         follow_ups: normalizedNotes.follow_ups,
-        document_content: documentContent,
+        ...(shouldSeedDocument ? { document_content: generatedDocument } : {}),
         status: 'done',
+        error_message: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', meetingId)

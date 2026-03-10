@@ -1,17 +1,25 @@
 import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:test'
 
+const mockBuildChatModelMessages = mock(() => Promise.resolve([]))
+const mockSearchWeb = mock(() => Promise.resolve(''))
+const mockGateway = mock((model: string) => model)
+
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
 }))
 
 mock.module('ai', () => ({
   streamText: mock(() => {}),
-  convertToModelMessages: mock(() => Promise.resolve([])),
-  UIMessage: mock(() => {}),
+  gateway: mockGateway,
 }))
 
-mock.module('@ai-sdk/openai', () => ({
-  createOpenAI: mock(() => mock(() => {})),
+mock.module('@/lib/chat-message-utils', () => ({
+  buildChatModelMessages: mockBuildChatModelMessages,
+  getLastUserText: mock(() => 'What changed?'),
+}))
+
+mock.module('@/lib/tavily', () => ({
+  searchWeb: mockSearchWeb,
 }))
 
 mock.module('@upstash/ratelimit', () => ({
@@ -44,36 +52,32 @@ function makeRequest(body: unknown) {
   })
 }
 
-function mockSupabase(user: { id: string } | null, meetingData: unknown, sourcesData: unknown[] = []) {
+function mockSupabase(user: { id: string } | null, meetingData: unknown) {
   const meetingSingle = mock(() => Promise.resolve({ data: meetingData }))
   const meetingEqUser = mock(() => ({ single: meetingSingle }))
   const meetingEqId = mock(() => ({ eq: meetingEqUser }))
   const meetingSelect = mock(() => ({ eq: meetingEqId }))
 
-  const sourcesEqUser = mock(() => Promise.resolve({ data: sourcesData }))
-  const sourcesEqMeeting = mock(() => ({ eq: sourcesEqUser }))
-  const sourcesSelect = mock(() => ({ eq: sourcesEqMeeting }))
-
   const from = mock((table: string) => {
     if (table === 'meetings') {
       return { select: meetingSelect }
     }
-    return { select: sourcesSelect }
+    throw new Error(`Unexpected table ${table}`)
   })
 
   const supabaseMock = {
     auth: { getUser: mock(() => Promise.resolve({ data: { user } })) },
     from,
-  };
+  }
 
-  (createClient as any).mockResolvedValue(supabaseMock as never)
-  return { sourcesEqUser }
+  ;(createClient as any).mockResolvedValue(supabaseMock as never)
+  return { from }
 }
 
 describe('POST /api/chat', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    (streamText as any).mockReturnValue({
+    jest.clearAllMocks()
+    ;(streamText as any).mockReturnValue({
       toUIMessageStreamResponse: () => new Response('ok', { status: 200 }),
     } as never)
   })
@@ -105,7 +109,7 @@ describe('POST /api/chat', () => {
     expect(payload.code).toBe('MEETING_NOT_FOUND')
   })
 
-  it('filters attached sources by user_id', async () => {
+  it('routes model selection through gateway and does not query meeting_sources', async () => {
     const meetingData = {
       title: 'Meeting',
       transcript: 'Transcript',
@@ -115,17 +119,51 @@ describe('POST /api/chat', () => {
       key_decisions: [],
       topics: [],
       follow_ups: [],
+      document_content: null,
     }
 
-    const { sourcesEqUser } = mockSupabase(
-      { id: 'user-1' },
-      meetingData,
-      [{ name: 'Doc', file_type: 'txt', content: 'hello' }]
-    )
+    const { from } = mockSupabase({ id: 'user-1' }, meetingData)
 
-    const response = await POST(makeRequest({ meetingId: 'meeting-1', messages: [] }))
+    const response = await POST(makeRequest({
+      meetingId: 'meeting-1',
+      messages: [],
+      modelTier: 'premium',
+      searchEnabled: false,
+    }))
 
     expect(response.status).toBe(200)
-    expect(sourcesEqUser).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(mockGateway).toHaveBeenCalledWith('openai/gpt-5.4')
+    expect(from).toHaveBeenCalledTimes(1)
+    expect(from).toHaveBeenCalledWith('meetings')
+  })
+
+  it('adds web search context when search is enabled', async () => {
+    mockSearchWeb.mockResolvedValueOnce('1. Result\nhttps://example.com\nContext')
+
+    const meetingData = {
+      title: 'Meeting',
+      transcript: 'Transcript',
+      summary: '',
+      detailed_notes: '',
+      action_items: [],
+      key_decisions: [],
+      topics: [],
+      follow_ups: [],
+      document_content: null,
+    }
+
+    mockSupabase({ id: 'user-1' }, meetingData)
+
+    const response = await POST(makeRequest({
+      meetingId: 'meeting-1',
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'What changed?' }] }],
+      searchEnabled: true,
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mockSearchWeb).toHaveBeenCalledWith('What changed?')
+
+    const call = (streamText as any).mock.calls[0][0]
+    expect(call.system).toContain('Web Search Context')
   })
 })

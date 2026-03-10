@@ -47,6 +47,22 @@ function evictOldest(index: string[]): string[] {
   return index
 }
 
+function sanitizeMessages(messages: UIMessage[]): UIMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    parts: Array.isArray(message.parts)
+      ? message.parts.map((part) => {
+        if (part && typeof part === 'object' && 'type' in part && part.type === 'file') {
+          const { url: _url, ...rest } = part as Record<string, unknown>
+          return rest
+        }
+
+        return part
+      })
+      : message.parts,
+  }))
+}
+
 export function getChatMessages(meetingId: string): UIMessage[] | undefined {
   if (!isLocalStorageAvailable()) return undefined
 
@@ -68,8 +84,10 @@ export function getChatMessages(meetingId: string): UIMessage[] | undefined {
 export function saveChatMessages(meetingId: string, messages: UIMessage[]): void {
   if (!isLocalStorageAvailable()) return
 
+  const sanitizedMessages = sanitizeMessages(messages)
+
   try {
-    localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(messages))
+    localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(sanitizedMessages))
 
     // Update index (move this meetingId to the end = most recent)
     let index = getIndex().filter((id) => id !== meetingId)
@@ -82,7 +100,7 @@ export function saveChatMessages(meetingId: string, messages: UIMessage[]): void
       let index = getIndex()
       index = evictOldest(index)
       setIndex(index)
-      localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(messages))
+      localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(sanitizedMessages))
     } catch {
       // Still failing — give up silently
     }
@@ -126,8 +144,10 @@ export function getGlobalChatMessages(): UIMessage[] | undefined {
 export function saveGlobalChatMessages(messages: UIMessage[]): void {
   if (!isLocalStorageAvailable()) return
 
+  const sanitizedMessages = sanitizeMessages(messages)
+
   try {
-    localStorage.setItem(GLOBAL_CHAT_KEY, JSON.stringify(messages))
+    localStorage.setItem(GLOBAL_CHAT_KEY, JSON.stringify(sanitizedMessages))
   } catch {
     // Quota exceeded — silent fail
   }

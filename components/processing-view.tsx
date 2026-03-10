@@ -32,38 +32,38 @@ function buildDisplaySteps(currentStep: MeetingStatus) {
     case 'uploading':
       return [
         { label: 'Uploading audio…', state: 'active' as const },
-        { label: 'Generating notes', state: 'pending' as const },
-        { label: 'Complete', state: 'pending' as const },
+        { label: 'Preparing transcript', state: 'pending' as const },
+        { label: 'Writing notes', state: 'pending' as const },
       ]
     case 'transcribing':
       return [
-        { label: 'Audio uploaded', state: 'done' as const },
-        { label: 'Transcribing audio…', state: 'active' as const },
-        { label: 'Complete', state: 'pending' as const },
+        { label: 'Audio ready', state: 'done' as const },
+        { label: 'Preparing transcript…', state: 'active' as const },
+        { label: 'Writing notes', state: 'pending' as const },
       ]
     case 'generating':
       return [
-        { label: 'Audio uploaded', state: 'done' as const },
-        { label: 'Generating notes…', state: 'active' as const },
-        { label: 'Complete', state: 'pending' as const },
+        { label: 'Audio ready', state: 'done' as const },
+        { label: 'Transcript ready', state: 'done' as const },
+        { label: 'Writing notes…', state: 'active' as const },
       ]
     case 'done':
       return [
-        { label: 'Audio uploaded', state: 'done' as const },
-        { label: 'Generating notes', state: 'done' as const },
-        { label: 'Complete', state: 'done' as const },
+        { label: 'Audio ready', state: 'done' as const },
+        { label: 'Transcript ready', state: 'done' as const },
+        { label: 'Notes complete', state: 'done' as const },
       ]
     case 'recording':
       return [
-        { label: 'Recording audio…', state: 'active' as const },
-        { label: 'Generating notes', state: 'pending' as const },
-        { label: 'Complete', state: 'pending' as const },
+        { label: 'Recording in progress…', state: 'active' as const },
+        { label: 'Preparing transcript', state: 'pending' as const },
+        { label: 'Writing notes', state: 'pending' as const },
       ]
     default:
       return [
-        { label: 'Audio uploaded', state: 'done' as const },
-        { label: 'Generating notes', state: 'pending' as const },
-        { label: 'Complete', state: 'pending' as const },
+        { label: 'Audio ready', state: 'done' as const },
+        { label: 'Preparing transcript', state: 'pending' as const },
+        { label: 'Writing notes', state: 'pending' as const },
       ]
   }
 }
@@ -111,7 +111,7 @@ export function ProcessingView({ meetingId, step, error }: Props) {
         setCurrentStep(nextStep)
         setCurrentError(nextStep === 'error' ? nextError ?? undefined : undefined)
       } catch {
-        // Poll failures are non-fatal here; user still sees current known state.
+        // Keep the current state visible if polling fails.
       }
     }
 
@@ -154,48 +154,42 @@ export function ProcessingView({ meetingId, step, error }: Props) {
     return (
       <>
         <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
-              Processing meeting
+          <div className="space-y-2">
+            <h1 className="text-[30px] font-semibold tracking-tight text-foreground">
+              We hit a problem preparing this note
             </h1>
-            <p className="text-sm text-muted-foreground">
-              We couldn&apos;t finish preparing this meeting.
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              Nothing is lost. You can start a new note, or remove this one and try again.
             </p>
           </div>
 
-          <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-card px-6 py-16">
-            <AlertCircle className="size-8 text-destructive" />
-            <div className="flex flex-col items-center gap-1 text-center">
-              <p className="text-sm font-medium text-foreground">Something went wrong</p>
-              <p className="max-w-md text-xs text-muted-foreground">
-                {currentError || 'An unexpected error occurred'}
-              </p>
+          <div className="surface-utility flex max-w-2xl flex-col gap-5 px-6 py-6">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <AlertCircle className="size-5 text-destructive" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-base font-semibold text-foreground">Processing stopped early</p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {currentError || 'An unexpected error occurred while preparing your note.'}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
+
+            <div className="flex flex-wrap items-center gap-3">
               <Button asChild>
-                <Link href="/dashboard/new">
-                  Try again
-                </Link>
+                <Link href="/dashboard/new">Start a new note</Link>
               </Button>
-              {meetingId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowDeleteDialog(true)}
-                  disabled={isDeleting}
-                  className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
-                >
-                  <Trash2 className="mr-1 size-3.5" />
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" />
-                      Deleting…
-                    </>
-                  ) : (
-                    'Delete meeting'
-                  )}
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={isDeleting}
+                className="px-0 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+                {isDeleting ? 'Deleting…' : 'Delete this note'}
+              </Button>
             </div>
           </div>
         </div>
@@ -203,9 +197,9 @@ export function ProcessingView({ meetingId, step, error }: Props) {
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete this meeting?</AlertDialogTitle>
+              <AlertDialogTitle>Delete this note?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently delete the meeting and all its data. This cannot be undone.
+                This will permanently delete the note and all its data. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -228,19 +222,20 @@ export function ProcessingView({ meetingId, step, error }: Props) {
   return (
     <>
       <div className="flex flex-col gap-8">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
-            Processing meeting
+        <div className="space-y-2">
+          <h1 className="text-[30px] font-semibold tracking-tight text-foreground">
+            Preparing your note
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Your notes are being prepared.
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            We&apos;re turning the audio into a clear set of notes. You can leave this page while
+            we finish up.
           </p>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {displaySteps.map((stepItem) => (
-            <div key={stepItem.label} className="flex items-center gap-3">
-              <div className="flex size-6 shrink-0 items-center justify-center">
+            <div key={stepItem.label} className="flex items-center gap-4">
+              <div className="flex size-7 shrink-0 items-center justify-center">
                 <StepIcon state={stepItem.state} />
               </div>
               <span
@@ -267,9 +262,9 @@ export function ProcessingView({ meetingId, step, error }: Props) {
               size="sm"
               onClick={() => setShowDeleteDialog(true)}
               disabled={isDeleting}
-              className="px-0 text-xs text-muted-foreground hover:text-destructive"
+              className="px-0 text-sm text-muted-foreground hover:text-destructive"
             >
-              <Trash2 className="mr-1 h-3 w-3" />
+              <Trash2 className="size-3.5" />
               {isDeleting ? 'Deleting…' : 'Cancel and delete'}
             </Button>
           </div>
@@ -279,9 +274,9 @@ export function ProcessingView({ meetingId, step, error }: Props) {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this meeting?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the meeting and all its data. This cannot be undone.
+              This will permanently delete the note and all its data. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -106,13 +106,51 @@ function buildMeetingNodes(input: GeneratedNotesDocumentInput): TiptapNode[] {
   return nodes
 }
 
-function isTiptapDocument(value: unknown): value is TiptapDocument {
+export function isTiptapDocument(value: unknown): value is TiptapDocument {
   return Boolean(
     value &&
     typeof value === 'object' &&
     (value as TiptapDocument).type === 'doc' &&
     Array.isArray((value as TiptapDocument).content)
   )
+}
+
+export function hasTiptapContent(value: unknown): value is TiptapDocument {
+  return isTiptapDocument(value) && value.content.some((node) => {
+    if (!node) return false
+    if (node.type === 'paragraph' && (!node.content || node.content.length === 0)) return false
+    return true
+  })
+}
+
+function nodeToPlainText(node: TiptapNode): string {
+  if (node.text) return node.text
+
+  const childText = (node.content ?? []).map(nodeToPlainText).filter(Boolean).join('\n')
+
+  if (node.type === 'heading') {
+    return childText ? `${childText}\n` : ''
+  }
+
+  if (node.type === 'listItem' || node.type === 'taskItem') {
+    return childText
+  }
+
+  if (node.type === 'bulletList' || node.type === 'orderedList' || node.type === 'taskList') {
+    return (node.content ?? []).map((child) => `- ${nodeToPlainText(child)}`.trim()).join('\n')
+  }
+
+  return childText
+}
+
+export function tiptapToPlainText(value: unknown): string {
+  if (!isTiptapDocument(value)) return ''
+
+  return value.content
+    .map(nodeToPlainText)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export function generatedNotesToTiptap(input: GeneratedNotesDocumentInput): TiptapDocument {

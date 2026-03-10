@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
 import { z } from 'zod'
+import { extractTextFromFile } from '@/lib/file-text'
 
 export const maxDuration = 30
 
@@ -24,61 +25,6 @@ function isFileLike(value: FormDataEntryValue | null): value is File {
     'arrayBuffer' in value &&
     'name' in value
   )
-}
-
-async function extractTextFromFile(file: File): Promise<string> {
-  const type = file.type || ''
-
-  // Plain text / markdown
-  if (type === 'text/plain' || type === 'text/markdown' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
-    return await file.text()
-  }
-
-  // PDF
-  if (type === 'application/pdf' || file.name.endsWith('.pdf')) {
-    try {
-      const pdfParse = (await import('pdf-parse')).default
-      const buffer = Buffer.from(await file.arrayBuffer())
-      const data = await pdfParse(buffer)
-      return data.text
-    } catch {
-      throw new Error('Failed to parse PDF. The file may be corrupted or password-protected.')
-    }
-  }
-
-  // DOCX - extract raw text from the XML inside the zip
-  if (type.includes('wordprocessingml') || file.name.endsWith('.docx')) {
-    try {
-      const buffer = Buffer.from(await file.arrayBuffer())
-      const text = await extractDocxText(buffer)
-      return text
-    } catch {
-      throw new Error('Failed to parse DOCX file.')
-    }
-  }
-
-  throw new Error(`Unsupported file type: ${type}`)
-}
-
-// Extract text from DOCX by decompressing the ZIP and parsing word/document.xml
-async function extractDocxText(buffer: Buffer): Promise<string> {
-  const JSZip = (await import('jszip')).default
-  const zip = await JSZip.loadAsync(buffer)
-  const docXml = zip.file('word/document.xml')
-  if (!docXml) {
-    throw new Error('Invalid DOCX: missing word/document.xml')
-  }
-  const xmlContent = await docXml.async('text')
-  const textParts: string[] = []
-  const regex = /<w:t[^>]*>([^<]*)<\/w:t>/g
-  let match
-  while ((match = regex.exec(xmlContent)) !== null) {
-    textParts.push(match[1])
-  }
-  if (textParts.length === 0) {
-    return 'Could not extract text from DOCX file.'
-  }
-  return textParts.join(' ')
 }
 
 // POST - Upload a new source

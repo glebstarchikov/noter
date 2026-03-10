@@ -57,6 +57,7 @@ export function MeetingEditor({ meeting, editable = true }: MeetingEditorProps) 
     : legacyMeetingToTiptap(meeting)
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
@@ -88,11 +89,11 @@ export function MeetingEditor({ meeting, editable = true }: MeetingEditorProps) 
       {saveState !== 'idle' && (
         <div
           className={cn(
-            'absolute right-0 top-0 text-[11px] tabular-nums transition-opacity',
-            saveState === 'saving' ? 'text-muted-foreground' : 'text-muted-foreground/60'
+            'absolute right-0 top-0 text-xs transition-opacity',
+            saveState === 'saving' ? 'text-muted-foreground' : 'text-muted-foreground/70'
           )}
         >
-          {saveState === 'saving' ? 'Saving…' : 'Saved'}
+          {saveState === 'saving' ? 'Saving changes…' : 'Saved'}
         </div>
       )}
 
@@ -100,7 +101,7 @@ export function MeetingEditor({ meeting, editable = true }: MeetingEditorProps) 
       {editable && (
         <BubbleMenu
           editor={editor}
-          className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-1 shadow-md"
+          className="surface-utility flex items-center gap-0.5 p-1 shadow-none"
         >
           <ToolbarButton
             active={editor.isActive('bold')}

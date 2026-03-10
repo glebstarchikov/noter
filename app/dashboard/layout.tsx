@@ -43,11 +43,11 @@ export default function DashboardLayout({
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset className="relative flex flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4 md:hidden">
+      <SidebarInset className="relative flex min-h-svh flex-col bg-background">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 bg-background/90 px-4 backdrop-blur md:hidden">
           <SidebarTrigger className="-ml-1" />
         </header>
-        <main className="flex-1 overflow-y-auto pb-16">
+        <main className="flex-1 overflow-y-auto">
           {children}
         </main>
         <ChatBar meetingTitle={meetingTitle} />
