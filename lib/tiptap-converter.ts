@@ -11,6 +11,10 @@ export type TiptapNode = {
 }
 
 export type TiptapDocument = { type: 'doc'; content: TiptapNode[] }
+export const EMPTY_TIPTAP_DOCUMENT: TiptapDocument = {
+  type: 'doc',
+  content: [{ type: 'paragraph' }],
+}
 
 export interface GeneratedNotesDocumentInput {
   summary: string
@@ -157,10 +161,17 @@ export function generatedNotesToTiptap(input: GeneratedNotesDocumentInput): Tipt
   const nodes = buildMeetingNodes(input)
 
   if (nodes.length === 0) {
-    nodes.push({ type: 'paragraph' })
+    nodes.push({ ...EMPTY_TIPTAP_DOCUMENT.content[0] })
   }
 
   return { type: 'doc', content: nodes }
+}
+
+export function createEmptyTiptapDocument(): TiptapDocument {
+  return {
+    type: 'doc',
+    content: [{ type: 'paragraph' }],
+  }
 }
 
 export function mergeTiptapDocuments(
@@ -189,4 +200,8 @@ export function legacyMeetingToTiptap(meeting: Meeting): TiptapDocument {
     key_decisions: meeting.key_decisions ?? [],
     follow_ups: meeting.follow_ups ?? [],
   })
+}
+
+export function normalizeTiptapDocument(value: unknown): TiptapDocument {
+  return isTiptapDocument(value) ? value : createEmptyTiptapDocument()
 }

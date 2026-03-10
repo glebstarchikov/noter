@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
 import { ProcessingView } from '@/components/processing-view'
+import { shouldUseProcessingView } from '@/lib/meeting-workspace'
 import type { Meeting } from '@/lib/types'
 
 export default async function MeetingPage({
@@ -24,18 +25,7 @@ export default async function MeetingPage({
 
   if (!meeting) notFound()
 
-  // Recording status: the meeting page IS the recording surface
-  if (meeting.status === 'recording') {
-    return <MeetingDetailWrapper meeting={meeting as Meeting} />
-  }
-
-  const isInlineWorkspaceMeeting =
-    meeting.status === 'done' ||
-    meeting.status === 'recording' ||
-    ((meeting.status === 'generating' || meeting.status === 'error') &&
-      Boolean(meeting.diarized_transcript))
-
-  if (!isInlineWorkspaceMeeting) {
+  if (shouldUseProcessingView(meeting as Meeting)) {
     return (
       <div className="p-6 md:p-10">
         <ProcessingView

@@ -1,41 +1,31 @@
-import { convertToModelMessages, type ModelMessage, type UIMessage } from 'ai'
+import {
+  convertToModelMessages,
+  isFileUIPart,
+  isTextUIPart,
+  type ModelMessage,
+  type TextUIPart,
+  type UIMessage,
+} from 'ai'
 import {
   decodeDataUrl,
   extractTextFromBuffer,
-  isDocumentAttachment,
-  isImageAttachment,
 } from '@/lib/file-text'
+import { isDocumentAttachment, isImageAttachment } from '@/lib/attachment-kind'
 
-type FileLikePart = {
-  type: 'file'
-  filename?: string
-  mediaType?: string
-  url?: string
-}
+type ChatUIPart = UIMessage['parts'][number]
 
-type TextLikePart = {
-  type: 'text'
-  text: string
-}
-
-function isFileLikePart(part: unknown): part is FileLikePart {
-  return Boolean(part && typeof part === 'object' && (part as FileLikePart).type === 'file')
-}
-
-function isTextLikePart(part: unknown): part is TextLikePart {
-  return Boolean(
-    part &&
-    typeof part === 'object' &&
-    (part as TextLikePart).type === 'text' &&
-    typeof (part as TextLikePart).text === 'string'
-  )
+function attachmentTextPart(filename: string, text: string): TextUIPart {
+  return {
+    type: 'text',
+    text: `Attachment: ${filename}\n${text}`,
+  }
 }
 
 export function getMessageText(message: UIMessage) {
   if (!Array.isArray(message.parts)) return ''
 
   return message.parts
-    .filter(isTextLikePart)
+    .filter(isTextUIPart)
     .map((part) => part.text)
     .join('\n')
 }
@@ -48,53 +38,45 @@ export function getLastUserText(messages: UIMessage[]) {
   return lastUserMessage ? getMessageText(lastUserMessage) : ''
 }
 
+async function normalizePart(part: ChatUIPart): Promise<ChatUIPart> {
+  if (!isFileUIPart(part)) {
+    return part
+  }
+
+  const filename = part.filename || 'attachment'
+
+  if (isImageAttachment(part.mediaType)) {
+    return part
+  }
+
+  if (isDocumentAttachment(part.mediaType, filename)) {
+    try {
+      const { buffer } = decodeDataUrl(part.url)
+      const extractedText = await extractTextFromBuffer(buffer, filename, part.mediaType)
+      return attachmentTextPart(filename, extractedText)
+    } catch {
+      return attachmentTextPart(filename, '[Attachment could not be parsed.]')
+    }
+  }
+
+  return {
+    type: 'text',
+    text: `Attachment: ${filename}`,
+  }
+}
+
 export async function buildChatModelMessages(messages: UIMessage[]): Promise<ModelMessage[]> {
-  const normalizedMessages = await Promise.all(
+  const normalizedMessages: Array<Omit<UIMessage, 'id'>> = await Promise.all(
     messages.map(async (message) => {
-      const normalizedParts = await Promise.all(
-        (message.parts ?? []).map(async (part) => {
-          if (!isFileLikePart(part)) {
-            return part
-          }
-
-          const filename = part.filename || 'attachment'
-          const mediaType = part.mediaType || ''
-
-          if (isImageAttachment(mediaType)) {
-            return part
-          }
-
-          if (part.url && isDocumentAttachment(mediaType, filename)) {
-            try {
-              const { buffer } = decodeDataUrl(part.url)
-              const extractedText = await extractTextFromBuffer(buffer, filename, mediaType)
-              return {
-                type: 'text',
-                text: `Attachment: ${filename}\n${extractedText}`,
-              }
-            } catch {
-              return {
-                type: 'text',
-                text: `Attachment: ${filename}\n[Attachment could not be parsed.]`,
-              }
-            }
-          }
-
-          return {
-            type: 'text',
-            text: `Attachment: ${filename}`,
-          }
-        })
-      )
+      const normalizedParts = await Promise.all((message.parts ?? []).map(normalizePart))
 
       return {
-        ...message,
+        role: message.role,
+        metadata: message.metadata,
         parts: normalizedParts,
       }
     })
   )
 
-  return convertToModelMessages(
-    normalizedMessages.map(({ id: _id, ...message }) => message)
-  )
+  return convertToModelMessages(normalizedMessages)
 }

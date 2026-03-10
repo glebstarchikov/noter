@@ -2,42 +2,59 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
+import { METADATA_MODEL } from '@/lib/ai-models'
+import { hashDocumentContent } from '@/lib/document-hash'
+import { resolveMeetingTemplate } from '@/lib/note-template'
 import { getOpenAI } from '@/lib/openai'
-import { ENHANCEMENT_MODEL } from '@/lib/ai-models'
+import { buildDraftProposalPrompt } from '@/lib/prompts'
 import {
+  hasTiptapContent,
   isTiptapDocument,
-  legacyMeetingToTiptap,
+  normalizeTiptapDocument,
   tiptapToPlainText,
   type TiptapDocument,
 } from '@/lib/tiptap-converter'
-import type { EnhancementState, EnhancementSuggestion, Meeting } from '@/lib/types'
+import type { EnhancementState, EnhancementOutcome, Meeting } from '@/lib/types'
 
-const MAX_SUGGESTIONS = 5
+const requestSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('generate'),
+    mode: z.enum(['generate', 'enhance']),
+    documentContent: z.unknown(),
+  }),
+  z.object({
+    action: z.literal('complete'),
+    outcome: z.enum(['accepted', 'dismissed']),
+    sourceHash: z.string().trim().min(1),
+    documentContent: z.unknown().optional(),
+  }),
+])
 
-const requestSchema = z.object({
-  action: z.enum(['start', 'accept', 'skip']),
-  suggestionId: z.string().trim().min(1).optional(),
-})
-
-const suggestionSchema = z.object({
-  useful: z.boolean().optional().default(true),
-  title: z.string().trim().min(1).optional().default('Suggested refinement'),
+const proposalSchema = z.object({
   summary: z.string().trim().optional().default(''),
-  beforeExcerpt: z.string().trim().optional().default(''),
-  afterExcerpt: z.string().trim().optional().default(''),
-  proposed_document_content: z.object({
-    type: z.literal('doc'),
-    content: z.array(z.record(z.string(), z.unknown())).default([]),
-  }).nullable(),
+  proposed_document_content: z.unknown(),
 })
 
-function getWorkingDocument(meeting: Pick<Meeting, 'document_content' | 'summary' | 'detailed_notes' | 'action_items' | 'key_decisions' | 'follow_ups'>) {
-  return isTiptapDocument(meeting.document_content)
-    ? meeting.document_content
-    : legacyMeetingToTiptap(meeting as Meeting)
+function normalizeEnhancementState(value: unknown): EnhancementState {
+  const state = value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {}
+
+  return {
+    lastReviewedSourceHash:
+      typeof state.lastReviewedSourceHash === 'string' ? state.lastReviewedSourceHash : null,
+    lastOutcome:
+      state.lastOutcome === 'accepted' || state.lastOutcome === 'dismissed'
+        ? state.lastOutcome
+        : null,
+    lastReviewedAt:
+      typeof state.lastReviewedAt === 'string' ? state.lastReviewedAt : null,
+    lastError:
+      typeof state.lastError === 'string' ? state.lastError : null,
+  }
 }
 
-function getMeetingContext(meeting: Pick<Meeting, 'summary' | 'detailed_notes' | 'action_items' | 'key_decisions' | 'topics' | 'follow_ups'>) {
+function getStructuredContext(meeting: Pick<Meeting, 'summary' | 'detailed_notes' | 'action_items' | 'key_decisions' | 'topics' | 'follow_ups'>) {
   return JSON.stringify({
     summary: meeting.summary ?? '',
     detailed_notes: meeting.detailed_notes ?? '',
@@ -46,111 +63,6 @@ function getMeetingContext(meeting: Pick<Meeting, 'summary' | 'detailed_notes' |
     topics: meeting.topics ?? [],
     follow_ups: meeting.follow_ups ?? [],
   }, null, 2)
-}
-
-async function generateEnhancementSuggestion({
-  transcript,
-  documentContent,
-  meeting,
-  step,
-  maxSuggestions,
-}: {
-  transcript: string
-  documentContent: TiptapDocument
-  meeting: Pick<Meeting, 'summary' | 'detailed_notes' | 'action_items' | 'key_decisions' | 'topics' | 'follow_ups'>
-  step: number
-  maxSuggestions: number
-}): Promise<EnhancementSuggestion | null> {
-  const currentDocumentText = tiptapToPlainText(documentContent)
-
-  if (!currentDocumentText.trim()) {
-    return null
-  }
-
-  const completion = await getOpenAI().chat.completions.create({
-    model: process.env.AI_GATEWAY_API_KEY ? ENHANCEMENT_MODEL : 'gpt-4o-mini',
-    response_format: { type: 'json_object' },
-    temperature: 0.25,
-    messages: [
-      {
-        role: 'system',
-        content: `You improve meeting notes one suggestion at a time.
-
-Return JSON only with this shape:
-{
-  "useful": true,
-  "title": "Short label for the suggestion",
-  "summary": "One sentence explaining why this suggestion matters",
-  "beforeExcerpt": "Small excerpt from the current notes that will be improved",
-  "afterExcerpt": "Small excerpt showing the improved version",
-  "proposed_document_content": { "type": "doc", "content": [...] }
-}
-
-Rules:
-- Suggest exactly one meaningful enhancement.
-- Return the entire next Tiptap JSON document in proposed_document_content.
-- Decide placement yourself inside the document.
-- Keep the user's tone and preserve existing content unless improving clarity or structure.
-- If there is no meaningful improvement left, return {"useful": false, "proposed_document_content": null }.
-- Never return markdown fences or extra text.`,
-      },
-      {
-        role: 'user',
-        content: `Enhancement step ${step} of ${maxSuggestions}.
-
-Current notes as plain text:
-${currentDocumentText}
-
-Structured meeting metadata:
-${getMeetingContext(meeting)}
-
-Transcript:
-${transcript}`,
-      },
-    ],
-  })
-
-  const rawContent = completion.choices[0]?.message?.content
-  if (!rawContent) {
-    throw new Error('No response from AI')
-  }
-
-  const parsedJson = JSON.parse(rawContent)
-  const parsedSuggestion = suggestionSchema.parse(parsedJson)
-
-  if (!parsedSuggestion.useful || !parsedSuggestion.proposed_document_content) {
-    return null
-  }
-
-  if (!isTiptapDocument(parsedSuggestion.proposed_document_content)) {
-    return null
-  }
-
-  const proposedText = tiptapToPlainText(parsedSuggestion.proposed_document_content)
-  if (!proposedText.trim() || proposedText.trim() === currentDocumentText.trim()) {
-    return null
-  }
-
-  return {
-    id: crypto.randomUUID(),
-    title: parsedSuggestion.title,
-    summary: parsedSuggestion.summary,
-    beforeExcerpt: parsedSuggestion.beforeExcerpt,
-    afterExcerpt: parsedSuggestion.afterExcerpt,
-    proposed_document_content: parsedSuggestion.proposed_document_content,
-  }
-}
-
-function buildState(state: Partial<EnhancementState>): EnhancementState {
-  return {
-    sessionId: state.sessionId ?? crypto.randomUUID(),
-    step: state.step ?? 0,
-    acceptedCount: state.acceptedCount ?? 0,
-    skippedCount: state.skippedCount ?? 0,
-    maxSuggestions: state.maxSuggestions ?? MAX_SUGGESTIONS,
-    currentSuggestion: state.currentSuggestion ?? null,
-    lastError: state.lastError ?? null,
-  }
 }
 
 export const maxDuration = 60
@@ -162,13 +74,17 @@ export async function POST(
   const { id } = await context.params
   const supabase = await createClient()
   let userId: string | null = null
+  let action: 'generate' | 'complete' | null = null
+  let persistedState: EnhancementState | null = null
 
   try {
-    const body = await request.json().catch(() => null)
-    const parsedBody = requestSchema.safeParse(body)
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = requestSchema.safeParse(rawBody)
     if (!parsedBody.success) {
       return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
     }
+
+    action = parsedBody.data.action
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -188,174 +104,138 @@ export async function POST(
     }
 
     if (!meeting.transcript || !meeting.transcript.trim()) {
-      return errorResponse('Transcript is required before enhancing notes', 'MISSING_TRANSCRIPT', 400)
+      return errorResponse('Transcript is required before generating note drafts', 'MISSING_TRANSCRIPT', 400)
     }
 
-    const action = parsedBody.data.action
-    const currentState = buildState(meeting.enhancement_state ?? {})
-    let workingDocument = getWorkingDocument(meeting as Meeting)
-    let nextState = currentState
-
-    if (action === 'start' && meeting.enhancement_status === 'reviewing' && currentState.currentSuggestion) {
-      return NextResponse.json({
-        enhancement_status: meeting.enhancement_status,
-        enhancement_state: currentState,
-        document_content: workingDocument,
-        updated_at: meeting.updated_at,
-      })
-    }
-
-    if (action === 'accept' || action === 'skip') {
-      if (!parsedBody.data.suggestionId || !currentState.currentSuggestion) {
-        return errorResponse('No active suggestion to review', 'NO_ACTIVE_SUGGESTION', 409)
-      }
-
-      if (currentState.currentSuggestion.id !== parsedBody.data.suggestionId) {
-        return errorResponse('Suggestion is out of date', 'STALE_SUGGESTION', 409)
-      }
-
-      if (action === 'accept' && isTiptapDocument(currentState.currentSuggestion.proposed_document_content)) {
-        workingDocument = currentState.currentSuggestion.proposed_document_content as TiptapDocument
-        nextState = buildState({
-          ...currentState,
-          acceptedCount: currentState.acceptedCount + 1,
-          currentSuggestion: null,
-          lastError: null,
-        })
-      } else {
-        nextState = buildState({
-          ...currentState,
-          skippedCount: currentState.skippedCount + 1,
-          currentSuggestion: null,
-          lastError: null,
-        })
-      }
-    } else {
-      nextState = buildState({
-        sessionId: crypto.randomUUID(),
-        step: 0,
-        acceptedCount: 0,
-        skippedCount: 0,
-        maxSuggestions: MAX_SUGGESTIONS,
-        currentSuggestion: null,
-        lastError: null,
-      })
-    }
-
-    const processedCount = nextState.acceptedCount + nextState.skippedCount
-
-    await supabase
-      .from('meetings')
-      .update({
-        ...(action === 'accept' ? { document_content: workingDocument } : {}),
-        enhancement_status: 'generating',
-        enhancement_state: {
-          ...nextState,
-          currentSuggestion: null,
-          step: processedCount,
-          lastError: null,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('user_id', user.id)
-
-    if (processedCount >= nextState.maxSuggestions) {
-      const completedState = buildState({
-        ...nextState,
-        step: processedCount,
-        currentSuggestion: null,
-      })
-
-      await supabase
-        .from('meetings')
-        .update({
-          ...(action === 'accept' ? { document_content: workingDocument } : {}),
-          enhancement_status: 'complete',
-          enhancement_state: completedState,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .eq('user_id', user.id)
-
-      return NextResponse.json({
-        enhancement_status: 'complete',
-        enhancement_state: completedState,
-        document_content: workingDocument,
-      })
-    }
-
-    const suggestion = await generateEnhancementSuggestion({
-      transcript: meeting.transcript,
-      documentContent: workingDocument,
-      meeting,
-      step: processedCount + 1,
-      maxSuggestions: nextState.maxSuggestions,
+    persistedState = normalizeEnhancementState(meeting.enhancement_state)
+    const template = await resolveMeetingTemplate(supabase as { from: (table: string) => any }, {
+      template_id: meeting.template_id,
+      user_id: user.id,
     })
 
-    if (!suggestion) {
-      const completedState = buildState({
-        ...nextState,
-        step: processedCount,
-        currentSuggestion: null,
+    if (parsedBody.data.action === 'generate') {
+      const sourceDocument = normalizeTiptapDocument(parsedBody.data.documentContent)
+      const sourceHash = hashDocumentContent(sourceDocument)
+      const currentDocumentText = tiptapToPlainText(sourceDocument).trim()
+
+      const completion = await getOpenAI().chat.completions.create({
+        model: METADATA_MODEL,
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: buildDraftProposalPrompt({
+              mode: parsedBody.data.mode,
+              template,
+              currentDocumentText,
+              structuredContext: getStructuredContext(meeting as Meeting),
+              transcript: meeting.transcript,
+            }),
+          },
+        ],
       })
 
-      await supabase
-        .from('meetings')
-        .update({
-          ...(action === 'accept' ? { document_content: workingDocument } : {}),
-          enhancement_status: 'complete',
-          enhancement_state: completedState,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .eq('user_id', user.id)
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('No proposal returned from AI')
+      }
+
+      const parsedProposal = proposalSchema.parse(JSON.parse(content))
+      if (!isTiptapDocument(parsedProposal.proposed_document_content)) {
+        throw new Error('AI returned an invalid draft proposal')
+      }
+
+      const proposedDocument = parsedProposal.proposed_document_content as TiptapDocument
+      const proposedHasContent = hasTiptapContent(proposedDocument)
+      const sourceHasContent = hasTiptapContent(sourceDocument)
+      const proposedHash = hashDocumentContent(proposedDocument)
+
+      if (!proposedHasContent) {
+        throw new Error('AI returned an empty draft proposal')
+      }
+
+      if (sourceHash === proposedHash || (sourceHasContent && tiptapToPlainText(proposedDocument).trim() === currentDocumentText)) {
+        throw new Error('No useful changes were proposed')
+      }
 
       return NextResponse.json({
-        enhancement_status: 'complete',
-        enhancement_state: completedState,
-        document_content: workingDocument,
+        mode: parsedBody.data.mode,
+        sourceHash,
+        summary: parsedProposal.summary,
+        proposedDocument,
       })
     }
 
-    const reviewingState = buildState({
-      ...nextState,
-      step: processedCount + 1,
-      currentSuggestion: suggestion,
+    const currentDocument = normalizeTiptapDocument(meeting.document_content)
+    const currentHash = hashDocumentContent(currentDocument)
+
+    if (currentHash !== parsedBody.data.sourceHash) {
+      return errorResponse('The note changed before this review was completed', 'STALE_SOURCE_HASH', 409)
+    }
+
+    let nextDocument = currentDocument
+    if (parsedBody.data.outcome === 'accepted') {
+      if (!isTiptapDocument(parsedBody.data.documentContent)) {
+        return errorResponse('Accepted reviews must include documentContent', 'INVALID_DOCUMENT', 400)
+      }
+
+      nextDocument = parsedBody.data.documentContent as TiptapDocument
+    }
+
+    const nextState: EnhancementState = {
+      lastReviewedSourceHash: hashDocumentContent(nextDocument),
+      lastOutcome: parsedBody.data.outcome,
+      lastReviewedAt: new Date().toISOString(),
       lastError: null,
-    })
+    }
 
-    await supabase
+    const updatePayload: Record<string, unknown> = {
+      enhancement_status: 'idle',
+      enhancement_state: nextState,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (parsedBody.data.outcome === 'accepted') {
+      updatePayload.document_content = nextDocument
+    }
+
+    const { error: updateError } = await supabase
       .from('meetings')
-      .update({
-        ...(action === 'accept' ? { document_content: workingDocument } : {}),
-        enhancement_status: 'reviewing',
-        enhancement_state: reviewingState,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id)
       .eq('user_id', user.id)
+
+    if (updateError) {
+      throw new Error(updateError.message)
+    }
 
     return NextResponse.json({
-      enhancement_status: 'reviewing',
-      enhancement_state: reviewingState,
-      document_content: workingDocument,
+      ok: true,
+      outcome: parsedBody.data.outcome as EnhancementOutcome,
+      enhancement_state: nextState,
+      document_content: nextDocument,
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to enhance notes'
+    const message = error instanceof Error ? error.message : 'Failed to draft notes'
 
-    if (id && userId) {
+    if (action === 'complete' && id && userId) {
       try {
-        const fallbackState = buildState({
+        const failureState: EnhancementState = {
+          ...(persistedState ?? {
+            lastReviewedSourceHash: null,
+            lastOutcome: null,
+            lastReviewedAt: null,
+            lastError: null,
+          }),
           lastError: message,
-          currentSuggestion: null,
-        })
+        }
 
         await supabase
           .from('meetings')
           .update({
             enhancement_status: 'error',
-            enhancement_state: fallbackState,
+            enhancement_state: failureState,
             updated_at: new Date().toISOString(),
           })
           .eq('id', id)

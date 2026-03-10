@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
 import { getOpenAI } from '@/lib/openai'
-import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
+import { buildNotesGenerationPrompt } from '@/lib/prompts'
 import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
 import { generatedNotesSchema } from '@/lib/schemas'
-import { generatedNotesToTiptap, hasTiptapContent } from '@/lib/tiptap-converter'
 import { METADATA_MODEL } from '@/lib/ai-models'
+import { resolveMeetingTemplate } from '@/lib/note-template'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Verify user owns the meeting
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('id, transcript, document_content')
+      .select('id, user_id, transcript, template_id')
       .eq('id', meetingId)
       .eq('user_id', user.id)
       .single()
@@ -89,11 +89,16 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId)
       .eq('user_id', user.id)
 
+    const template = await resolveMeetingTemplate(supabase as { from: (table: string) => any }, {
+      template_id: meeting.template_id,
+      user_id: user.id,
+    })
+
     // Generate notes with GPT
     const completion = await getOpenAI().chat.completions.create({
       model: METADATA_MODEL,
       messages: [
-        { role: 'system', content: NOTES_GENERATION_PROMPT },
+        { role: 'system', content: buildNotesGenerationPrompt(template) },
         { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
       ],
       temperature: 0.3,
@@ -126,8 +131,6 @@ export async function POST(request: NextRequest) {
       topics: normalizeStringArray(parsedNotes.data.topics),
       follow_ups: normalizeStringArray(parsedNotes.data.follow_ups),
     }
-    const generatedDocument = generatedNotesToTiptap(normalizedNotes)
-    const shouldSeedDocument = !hasTiptapContent(meeting.document_content)
 
     // Save notes to database
     await supabase
@@ -140,7 +143,6 @@ export async function POST(request: NextRequest) {
         key_decisions: normalizedNotes.key_decisions,
         topics: normalizedNotes.topics,
         follow_ups: normalizedNotes.follow_ups,
-        ...(shouldSeedDocument ? { document_content: generatedDocument } : {}),
         status: 'done',
         error_message: null,
         updated_at: new Date().toISOString(),

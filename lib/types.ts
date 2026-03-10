@@ -66,27 +66,14 @@ export type MeetingStatus =
 
 export type EnhancementStatus =
   | 'idle'
-  | 'generating'
-  | 'reviewing'
-  | 'complete'
   | 'error'
 
-export interface EnhancementSuggestion {
-  id: string
-  title: string
-  summary: string
-  beforeExcerpt: string
-  afterExcerpt: string
-  proposed_document_content: Record<string, unknown>
-}
+export type EnhancementOutcome = 'accepted' | 'dismissed'
 
 export interface EnhancementState {
-  sessionId: string
-  step: number
-  acceptedCount: number
-  skippedCount: number
-  maxSuggestions: number
-  currentSuggestion: EnhancementSuggestion | null
+  lastReviewedSourceHash: string | null
+  lastOutcome: EnhancementOutcome | null
+  lastReviewedAt: string | null
   lastError: string | null
 }
 

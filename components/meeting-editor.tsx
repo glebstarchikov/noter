@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useEffectEvent } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import BubbleMenuExtension from '@tiptap/extension-bubble-menu'
@@ -8,16 +9,19 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Placeholder from '@tiptap/extension-placeholder'
 import Typography from '@tiptap/extension-typography'
-import type { JSONContent } from '@tiptap/react'
+import type { Editor, JSONContent } from '@tiptap/react'
 import { Bold, Italic, Heading2, Heading3, List, ListTodo, Quote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEditorAutosave } from '@/hooks/use-editor-autosave'
-import { legacyMeetingToTiptap } from '@/lib/tiptap-converter'
+import { createEmptyTiptapDocument } from '@/lib/tiptap-converter'
 import type { Meeting } from '@/lib/types'
 
 interface MeetingEditorProps {
   meeting: Meeting
   editable?: boolean
+  onEditorReady?: (editor: Editor | null) => void
+  documentContent?: JSONContent
+  onContentChange?: (document: JSONContent) => void
 }
 
 function ToolbarButton({
@@ -51,10 +55,15 @@ function ToolbarButton({
   )
 }
 
-export function MeetingEditor({ meeting, editable = true }: MeetingEditorProps) {
-  const initialContent: JSONContent = meeting.document_content
-    ? (meeting.document_content as JSONContent)
-    : legacyMeetingToTiptap(meeting)
+export function MeetingEditor({
+  meeting,
+  editable = true,
+  onEditorReady,
+  documentContent,
+  onContentChange,
+}: MeetingEditorProps) {
+  const initialContent: JSONContent =
+    documentContent ?? (meeting.document_content as JSONContent | null) ?? createEmptyTiptapDocument()
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -80,6 +89,34 @@ export function MeetingEditor({ meeting, editable = true }: MeetingEditorProps) 
   })
 
   const saveState = useEditorAutosave(editable ? editor : null, meeting.id)
+  const emitEditorReady = useEffectEvent((nextEditor: Editor | null) => {
+    onEditorReady?.(nextEditor)
+  })
+  const emitContentChange = useEffectEvent((document: JSONContent) => {
+    onContentChange?.(document)
+  })
+
+  useEffect(() => {
+    if (!editor || !onEditorReady) return
+
+    emitEditorReady(editor)
+    return () => emitEditorReady(null)
+  }, [editor, onEditorReady])
+
+  useEffect(() => {
+    if (!editor || !onContentChange) return
+
+    emitContentChange(editor.getJSON())
+
+    const handleUpdate = () => {
+      emitContentChange(editor.getJSON())
+    }
+
+    editor.on('update', handleUpdate)
+    return () => {
+      editor.off('update', handleUpdate)
+    }
+  }, [editor, onContentChange])
 
   if (!editor) return null
 

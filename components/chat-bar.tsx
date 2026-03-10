@@ -36,6 +36,7 @@ import {
   saveGlobalChatMessages,
   clearGlobalChatMessages,
 } from '@/lib/chat-storage'
+import { ChatMessageAttachments } from '@/components/chat-message-attachments'
 
 type ModelTier = 'fast' | 'balanced' | 'premium'
 
@@ -45,11 +46,6 @@ function getMessageText(msg: UIMessage): string {
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('')
-}
-
-function getFileParts(msg: UIMessage) {
-  if (!msg.parts || !Array.isArray(msg.parts)) return []
-  return msg.parts.filter((part): part is FileUIPart => part.type === 'file')
 }
 
 const GLOBAL_SUGGESTIONS = [
@@ -76,7 +72,7 @@ function AttachmentChip({
   onRemove?: () => void
 }) {
   const filename = 'name' in file ? file.name : (file.filename || 'attachment')
-  const mediaType = 'type' in file ? file.type : (file.mediaType || '')
+  const mediaType = file instanceof File ? file.type : file.mediaType
   const isImage = mediaType.startsWith('image/')
 
   return (
@@ -104,6 +100,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
   const [modelTier, setModelTier] = useState<ModelTier>('balanced')
   const [searchEnabled, setSearchEnabled] = useState(false)
   const [files, setFiles] = useState<FileList | undefined>(undefined)
+  const [hasHydratedMessages, setHasHydratedMessages] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -125,19 +122,21 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
     [isGlobal, meetingId]
   )
 
-  const storedMessages = useMemo(
-    () => (isGlobal ? getGlobalChatMessages() : getChatMessages(chatId)),
-    [isGlobal, chatId]
-  )
-
   const { messages, sendMessage, setMessages, status, error } = useChat({
     id: chatId,
     transport,
-    messages: storedMessages,
   })
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    setHasHydratedMessages(false)
+    const storedMessages = isGlobal ? getGlobalChatMessages() : getChatMessages(chatId)
+    setMessages(storedMessages ?? [])
+    setHasHydratedMessages(true)
+  }, [isGlobal, chatId, setMessages])
+
+  useEffect(() => {
+    if (!hasHydratedMessages) return
     if (messages.length === 0) return
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     saveTimeoutRef.current = setTimeout(() => {
@@ -147,7 +146,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     }
-  }, [messages, isGlobal, chatId])
+  }, [messages, isGlobal, chatId, hasHydratedMessages])
 
   const handleClearChat = useCallback(() => {
     if (isGlobal) clearGlobalChatMessages()
@@ -297,7 +296,6 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                 <div className="flex flex-col gap-4">
                   {messages.map((message) => {
                     const text = getMessageText(message)
-                    const fileParts = getFileParts(message)
 
                     return (
                       <div
@@ -311,13 +309,7 @@ export function ChatBar({ meetingTitle }: ChatBarProps) {
                           {message.role === 'user' ? 'You' : 'noter'}
                         </span>
 
-                        {fileParts.length > 0 && (
-                          <div className="flex max-w-[88%] flex-wrap gap-2">
-                            {fileParts.map((filePart, index) => (
-                              <AttachmentChip key={`${message.id}-file-${index}`} file={filePart} />
-                            ))}
-                          </div>
-                        )}
+                        <ChatMessageAttachments message={message} />
 
                         {text && (
                           <div

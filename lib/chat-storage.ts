@@ -1,4 +1,9 @@
-import type { UIMessage } from 'ai'
+import { isFileUIPart, type UIMessage } from 'ai'
+import {
+  getMessageAttachmentMetadata,
+  setMessageAttachmentMetadata,
+  toChatAttachmentMetadata,
+} from '@/lib/chat-attachments'
 
 const STORAGE_KEY_PREFIX = 'noter-chat-'
 const INDEX_KEY = 'noter-chat-index'
@@ -48,19 +53,20 @@ function evictOldest(index: string[]): string[] {
 }
 
 function sanitizeMessages(messages: UIMessage[]): UIMessage[] {
-  return messages.map((message) => ({
-    ...message,
-    parts: Array.isArray(message.parts)
-      ? message.parts.map((part) => {
-        if (part && typeof part === 'object' && 'type' in part && part.type === 'file') {
-          const { url: _url, ...rest } = part as Record<string, unknown>
-          return rest
-        }
+  return messages.map((message) => {
+    const parts = Array.isArray(message.parts) ? message.parts : []
+    const liveAttachments = parts
+      .filter(isFileUIPart)
+      .map(toChatAttachmentMetadata)
+    const existingAttachments = getMessageAttachmentMetadata(message)
+    const attachments = [...existingAttachments, ...liveAttachments]
+    const sanitizedMessage = setMessageAttachmentMetadata(message, attachments)
 
-        return part
-      })
-      : message.parts,
-  }))
+    return {
+      ...sanitizedMessage,
+      parts: parts.filter((part) => !isFileUIPart(part)),
+    }
+  })
 }
 
 export function getChatMessages(meetingId: string): UIMessage[] | undefined {

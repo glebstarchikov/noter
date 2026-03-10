@@ -4,8 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { errorResponse } from '@/lib/api-helpers'
 import { getOpenAI } from '@/lib/openai'
 import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
-import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
+import { buildNotesGenerationPrompt } from '@/lib/prompts'
 import { generatedNotesSchema } from '@/lib/schemas'
+import { resolveMeetingTemplate } from '@/lib/note-template'
 
 export const maxDuration = 300
 
@@ -191,7 +192,7 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
 
   const { data: meeting } = await admin
     .from('meetings')
-    .select('id, user_id, audio_url, transcript, diarized_transcript')
+    .select('id, user_id, audio_url, transcript, diarized_transcript, template_id')
     .eq('id', job.meeting_id)
     .eq('user_id', job.user_id)
     .single()
@@ -263,10 +264,15 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
     ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'
     : transcript
 
+  const template = await resolveMeetingTemplate(admin as { from: (table: string) => any }, {
+    template_id: meeting.template_id,
+    user_id: meeting.user_id,
+  })
+
   const completion = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: NOTES_GENERATION_PROMPT },
+      { role: 'system', content: buildNotesGenerationPrompt(template) },
       { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
     ],
     temperature: 0.3,

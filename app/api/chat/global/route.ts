@@ -1,13 +1,13 @@
 import { gateway, streamText, UIMessage } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
-import { isStringArray, isActionItemArray } from '@/lib/type-guards'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
 import { resolveChatModel, resolveChatModelTier } from '@/lib/ai-models'
 import { buildChatModelMessages, getLastUserText } from '@/lib/chat-message-utils'
 import { searchWeb } from '@/lib/tavily'
+import { buildGlobalChatContext, type GlobalChatMeetingRow } from '@/lib/global-chat-context'
 
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -20,24 +20,11 @@ const ratelimit =
 
 export const maxDuration = 60
 
-const MAX_GLOBAL_CONTEXT_CHARS = 100_000
-
 const globalChatRequestSchema = z.object({
   messages: z.array(z.unknown()).default([]),
   modelTier: z.enum(['fast', 'balanced', 'premium']).optional(),
   searchEnabled: z.boolean().optional().default(false),
 })
-
-interface MeetingRow {
-  id: string
-  title: string | null
-  summary: string | null
-  action_items: unknown
-  key_decisions: unknown
-  topics: unknown
-  follow_ups: unknown
-  created_at: string
-}
 
 export async function POST(req: Request) {
   try {
@@ -68,7 +55,7 @@ export async function POST(req: Request) {
     const { data: meetings } = await supabase
       .from('meetings')
       .select(
-        'id, title, summary, action_items, key_decisions, topics, follow_ups, created_at'
+        'id, title, summary, action_items, key_decisions, topics, follow_ups, document_content, transcript, created_at'
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
@@ -78,71 +65,7 @@ export async function POST(req: Request) {
       return errorResponse('No meetings found', 'NO_MEETINGS', 404)
     }
 
-    let context = `# All Notes (${meetings.length} total)\n\n`
-    let contextSize = 0
-
-    for (const meeting of meetings as MeetingRow[]) {
-      const meetingTitle =
-        typeof meeting.title === 'string' && meeting.title.trim().length > 0
-          ? meeting.title
-          : 'Untitled Meeting'
-
-      const createdDate = new Date(meeting.created_at).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-
-      let meetingBlock = `---\n## ${meetingTitle} (${createdDate})\n\n`
-
-      if (typeof meeting.summary === 'string' && meeting.summary.length > 0) {
-        meetingBlock += `### Summary\n${meeting.summary}\n\n`
-      }
-
-      const actionItems = isActionItemArray(meeting.action_items) ? meeting.action_items : []
-      if (actionItems.length > 0) {
-        meetingBlock += '### Action Items\n'
-        for (const item of actionItems) {
-          meetingBlock += `- [${item.done ? 'x' : ' '}] ${item.task}${item.owner ? ` (Owner: ${item.owner})` : ''}\n`
-        }
-        meetingBlock += '\n'
-      }
-
-      const keyDecisions = isStringArray(meeting.key_decisions) ? meeting.key_decisions : []
-      if (keyDecisions.length > 0) {
-        meetingBlock += '### Key Decisions\n'
-        for (const decision of keyDecisions) {
-          meetingBlock += `- ${decision}\n`
-        }
-        meetingBlock += '\n'
-      }
-
-      const topics = isStringArray(meeting.topics) ? meeting.topics : []
-      if (topics.length > 0) {
-        meetingBlock += '### Topics\n'
-        for (const topic of topics) {
-          meetingBlock += `- ${topic}\n`
-        }
-        meetingBlock += '\n'
-      }
-
-      const followUps = isStringArray(meeting.follow_ups) ? meeting.follow_ups : []
-      if (followUps.length > 0) {
-        meetingBlock += '### Follow-ups\n'
-        for (const followUp of followUps) {
-          meetingBlock += `- ${followUp}\n`
-        }
-        meetingBlock += '\n'
-      }
-
-      if (contextSize + meetingBlock.length > MAX_GLOBAL_CONTEXT_CHARS) {
-        context += '\n\n[...additional notes truncated due to context limits]\n'
-        break
-      }
-
-      context += meetingBlock
-      contextSize += meetingBlock.length
-    }
+    const context = buildGlobalChatContext(meetings as GlobalChatMeetingRow[])
 
     const webSearchContext = searchEnabled
       ? await searchWeb(getLastUserText(messages as UIMessage[]))

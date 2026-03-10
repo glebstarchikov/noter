@@ -22,16 +22,20 @@ interface TranscriptDrawerProps {
   transcript?: string | null
   liveSegments?: LiveSegmentLike[]
   live?: boolean
+  alwaysVisible?: boolean
+  emptyMessage?: string
 }
 
 export function TranscriptDrawer({
   transcript,
   liveSegments = [],
   live = false,
+  alwaysVisible = false,
+  emptyMessage = 'Transcript will appear here soon.',
 }: TranscriptDrawerProps) {
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
-  const hasTranscript = Boolean(transcript?.trim()) || liveSegments.length > 0
+  const hasTranscript = alwaysVisible || Boolean(transcript?.trim()) || liveSegments.length > 0
 
   if (!hasTranscript) return null
 
@@ -97,9 +101,13 @@ export function TranscriptDrawer({
                 </p>
               ))}
             </div>
-          ) : (
+          ) : transcript?.trim() ? (
             <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
               {transcript}
+            </p>
+          ) : (
+            <p className="text-sm leading-7 text-muted-foreground">
+              {emptyMessage}
             </p>
           )}
         </div>

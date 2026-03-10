@@ -32,10 +32,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { MeetingEditor } from '@/components/meeting-editor'
 import { clearChatMessages } from '@/lib/chat-storage'
+import { MeetingNoteSurface } from '@/components/meeting-note-surface'
 import { TranscriptDrawer } from '@/components/transcript-drawer'
-import { MeetingEnhancementControls } from '@/components/meeting-enhancement-controls'
 import type { Meeting, ActionItem } from '@/lib/types'
 
 function formatDate(dateStr: string) {
@@ -124,10 +123,6 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
     }
   }
 
-  const editorLocked =
-    meeting.enhancement_status === 'generating' ||
-    meeting.enhancement_status === 'reviewing'
-
   return (
     <>
       <div className="flex flex-col gap-8">
@@ -187,7 +182,7 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           </div>
         </div>
 
-        {(meeting.status === 'generating' || meeting.status === 'error' || meeting.enhancement_status === 'error') && (
+        {(meeting.status === 'generating' || meeting.status === 'error' || meeting.enhancement_state?.lastError) && (
           <div className="surface-utility flex items-start gap-3 px-5 py-4">
             {meeting.status === 'generating' ? (
               <Loader2 className="mt-0.5 size-4 animate-spin text-accent" />
@@ -198,29 +193,20 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
               <p className="text-sm font-medium text-foreground">
                 {meeting.status === 'generating'
                   ? 'Preparing meeting metadata in the background'
-                  : meeting.enhancement_status === 'error'
+                  : meeting.enhancement_state?.lastError
                     ? 'Enhancement review hit a problem'
                     : 'Automatic note generation hit a problem'}
               </p>
               <p className="text-sm leading-6 text-muted-foreground">
                 {meeting.status === 'generating'
                   ? 'Your editor stays available while noter updates the meeting title, summary, and action items.'
-                  : meeting.error_message || meeting.enhancement_state?.lastError || 'Please try again.'}
+                  : meeting.enhancement_state?.lastError || meeting.error_message || 'Please try again.'}
               </p>
             </div>
           </div>
         )}
 
-        <section className="surface-document relative px-6 py-7 md:px-10 md:py-10">
-          <div className="mx-auto w-full max-w-4xl">
-            <MeetingEditor
-              key={`${meeting.id}:${meeting.updated_at}:${meeting.enhancement_status}`}
-              meeting={meeting}
-              editable={!editorLocked}
-            />
-          </div>
-          <MeetingEnhancementControls meeting={meeting} />
-        </section>
+        <MeetingNoteSurface meeting={meeting} />
       </div>
 
       <TranscriptDrawer transcript={meeting.transcript} />
