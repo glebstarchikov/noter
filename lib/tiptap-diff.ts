@@ -10,8 +10,9 @@ export type TiptapDiffSegment =
   | {
       kind: 'change'
       id: string
-      baseNodes: TiptapNode[]
-      proposedNodes: TiptapNode[]
+      changeType: 'insert' | 'delete' | 'replace'
+      baseNode: TiptapNode | null
+      proposedNode: TiptapNode | null
     }
 
 function stableNodeKey(node: TiptapNode) {
@@ -37,6 +38,15 @@ function buildLcsTable(baseKeys: string[], proposedKeys: string[]) {
   }
 
   return table
+}
+
+function createChangeId(
+  changeType: 'insert' | 'delete' | 'replace',
+  baseNode: TiptapNode | null,
+  proposedNode: TiptapNode | null,
+  index: number
+) {
+  return `${changeType}-${index}-${hashUnknownContent([baseNode, proposedNode])}`
 }
 
 export function createTopLevelDiff(
@@ -66,21 +76,57 @@ export function createTopLevelDiff(
     unchangedBuffer = []
   }
 
-  const flushChange = () => {
+  const flushChanges = () => {
     if (removedBuffer.length === 0 && insertedBuffer.length === 0) return
-    segments.push({
-      kind: 'change',
-      id: `change-${segments.length}-${hashUnknownContent([removedBuffer, insertedBuffer])}`,
-      baseNodes: removedBuffer,
-      proposedNodes: insertedBuffer,
-    })
+
+    const basePosition = segments.length
+    let changeIndex = 0
+    const pairCount = Math.min(removedBuffer.length, insertedBuffer.length)
+
+    for (let index = 0; index < pairCount; index += 1) {
+      const baseNode = removedBuffer[index]
+      const proposedNode = insertedBuffer[index]
+      segments.push({
+        kind: 'change',
+        id: createChangeId('replace', baseNode, proposedNode, basePosition + changeIndex),
+        changeType: 'replace',
+        baseNode,
+        proposedNode,
+      })
+      changeIndex += 1
+    }
+
+    for (let index = pairCount; index < removedBuffer.length; index += 1) {
+      const baseNode = removedBuffer[index]
+      segments.push({
+        kind: 'change',
+        id: createChangeId('delete', baseNode, null, basePosition + changeIndex),
+        changeType: 'delete',
+        baseNode,
+        proposedNode: null,
+      })
+      changeIndex += 1
+    }
+
+    for (let index = pairCount; index < insertedBuffer.length; index += 1) {
+      const proposedNode = insertedBuffer[index]
+      segments.push({
+        kind: 'change',
+        id: createChangeId('insert', null, proposedNode, basePosition + changeIndex),
+        changeType: 'insert',
+        baseNode: null,
+        proposedNode,
+      })
+      changeIndex += 1
+    }
+
     removedBuffer = []
     insertedBuffer = []
   }
 
   while (baseIndex < baseNodes.length && proposedIndex < proposedNodes.length) {
     if (baseKeys[baseIndex] === proposedKeys[proposedIndex]) {
-      flushChange()
+      flushChanges()
       unchangedBuffer.push(baseNodes[baseIndex])
       baseIndex += 1
       proposedIndex += 1
@@ -110,7 +156,7 @@ export function createTopLevelDiff(
     proposedIndex += 1
   }
 
-  flushChange()
+  flushChanges()
 
   if (segments.length === 0) {
     return [

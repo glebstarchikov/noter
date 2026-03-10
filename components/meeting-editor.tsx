@@ -3,17 +3,15 @@
 import { useEffect, useEffectEvent } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
-import BubbleMenuExtension from '@tiptap/extension-bubble-menu'
-import StarterKit from '@tiptap/starter-kit'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import Placeholder from '@tiptap/extension-placeholder'
-import Typography from '@tiptap/extension-typography'
 import type { Editor, JSONContent } from '@tiptap/react'
 import { Bold, Italic, Heading2, Heading3, List, ListTodo, Quote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEditorAutosave } from '@/hooks/use-editor-autosave'
-import { createEmptyTiptapDocument } from '@/lib/tiptap-converter'
+import { createMeetingEditorExtensions } from '@/lib/meeting-editor-extensions'
+import {
+  createEmptyTiptapDocument,
+  type TiptapDocument,
+} from '@/lib/tiptap-converter'
 import type { Meeting } from '@/lib/types'
 
 interface MeetingEditorProps {
@@ -22,6 +20,14 @@ interface MeetingEditorProps {
   onEditorReady?: (editor: Editor | null) => void
   documentContent?: JSONContent
   onContentChange?: (document: JSONContent) => void
+  autosaveBaseHash?: string
+  autosaveEnabled?: boolean
+  onAutosaveSuccess?: (payload: { documentHash: string }) => void
+  onAutosaveConflict?: (payload: {
+    currentDocument: TiptapDocument
+    currentHash: string
+    message: string
+  }) => void
 }
 
 function ToolbarButton({
@@ -61,24 +67,20 @@ export function MeetingEditor({
   onEditorReady,
   documentContent,
   onContentChange,
+  autosaveBaseHash,
+  autosaveEnabled = true,
+  onAutosaveSuccess,
+  onAutosaveConflict,
 }: MeetingEditorProps) {
   const initialContent: JSONContent =
     documentContent ?? (meeting.document_content as JSONContent | null) ?? createEmptyTiptapDocument()
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
-      TaskList,
-      TaskItem.configure({ nested: false }),
-      Placeholder.configure({
-        placeholder: 'Start writing your notes…',
-      }),
-      Typography,
-      BubbleMenuExtension,
-    ],
+    extensions: createMeetingEditorExtensions({
+      includePlaceholder: true,
+      includeBubbleMenu: true,
+    }),
     content: initialContent,
     editable,
     editorProps: {
@@ -88,7 +90,12 @@ export function MeetingEditor({
     },
   })
 
-  const saveState = useEditorAutosave(editable ? editor : null, meeting.id)
+  const saveState = useEditorAutosave(editable && autosaveEnabled ? editor : null, {
+    meetingId: meeting.id,
+    baseHash: autosaveBaseHash,
+    onSaveSuccess: onAutosaveSuccess,
+    onConflict: onAutosaveConflict,
+  })
   const emitEditorReady = useEffectEvent((nextEditor: Editor | null) => {
     onEditorReady?.(nextEditor)
   })

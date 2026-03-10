@@ -1,17 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { hashDocumentContent } from '@/lib/document-hash'
 import type { TiptapDocument } from '@/lib/tiptap-converter'
 import type { Meeting } from '@/lib/types'
-
-const refreshMock = mock(() => {})
-
-mock.module('next/navigation', () => ({
-  useRouter: () => ({
-    refresh: refreshMock,
-  }),
-}))
 
 function makeDocument(text: string): TiptapDocument {
   return {
@@ -90,17 +82,16 @@ function makeMeeting(overrides: Partial<Meeting> = {}): Meeting {
 }
 
 describe('MeetingNoteSurface', () => {
-  beforeEach(() => {
-    refreshMock.mockClear()
-  })
-
   afterEach(() => {
     cleanup()
   })
 
   it('shows Generate notes for an empty editor and Enhance for a populated one', () => {
     const emptyMeeting = makeMeeting({ document_content: null })
-    const populatedMeeting = makeMeeting()
+    const populatedMeeting = makeMeeting({
+      id: 'meeting-2',
+      document_content: makeDocument('Typed note from the user'),
+    })
 
     const { rerender } = render(<MeetingNoteSurface meeting={emptyMeeting} />)
     expect(screen.getByRole('button', { name: /generate notes/i })).not.toBeNull()
@@ -116,7 +107,15 @@ describe('MeetingNoteSurface', () => {
       const url = String(input)
 
       if (url.endsWith('/document')) {
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              documentHash: hashDocumentContent(makeDocument('Typed note from the user')),
+            }),
+            { status: 200 }
+          )
+        )
       }
 
       if (url.endsWith('/enhance')) {
@@ -154,6 +153,7 @@ describe('MeetingNoteSurface', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /accept all/i })).not.toBeNull()
       expect(screen.getByRole('button', { name: /reject all/i })).not.toBeNull()
+      expect(screen.getByRole('button', { name: /apply reviewed changes/i })).not.toBeNull()
     })
   })
 
@@ -173,7 +173,15 @@ describe('MeetingNoteSurface', () => {
       const url = String(input)
 
       if (url.endsWith('/document')) {
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              documentHash: hashDocumentContent(emptyDocument),
+            }),
+            { status: 200 }
+          )
+        )
       }
 
       if (url.endsWith('/enhance')) {
@@ -189,18 +197,24 @@ describe('MeetingNoteSurface', () => {
         }
 
         if (payload.action === 'complete') {
-          return Promise.resolve(new Response(JSON.stringify({
-            ok: true,
-            enhancement_state: dismissedState,
-            document_content: emptyDocument,
-          }), { status: 200 }))
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                ok: true,
+                enhancement_state: dismissedState,
+                document_content: emptyDocument,
+                documentHash: hashDocumentContent(emptyDocument),
+              }),
+              { status: 200 }
+            )
+          )
         }
       }
 
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    const { rerender } = render(<MeetingNoteSurface meeting={makeMeeting({ document_content: null })} />)
+    render(<MeetingNoteSurface meeting={makeMeeting({ document_content: null })} />)
 
     fireEvent.click(screen.getByRole('button', { name: /generate notes/i }))
 
@@ -209,20 +223,14 @@ describe('MeetingNoteSurface', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /reject all/i }))
+    fireEvent.click(screen.getByRole('button', { name: /apply reviewed changes/i }))
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /generate notes/i })).toBeNull()
       expect(screen.queryByRole('button', { name: /enhance/i })).toBeNull()
     })
 
-    rerender(
-      <MeetingNoteSurface
-        meeting={makeMeeting({
-          document_content: makeDocument('User added a note'),
-          enhancement_state: dismissedState,
-        })}
-      />
-    )
+    fireEvent.click(screen.getByRole('button', { name: /simulate edit/i }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /enhance/i })).not.toBeNull()

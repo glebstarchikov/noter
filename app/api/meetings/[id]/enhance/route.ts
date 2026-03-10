@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
 import { METADATA_MODEL } from '@/lib/ai-models'
 import { hashDocumentContent } from '@/lib/document-hash'
+import { shapeEnhancementContext } from '@/lib/enhancement-context'
 import { resolveMeetingTemplate } from '@/lib/note-template'
 import { getOpenAI } from '@/lib/openai'
 import { buildDraftProposalPrompt } from '@/lib/prompts'
@@ -34,6 +35,18 @@ const proposalSchema = z.object({
   summary: z.string().trim().optional().default(''),
   proposed_document_content: z.unknown(),
 })
+
+class EnhanceRouteError extends Error {
+  code: string
+  status: number
+
+  constructor(message: string, code: string, status: number) {
+    super(message)
+    this.name = 'EnhanceRouteError'
+    this.code = code
+    this.status = status
+  }
+}
 
 function normalizeEnhancementState(value: unknown): EnhancementState {
   const state = value && typeof value === 'object'
@@ -76,6 +89,31 @@ export async function POST(
   let userId: string | null = null
   let action: 'generate' | 'complete' | null = null
   let persistedState: EnhancementState | null = null
+  let meetingOwnerId: string | null = null
+
+  const persistEnhancementState = async ({
+    status,
+    state,
+  }: {
+    status: 'idle' | 'error'
+    state: EnhancementState
+  }) => {
+    if (!id || !meetingOwnerId) return
+
+    const { error } = await supabase
+      .from('meetings')
+      .update({
+        enhancement_status: status,
+        enhancement_state: state,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('user_id', meetingOwnerId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+  }
 
   try {
     const rawBody = await request.json().catch(() => null)
@@ -102,6 +140,7 @@ export async function POST(
     if (!meeting) {
       return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
+    meetingOwnerId = user.id
 
     if (!meeting.transcript || !meeting.transcript.trim()) {
       return errorResponse('Transcript is required before generating note drafts', 'MISSING_TRANSCRIPT', 400)
@@ -117,33 +156,58 @@ export async function POST(
       const sourceDocument = normalizeTiptapDocument(parsedBody.data.documentContent)
       const sourceHash = hashDocumentContent(sourceDocument)
       const currentDocumentText = tiptapToPlainText(sourceDocument).trim()
-
-      const completion = await getOpenAI().chat.completions.create({
-        model: METADATA_MODEL,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: buildDraftProposalPrompt({
-              mode: parsedBody.data.mode,
-              template,
-              currentDocumentText,
-              structuredContext: getStructuredContext(meeting as Meeting),
-              transcript: meeting.transcript,
-            }),
-          },
-        ],
+      const shapedContext = shapeEnhancementContext({
+        currentDocumentText,
+        structuredContext: getStructuredContext(meeting as Meeting),
+        transcript: meeting.transcript,
       })
+
+      let completion: Awaited<ReturnType<ReturnType<typeof getOpenAI>['chat']['completions']['create']>>
+      try {
+        completion = await getOpenAI().chat.completions.create({
+          model: METADATA_MODEL,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: buildDraftProposalPrompt({
+                mode: parsedBody.data.mode,
+                template,
+                currentDocumentText: shapedContext.currentDocumentText,
+                structuredContext: shapedContext.structuredContext,
+                transcript: shapedContext.transcript,
+              }),
+            },
+          ],
+        })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to contact the model'
+        throw new EnhanceRouteError(message, 'MODEL_FAILED', 502)
+      }
 
       const content = completion.choices[0]?.message?.content
       if (!content) {
-        throw new Error('No proposal returned from AI')
+        throw new EnhanceRouteError('No proposal returned from AI', 'MODEL_FAILED', 502)
       }
 
-      const parsedProposal = proposalSchema.parse(JSON.parse(content))
+      let parsedProposal: z.infer<typeof proposalSchema>
+      try {
+        parsedProposal = proposalSchema.parse(JSON.parse(content))
+      } catch {
+        throw new EnhanceRouteError(
+          'AI returned an invalid draft proposal',
+          'INVALID_PROPOSAL',
+          502
+        )
+      }
+
       if (!isTiptapDocument(parsedProposal.proposed_document_content)) {
-        throw new Error('AI returned an invalid draft proposal')
+        throw new EnhanceRouteError(
+          'AI returned an invalid draft proposal',
+          'INVALID_PROPOSAL',
+          502
+        )
       }
 
       const proposedDocument = parsedProposal.proposed_document_content as TiptapDocument
@@ -152,11 +216,35 @@ export async function POST(
       const proposedHash = hashDocumentContent(proposedDocument)
 
       if (!proposedHasContent) {
-        throw new Error('AI returned an empty draft proposal')
+        throw new EnhanceRouteError(
+          'AI returned an empty draft proposal',
+          'INVALID_PROPOSAL',
+          502
+        )
       }
 
-      if (sourceHash === proposedHash || (sourceHasContent && tiptapToPlainText(proposedDocument).trim() === currentDocumentText)) {
-        throw new Error('No useful changes were proposed')
+      if (
+        sourceHash === proposedHash ||
+        (sourceHasContent &&
+          tiptapToPlainText(proposedDocument).trim() === currentDocumentText)
+      ) {
+        throw new EnhanceRouteError(
+          'No useful changes were proposed',
+          'NO_USEFUL_CHANGES',
+          409
+        )
+      }
+
+      if (persistedState?.lastError) {
+        const clearedState: EnhancementState = {
+          ...persistedState,
+          lastError: null,
+        }
+        try {
+          await persistEnhancementState({ status: 'idle', state: clearedState })
+        } catch {
+          // Best effort only. The review can still proceed locally.
+        }
       }
 
       return NextResponse.json({
@@ -215,11 +303,22 @@ export async function POST(
       outcome: parsedBody.data.outcome as EnhancementOutcome,
       enhancement_state: nextState,
       document_content: nextDocument,
+      documentHash: hashDocumentContent(nextDocument),
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to draft notes'
+    const code =
+      error instanceof EnhanceRouteError
+        ? error.code
+        : action === 'generate'
+          ? 'MODEL_FAILED'
+          : 'ENHANCEMENT_FAILED'
+    const status =
+      error instanceof EnhanceRouteError
+        ? error.status
+        : 500
 
-    if (action === 'complete' && id && userId) {
+    if ((action === 'generate' || action === 'complete') && id && userId) {
       try {
         const failureState: EnhancementState = {
           ...(persistedState ?? {
@@ -231,20 +330,15 @@ export async function POST(
           lastError: message,
         }
 
-        await supabase
-          .from('meetings')
-          .update({
-            enhancement_status: 'error',
-            enhancement_state: failureState,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', id)
-          .eq('user_id', userId)
+        await persistEnhancementState({
+          status: 'error',
+          state: failureState,
+        })
       } catch {
         // Best effort only.
       }
     }
 
-    return errorResponse(message, 'ENHANCEMENT_FAILED', 500)
+    return errorResponse(message, code, status)
   }
 }

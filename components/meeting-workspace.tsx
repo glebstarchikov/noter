@@ -595,7 +595,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           <div className="surface-utility flex items-start gap-3 px-5 py-4">
             {meeting.status === 'generating' ? (
               <Loader2 className="mt-0.5 size-4 animate-spin text-accent" />
-            ) : meeting.status === 'error' || meeting.enhancement_state?.lastError ? (
+            ) : meeting.status === 'error' ? (
               <AlertCircle className="mt-0.5 size-4 text-destructive" />
             ) : (
               <CheckCircle2 className="mt-0.5 size-4 text-accent" />
@@ -604,20 +604,16 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
               <p className="text-sm font-medium text-foreground">
                 {meeting.status === 'generating'
                   ? 'Preparing meeting metadata in the background'
-                  : meeting.enhancement_state?.lastError
-                    ? 'Enhancement review hit a problem'
-                    : meeting.status === 'error'
-                      ? 'Automatic note generation hit a problem'
-                      : 'Recording complete'}
+                  : meeting.status === 'error'
+                    ? 'Automatic note generation hit a problem'
+                    : 'Recording complete'}
               </p>
               <p className="text-sm leading-6 text-muted-foreground">
                 {meeting.status === 'generating'
                   ? 'Your editor stays available while noter updates the meeting title, summary, and action items.'
-                  : meeting.enhancement_state?.lastError
-                    ? meeting.enhancement_state?.lastError || 'Please try again.'
-                    : meeting.status === 'error'
-                      ? meeting.error_message || 'Please try again.'
-                      : 'Your note stays editable. Open the transcript only when you need more detail.'}
+                  : meeting.status === 'error'
+                    ? meeting.error_message || 'Please try again.'
+                    : 'Your note stays editable. Open the transcript only when you need more detail.'}
               </p>
             </div>
           </div>

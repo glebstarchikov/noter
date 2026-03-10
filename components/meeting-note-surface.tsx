@@ -1,13 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Loader2, Sparkles } from 'lucide-react'
+import { AlertCircle, Loader2, RefreshCcw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { MeetingEditor } from '@/components/meeting-editor'
 import { MeetingInlineReview } from '@/components/meeting-inline-review'
 import { Button } from '@/components/ui/button'
 import { hashDocumentContent } from '@/lib/document-hash'
+import {
+  isDocumentSaveConflict,
+  saveMeetingDocument,
+  type DocumentSaveConflict,
+} from '@/lib/document-sync'
 import { readApiError } from '@/lib/meeting-pipeline'
 import {
   hasTiptapContent,
@@ -45,22 +49,28 @@ export function MeetingNoteSurface({
   transcript?: string | null
   isRecordingComplete?: boolean
 }) {
-  const router = useRouter()
   const initialDocument = useMemo(
     () => normalizeTiptapDocument(meeting.document_content),
     [meeting.document_content]
   )
+  const initialDocumentHash = useMemo(
+    () => hashDocumentContent(initialDocument),
+    [initialDocument]
+  )
   const [editorSeed, setEditorSeed] = useState<TiptapDocument>(initialDocument)
   const [editorRevision, setEditorRevision] = useState(0)
   const [currentDocument, setCurrentDocument] = useState<TiptapDocument>(initialDocument)
+  const [acknowledgedHash, setAcknowledgedHash] = useState(initialDocumentHash)
   const [draftState, setDraftState] = useState<DraftUiState>('idle')
   const [proposal, setProposal] = useState<ReviewProposal | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [documentConflict, setDocumentConflict] = useState<DocumentSaveConflict | null>(null)
   const [reviewState, setReviewState] = useState<EnhancementState>(normalizeReviewState(meeting.enhancement_state))
   const serverReviewState = useMemo(
     () => normalizeReviewState(meeting.enhancement_state),
     [meeting.enhancement_state]
   )
+  const meetingIdRef = useRef(meeting.id)
   const draftStateRef = useRef(draftState)
   const proposalRef = useRef(proposal)
 
@@ -73,13 +83,18 @@ export function MeetingNoteSurface({
   }, [proposal])
 
   useEffect(() => {
+    if (meetingIdRef.current === meeting.id) return
+
+    meetingIdRef.current = meeting.id
     const nextDocument = normalizeTiptapDocument(meeting.document_content)
     setEditorSeed(nextDocument)
     setCurrentDocument(nextDocument)
-    setEditorRevision(0)
+    setAcknowledgedHash(hashDocumentContent(nextDocument))
+    setEditorRevision((value) => value + 1)
     setDraftState('idle')
     setProposal(null)
     setSaveError(null)
+    setDocumentConflict(null)
     setReviewState(serverReviewState)
   }, [meeting.document_content, meeting.id, serverReviewState])
 
@@ -96,6 +111,7 @@ export function MeetingNoteSurface({
   const shouldShowAction =
     canReview &&
     draftState === 'idle' &&
+    !documentConflict &&
     currentHash !== reviewState.lastReviewedSourceHash
 
   const actionMode: DraftMode = hasDocumentContent ? 'enhance' : 'generate'
@@ -110,18 +126,71 @@ export function MeetingNoteSurface({
     setSaveError(null)
   }, [])
 
-  const persistCurrentDocument = async (document: TiptapDocument) => {
-    const response = await fetch(`/api/meetings/${meeting.id}/document`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ document_content: document }),
+  const handleAutosaveConflict = useCallback((payload: {
+    currentDocument: TiptapDocument
+    currentHash: string
+    message: string
+  }) => {
+    setDocumentConflict({
+      ok: false,
+      code: 'STALE_DOCUMENT',
+      ...payload,
     })
+    setSaveError(null)
+  }, [])
 
-    if (!response.ok) {
-      const { message } = await readApiError(response, 'Failed to save the current note')
-      throw new Error(message)
+  const handleAutosaveSuccess = useCallback((payload: { documentHash: string }) => {
+    setAcknowledgedHash(payload.documentHash)
+    setDocumentConflict(null)
+  }, [])
+
+  const persistCurrentDocument = useCallback(
+    async (document: TiptapDocument, baseHash = acknowledgedHash) => {
+      const result = await saveMeetingDocument({
+        meetingId: meeting.id,
+        document,
+        baseHash,
+      })
+
+      if (isDocumentSaveConflict(result)) {
+        setDocumentConflict(result)
+        const conflictError = new Error(result.message)
+        ;(conflictError as Error & { code?: string }).code = result.code
+        throw conflictError
+      }
+
+      setAcknowledgedHash(result.documentHash)
+      setDocumentConflict(null)
+      return result
+    },
+    [acknowledgedHash, meeting.id]
+  )
+
+  const handleLoadLatestVersion = useCallback(() => {
+    if (!documentConflict) return
+
+    setCurrentDocument(documentConflict.currentDocument)
+    setEditorSeed(documentConflict.currentDocument)
+    setAcknowledgedHash(documentConflict.currentHash)
+    setEditorRevision((value) => value + 1)
+    setProposal(null)
+    setDraftState('idle')
+    setSaveError(null)
+    setDocumentConflict(null)
+  }, [documentConflict])
+
+  const handleKeepLocalDraft = useCallback(async () => {
+    if (!documentConflict) return
+
+    try {
+      await persistCurrentDocument(currentDocument, documentConflict.currentHash)
+      toast.success('Your local draft replaced the newer server version.')
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to replace the server version'
+      toast.error(message)
     }
-  }
+  }, [currentDocument, documentConflict, persistCurrentDocument])
 
   const handleDraftRequest = async () => {
     if (!shouldShowAction) return
@@ -161,15 +230,28 @@ export function MeetingNoteSurface({
         baseDocument: currentDocument,
         proposedDocument: payload.proposedDocument,
       })
+      setReviewState((current) => ({
+        ...current,
+        lastError: null,
+      }))
+      setDocumentConflict(null)
       setDraftState('reviewing')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to draft notes'
-      toast.error(message)
+      const code =
+        error instanceof Error && 'code' in error ? (error as { code?: string }).code : undefined
+      if (code !== 'STALE_DOCUMENT') {
+        toast.error(message)
+        setReviewState((current) => ({
+          ...current,
+          lastError: message,
+        }))
+      }
       setDraftState('idle')
     }
   }
 
-  const handleFinalizeReview = async ({
+  const handleApplyReview = async ({
     document,
     outcome,
   }: {
@@ -201,6 +283,7 @@ export function MeetingNoteSurface({
       const payload = (await response.json()) as {
         enhancement_state: EnhancementState
         document_content: TiptapDocument
+        documentHash: string
       }
       const nextDocument =
         outcome === 'accepted'
@@ -213,8 +296,9 @@ export function MeetingNoteSurface({
       setSaveError(null)
       setCurrentDocument(nextDocument)
       setEditorSeed(nextDocument)
+      setAcknowledgedHash(payload.documentHash)
+      setDocumentConflict(null)
       setEditorRevision((value) => value + 1)
-      router.refresh()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save reviewed note'
       setSaveError(message)
@@ -223,12 +307,70 @@ export function MeetingNoteSurface({
     }
   }
 
+  const handleCancelReview = useCallback(() => {
+    setProposal(null)
+    setDraftState('idle')
+    setSaveError(null)
+  }, [])
+
   return (
     <section className="surface-document relative px-6 py-7 md:px-10 md:py-10">
       <div className="mx-auto w-full max-w-4xl space-y-5">
+        {documentConflict && (
+          <div className="rounded-2xl border border-amber-300/60 bg-amber-50/80 px-4 py-4 text-sm text-amber-950">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 font-medium">
+                  <AlertCircle className="size-4" />
+                  A newer version of this note exists
+                </div>
+                <p className="leading-6 text-amber-900/80">
+                  {documentConflict.message}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLoadLatestVersion}
+                  className="h-8 rounded-full border-amber-300/70 bg-transparent shadow-none"
+                >
+                  Load latest
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void handleKeepLocalDraft()}
+                  className="liquid-metal-button h-8 rounded-full"
+                >
+                  Replace with my draft
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {reviewState.lastError && draftState === 'idle' && (
-          <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            {reviewState.lastError}
+          <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4 text-sm text-destructive">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-1">
+                <div className="font-medium">Drafting needs another try</div>
+                <p className="leading-6">{reviewState.lastError}</p>
+              </div>
+              {canReview && !documentConflict && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleDraftRequest()}
+                  className="h-8 rounded-full shadow-none"
+                >
+                  <RefreshCcw className="size-4" />
+                  Retry draft
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -262,7 +404,8 @@ export function MeetingNoteSurface({
             summary={proposal.summary}
             isSaving={draftState === 'saving'}
             saveError={saveError}
-            onFinalizeReview={handleFinalizeReview}
+            onApplyReview={handleApplyReview}
+            onCancelReview={handleCancelReview}
           />
         ) : (
           <MeetingEditor
@@ -271,6 +414,10 @@ export function MeetingNoteSurface({
             editable={draftState === 'idle'}
             documentContent={editorSeed}
             onContentChange={handleEditorContentChange}
+            autosaveBaseHash={acknowledgedHash}
+            autosaveEnabled={!documentConflict}
+            onAutosaveSuccess={handleAutosaveSuccess}
+            onAutosaveConflict={handleAutosaveConflict}
           />
         )}
       </div>

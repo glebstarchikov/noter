@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
+import { hashDocumentContent } from '@/lib/document-hash'
+import {
+  isTiptapDocument,
+  normalizeTiptapDocument,
+} from '@/lib/tiptap-converter'
 
 export const maxDuration = 10
 
@@ -13,8 +18,18 @@ export async function PATCH(
     if (!id) return errorResponse('Missing meeting id', 'INVALID_MEETING_ID', 400)
 
     const body = await request.json().catch(() => null)
-    if (!body || typeof body.document_content !== 'object') {
-      return errorResponse('Request body must include { document_content: object }', 'INVALID_BODY', 400)
+    if (
+      !body ||
+      typeof body.document_content !== 'object' ||
+      !isTiptapDocument(body.document_content) ||
+      typeof body.baseHash !== 'string' ||
+      body.baseHash.trim().length === 0
+    ) {
+      return errorResponse(
+        'Request body must include { document_content: TiptapDocument, baseHash: string }',
+        'INVALID_BODY',
+        400
+      )
     }
 
     const supabase = await createClient()
@@ -23,22 +38,43 @@ export async function PATCH(
 
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('id')
+      .select('id, document_content')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
 
     if (!meeting) return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
 
+    const currentDocument = normalizeTiptapDocument(meeting.document_content)
+    const currentHash = hashDocumentContent(currentDocument)
+
+    if (body.baseHash !== currentHash) {
+      return NextResponse.json(
+        {
+          error: 'A newer version of this note was saved elsewhere.',
+          code: 'STALE_DOCUMENT',
+          currentDocument,
+          currentHash,
+        },
+        { status: 409 }
+      )
+    }
+
+    const nextDocument = body.document_content
+    const nextHash = hashDocumentContent(nextDocument)
+
     const { error: updateError } = await supabase
       .from('meetings')
-      .update({ document_content: body.document_content })
+      .update({
+        document_content: nextDocument,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
       .eq('user_id', user.id)
 
     if (updateError) throw new Error(updateError.message)
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, documentHash: nextHash })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to save document'
     return errorResponse(message, 'DOCUMENT_SAVE_FAILED', 500)

@@ -1,16 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Loader2, Sparkles, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { EditorContent, useEditor } from '@tiptap/react'
+import { Check, Loader2, Sparkles, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { createMeetingEditorExtensions } from '@/lib/meeting-editor-extensions'
 import { createTopLevelDiff, type TiptapDiffSegment } from '@/lib/tiptap-diff'
-import {
-  tiptapToPlainText,
-  type TiptapDocument,
-  type TiptapNode,
-} from '@/lib/tiptap-converter'
 import type { EnhancementOutcome } from '@/lib/types'
+import type { TiptapDocument, TiptapNode } from '@/lib/tiptap-converter'
 
 type ChangeDecision = 'pending' | 'accepted' | 'rejected'
 
@@ -18,13 +15,7 @@ type ReviewChangeSegment = Extract<TiptapDiffSegment, { kind: 'change' }> & {
   decision: ChangeDecision
 }
 
-type ReviewUnchangedSegment = Extract<TiptapDiffSegment, { kind: 'unchanged' }>
-
-type ReviewSegment = ReviewUnchangedSegment | ReviewChangeSegment
-
-function isReviewChangeSegment(segment: ReviewSegment): segment is ReviewChangeSegment {
-  return segment.kind === 'change'
-}
+type ReviewSegment = Extract<TiptapDiffSegment, { kind: 'unchanged' }> | ReviewChangeSegment
 
 function toReviewSegment(segment: TiptapDiffSegment): ReviewSegment {
   if (segment.kind === 'change') {
@@ -37,57 +28,8 @@ function toReviewSegment(segment: TiptapDiffSegment): ReviewSegment {
   return segment
 }
 
-function renderNodeText(node: TiptapNode) {
-  return tiptapToPlainText({ type: 'doc', content: [node] }).trim()
-}
-
-function renderNode(node: TiptapNode, key: string, tone: 'base' | 'added' | 'removed') {
-  const text = renderNodeText(node)
-  const commonClass = cn(
-    'whitespace-pre-wrap text-[15px] leading-7',
-    tone === 'added' && 'text-foreground',
-    tone === 'removed' && 'text-muted-foreground line-through decoration-muted-foreground/70',
-    tone === 'base' && 'text-foreground'
-  )
-
-  if (node.type === 'heading') {
-    const level = typeof node.attrs?.level === 'number' ? node.attrs.level : 2
-    return (
-      <div
-        key={key}
-        className={cn(
-          commonClass,
-          level === 1 && 'text-[26px] font-semibold tracking-tight',
-          level === 2 && 'pt-4 text-[18px] font-semibold tracking-tight',
-          level === 3 && 'pt-3 text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground'
-        )}
-      >
-        {text}
-      </div>
-    )
-  }
-
-  if (node.type === 'bulletList' || node.type === 'orderedList' || node.type === 'taskList') {
-    return (
-      <div key={key} className={cn(commonClass, 'pl-4')}>
-        {text || '\u00A0'}
-      </div>
-    )
-  }
-
-  if (node.type === 'blockquote') {
-    return (
-      <div key={key} className={cn(commonClass, 'border-l border-border pl-4 italic')}>
-        {text || '\u00A0'}
-      </div>
-    )
-  }
-
-  return (
-    <div key={key} className={commonClass}>
-      {text || '\u00A0'}
-    </div>
-  )
+function isReviewChangeSegment(segment: ReviewSegment): segment is ReviewChangeSegment {
+  return segment.kind === 'change'
 }
 
 function nodesToDocument(nodes: TiptapNode[]): TiptapDocument {
@@ -97,10 +39,31 @@ function nodesToDocument(nodes: TiptapNode[]): TiptapDocument {
   }
 }
 
-function buildResolvedDocument(segments: ReviewSegment[]): {
+function StaticMeetingDocument({
+  document,
+  className,
+}: {
   document: TiptapDocument
-  outcome: EnhancementOutcome
-} {
+  className?: string
+}) {
+  const editor = useEditor({
+    immediatelyRender: false,
+    editable: false,
+    extensions: createMeetingEditorExtensions(),
+    content: document,
+    editorProps: {
+      attributes: {
+        class: `prose-editor focus:outline-none ${className ?? ''}`.trim(),
+      },
+    },
+  })
+
+  if (!editor) return null
+
+  return <EditorContent editor={editor} />
+}
+
+function buildResolvedDocument(segments: ReviewSegment[]) {
   const content: TiptapNode[] = []
   let acceptedChangeCount = 0
 
@@ -110,18 +73,47 @@ function buildResolvedDocument(segments: ReviewSegment[]): {
       continue
     }
 
+    if (segment.decision === 'pending') {
+      continue
+    }
+
     if (segment.decision === 'accepted') {
-      content.push(...segment.proposedNodes)
+      if (segment.changeType === 'replace' || segment.changeType === 'insert') {
+        if (segment.proposedNode) {
+          content.push(segment.proposedNode)
+        }
+      }
       acceptedChangeCount += 1
-    } else {
-      content.push(...segment.baseNodes)
+      continue
+    }
+
+    if (segment.changeType === 'replace' || segment.changeType === 'delete') {
+      if (segment.baseNode) {
+        content.push(segment.baseNode)
+      }
     }
   }
 
   return {
     document: nodesToDocument(content.length > 0 ? content : [{ type: 'paragraph' }]),
-    outcome: acceptedChangeCount > 0 ? 'accepted' : 'dismissed',
+    outcome: acceptedChangeCount > 0 ? 'accepted' : 'dismissed' as EnhancementOutcome,
   }
+}
+
+function renderCurrentLabel(segment: ReviewChangeSegment) {
+  if (segment.changeType === 'insert') {
+    return 'Nothing here yet'
+  }
+
+  return 'Current'
+}
+
+function renderProposedLabel(segment: ReviewChangeSegment) {
+  if (segment.changeType === 'delete') {
+    return 'Remove this block'
+  }
+
+  return 'Proposed'
 }
 
 export function MeetingInlineReview({
@@ -130,25 +122,25 @@ export function MeetingInlineReview({
   summary,
   isSaving,
   saveError,
-  onFinalizeReview,
+  onApplyReview,
+  onCancelReview,
 }: {
   baseDocument: TiptapDocument
   proposedDocument: TiptapDocument
   summary?: string
   isSaving: boolean
   saveError: string | null
-  onFinalizeReview: (result: { document: TiptapDocument; outcome: EnhancementOutcome }) => void
+  onApplyReview: (result: { document: TiptapDocument; outcome: EnhancementOutcome }) => void
+  onCancelReview: () => void
 }) {
   const initialSegments = useMemo<ReviewSegment[]>(
     () => createTopLevelDiff(baseDocument, proposedDocument).map(toReviewSegment),
     [baseDocument, proposedDocument]
   )
   const [segments, setSegments] = useState(initialSegments)
-  const hasSubmittedRef = useRef(false)
 
   useEffect(() => {
     setSegments(initialSegments)
-    hasSubmittedRef.current = false
   }, [initialSegments])
 
   const pendingCount = segments.filter(
@@ -156,12 +148,6 @@ export function MeetingInlineReview({
   ).length
 
   const resolvedReview = useMemo(() => buildResolvedDocument(segments), [segments])
-
-  useEffect(() => {
-    if (pendingCount !== 0 || hasSubmittedRef.current) return
-    hasSubmittedRef.current = true
-    onFinalizeReview(resolvedReview)
-  }, [onFinalizeReview, pendingCount, resolvedReview])
 
   const updateDecision = (segmentId: string, decision: ChangeDecision) => {
     setSegments((current) =>
@@ -197,7 +183,17 @@ export function MeetingInlineReview({
           {summary ? (
             <span className="text-sm text-muted-foreground">{summary}</span>
           ) : null}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCancelReview}
+              disabled={isSaving}
+              className="h-8 rounded-full shadow-none"
+            >
+              Cancel review
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -217,6 +213,15 @@ export function MeetingInlineReview({
             >
               Accept all
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onApplyReview(resolvedReview)}
+              disabled={isSaving || pendingCount > 0}
+              className="liquid-metal-button h-8 rounded-full"
+            >
+              Apply reviewed changes
+            </Button>
           </div>
         </div>
 
@@ -235,7 +240,8 @@ export function MeetingInlineReview({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => onFinalizeReview(resolvedReview)}
+                  onClick={() => onApplyReview(resolvedReview)}
+                  disabled={pendingCount > 0}
                   className="h-8 rounded-full shadow-none"
                 >
                   Retry save
@@ -250,60 +256,75 @@ export function MeetingInlineReview({
         {segments.map((segment) => {
           if (segment.kind === 'unchanged') {
             return (
-              <div key={segment.id} className="space-y-2">
-                {segment.nodes.map((node, nodeIndex) =>
-                  renderNode(node, `${segment.id}-${nodeIndex}`, 'base')
-                )}
+              <div key={segment.id} className="rounded-2xl border border-transparent px-1">
+                <StaticMeetingDocument document={nodesToDocument(segment.nodes)} />
               </div>
             )
           }
 
-          if (segment.decision !== 'pending') {
-            const visibleNodes =
-              segment.decision === 'accepted' ? segment.proposedNodes : segment.baseNodes
-
-            return (
-              <div key={segment.id} className="space-y-2">
-                {visibleNodes.map((node, nodeIndex) =>
-                  renderNode(node, `${segment.id}-${nodeIndex}`, 'base')
-                )}
-              </div>
-            )
-          }
+          const acceptedState =
+            segment.decision === 'accepted'
+              ? 'Accepted'
+              : segment.decision === 'rejected'
+                ? 'Rejected'
+                : segment.changeType === 'insert'
+                  ? 'Add block'
+                  : segment.changeType === 'delete'
+                    ? 'Remove block'
+                    : 'Replace block'
 
           return (
-            <div key={segment.id} className="rounded-2xl border border-border/70 bg-secondary/30 px-4 py-4">
+            <div
+              key={segment.id}
+              className="rounded-2xl border border-border/70 bg-secondary/30 px-4 py-4"
+            >
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-background/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground shadow-sm">
+                  {acceptedState}
+                </span>
+              </div>
+
               <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
                 <div className="space-y-2">
                   <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Current
+                    {renderCurrentLabel(segment)}
                   </p>
-                  <div className="space-y-2">
-                    {segment.baseNodes.length > 0 ? (
-                      segment.baseNodes.map((node, nodeIndex) =>
-                        renderNode(node, `${segment.id}-base-${nodeIndex}`, 'removed')
-                      )
-                    ) : (
-                      <div className="text-sm text-muted-foreground">Nothing here yet.</div>
-                    )}
-                  </div>
+                  {segment.baseNode ? (
+                    <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3 opacity-70">
+                      <StaticMeetingDocument
+                        document={nodesToDocument([segment.baseNode])}
+                        className="pointer-events-none"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
+                      Nothing here yet.
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-center">
                   <div className="rounded-full bg-background/80 px-3 py-1 text-xs text-muted-foreground shadow-sm">
-                    Change
+                    Review
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Proposed
+                    {renderProposedLabel(segment)}
                   </p>
-                  <div className="space-y-2 rounded-2xl border border-accent/30 bg-background/80 px-3 py-3 shadow-sm">
-                    {segment.proposedNodes.map((node, nodeIndex) =>
-                      renderNode(node, `${segment.id}-new-${nodeIndex}`, 'added')
-                    )}
-                  </div>
+                  {segment.proposedNode ? (
+                    <div className="rounded-2xl border border-accent/30 bg-background/80 px-3 py-3 shadow-sm">
+                      <StaticMeetingDocument
+                        document={nodesToDocument([segment.proposedNode])}
+                        className="pointer-events-none"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
+                      This block will be removed.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -329,6 +350,19 @@ export function MeetingInlineReview({
                   <X className="size-4" />
                   Reject
                 </Button>
+                {segment.decision !== 'pending' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateDecision(segment.id, 'pending')}
+                    disabled={isSaving}
+                    className="h-8 rounded-full text-muted-foreground shadow-none"
+                  >
+                    <Undo2 className="size-4" />
+                    Reset
+                  </Button>
+                ) : null}
               </div>
             </div>
           )
