@@ -1,4 +1,5 @@
 import { formatTemplateContext, type ResolvedNoteTemplate } from '@/lib/note-template'
+import { draftPromptSchemaExample } from '@/lib/draft-proposal'
 
 const BASE_NOTES_GENERATION_PROMPT = `You are an expert meeting note-taker. Given a meeting transcript, produce structured notes in the following JSON format. Be concise but thorough.
 
@@ -38,12 +39,14 @@ export function buildDraftProposalPrompt({
   currentDocumentText,
   structuredContext,
   transcript,
+  repairFeedback,
 }: {
   mode: 'generate' | 'enhance'
   template: ResolvedNoteTemplate
   currentDocumentText: string
   structuredContext: string
   transcript: string
+  repairFeedback?: string | null
 }) {
   const modeInstructions =
     mode === 'generate'
@@ -56,15 +59,15 @@ Preserve the user's structure and tone whenever possible. Use the selected note 
 
   return `You are helping draft meeting notes inside a writing editor.
 
-Return JSON only with this shape:
-{
-  "summary": "One short sentence describing what changed",
-  "proposed_document_content": { "type": "doc", "content": [...] }
-}
+Return JSON only. The response must match this exact schema:
+${JSON.stringify(draftPromptSchemaExample, null, 2)}
 
 Rules:
-- Return a valid Tiptap JSON document in proposed_document_content.
-- Work at the level of readable note blocks like headings, paragraphs, lists, and tasks.
+- Always include schemaVersion: 1.
+- Return one short summary sentence under 200 characters.
+- Allowed block types only: heading, paragraph, bullet_list, task_list.
+- For task_list items, owner must be a string or null. Never omit owner.
+- Work at the level of readable note blocks. Do not emit Tiptap JSON.
 - Keep the output concise and readable.
 - Do not mention that AI was used.
 - Do not wrap the JSON in markdown fences.
@@ -80,5 +83,14 @@ Structured meeting metadata:
 ${structuredContext}
 
 Transcript:
-${transcript}`
+${transcript}
+
+${
+    repairFeedback
+      ? `Previous attempt failed this safety check:
+${repairFeedback}
+
+Return a corrected response that matches the schema exactly.`
+      : ''
+  }`
 }

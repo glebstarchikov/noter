@@ -12,6 +12,7 @@ import {
   saveMeetingDocument,
   type DocumentSaveConflict,
 } from '@/lib/document-sync'
+import { isNeutralEnhancementMessage } from '@/lib/enhancement-errors'
 import { readApiError } from '@/lib/meeting-pipeline'
 import {
   hasTiptapContent,
@@ -108,6 +109,7 @@ export function MeetingNoteSurface({
   const hasDocumentContent = hasTiptapContent(currentDocument)
   const canReview =
     Boolean(transcriptText.trim()) && (isRecordingComplete ?? meeting.status !== 'recording')
+  const isNeutralDraftFeedback = isNeutralEnhancementMessage(reviewState.lastError)
   const shouldShowAction =
     canReview &&
     draftState === 'idle' &&
@@ -212,8 +214,10 @@ export function MeetingNoteSurface({
       })
 
       if (!response.ok) {
-        const { message } = await readApiError(response, 'Failed to draft notes')
-        throw new Error(message)
+        const { message, code } = await readApiError(response, 'Failed to draft notes')
+        const draftError = new Error(message)
+        ;(draftError as Error & { code?: string }).code = code
+        throw draftError
       }
 
       const payload = (await response.json()) as {
@@ -241,7 +245,9 @@ export function MeetingNoteSurface({
       const code =
         error instanceof Error && 'code' in error ? (error as { code?: string }).code : undefined
       if (code !== 'STALE_DOCUMENT') {
-        toast.error(message)
+        if (!isNeutralEnhancementMessage(message)) {
+          toast.error(message)
+        }
         setReviewState((current) => ({
           ...current,
           lastError: message,
@@ -352,10 +358,18 @@ export function MeetingNoteSurface({
         )}
 
         {reviewState.lastError && draftState === 'idle' && (
-          <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4 text-sm text-destructive">
+          <div
+            className={
+              isNeutralDraftFeedback
+                ? 'rounded-2xl border border-border/70 bg-secondary/40 px-4 py-4 text-sm text-muted-foreground'
+                : 'rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4 text-sm text-destructive'
+            }
+          >
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="space-y-1">
-                <div className="font-medium">Drafting needs another try</div>
+                <div className="font-medium">
+                  {isNeutralDraftFeedback ? 'No changes suggested' : 'Drafting needs another try'}
+                </div>
                 <p className="leading-6">{reviewState.lastError}</p>
               </div>
               {canReview && !documentConflict && (

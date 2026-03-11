@@ -1,12 +1,25 @@
+import { generateObject, NoObjectGeneratedError } from 'ai'
+import { openai } from '@ai-sdk/openai'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
-import { METADATA_MODEL } from '@/lib/ai-models'
+import { ENHANCEMENT_MODEL } from '@/lib/ai-models'
 import { hashDocumentContent } from '@/lib/document-hash'
+import {
+  assertSupportedEnhancementSourceDocument,
+  compileDraftProposalToTiptap,
+  DraftProposalValidationError,
+  draftProposalSchema,
+  validateDraftProposal,
+} from '@/lib/draft-proposal'
 import { shapeEnhancementContext } from '@/lib/enhancement-context'
+import {
+  ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
+  ENHANCEMENT_MODEL_FAILED_MESSAGE,
+  ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
+} from '@/lib/enhancement-errors'
 import { resolveMeetingTemplate } from '@/lib/note-template'
-import { getOpenAI } from '@/lib/openai'
 import { buildDraftProposalPrompt } from '@/lib/prompts'
 import {
   hasTiptapContent,
@@ -15,7 +28,7 @@ import {
   tiptapToPlainText,
   type TiptapDocument,
 } from '@/lib/tiptap-converter'
-import type { EnhancementState, EnhancementOutcome, Meeting } from '@/lib/types'
+import type { EnhancementOutcome, EnhancementState, Meeting } from '@/lib/types'
 
 const requestSchema = z.discriminatedUnion('action', [
   z.object({
@@ -31,20 +44,25 @@ const requestSchema = z.discriminatedUnion('action', [
   }),
 ])
 
-const proposalSchema = z.object({
-  summary: z.string().trim().optional().default(''),
-  proposed_document_content: z.unknown(),
-})
-
 class EnhanceRouteError extends Error {
   code: string
   status: number
+  logReason?: string
+  retryUsed: boolean
 
-  constructor(message: string, code: string, status: number) {
+  constructor(
+    message: string,
+    code: string,
+    status: number,
+    logReason?: string,
+    retryUsed = false
+  ) {
     super(message)
     this.name = 'EnhanceRouteError'
     this.code = code
     this.status = status
+    this.logReason = logReason
+    this.retryUsed = retryUsed
   }
 }
 
@@ -67,15 +85,127 @@ function normalizeEnhancementState(value: unknown): EnhancementState {
   }
 }
 
-function getStructuredContext(meeting: Pick<Meeting, 'summary' | 'detailed_notes' | 'action_items' | 'key_decisions' | 'topics' | 'follow_ups'>) {
-  return JSON.stringify({
-    summary: meeting.summary ?? '',
-    detailed_notes: meeting.detailed_notes ?? '',
-    action_items: meeting.action_items ?? [],
-    key_decisions: meeting.key_decisions ?? [],
-    topics: meeting.topics ?? [],
-    follow_ups: meeting.follow_ups ?? [],
-  }, null, 2)
+function getStructuredContext(
+  meeting: Pick<
+    Meeting,
+    'summary' | 'detailed_notes' | 'action_items' | 'key_decisions' | 'topics' | 'follow_ups'
+  >
+) {
+  return JSON.stringify(
+    {
+      summary: meeting.summary ?? '',
+      detailed_notes: meeting.detailed_notes ?? '',
+      action_items: meeting.action_items ?? [],
+      key_decisions: meeting.key_decisions ?? [],
+      topics: meeting.topics ?? [],
+      follow_ups: meeting.follow_ups ?? [],
+    },
+    null,
+    2
+  )
+}
+
+function logEnhancementGenerate(event: string, payload: Record<string, unknown>) {
+  console.info(
+    JSON.stringify({
+      scope: 'meetings.enhance.generate',
+      event,
+      ...payload,
+    })
+  )
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unknown error'
+}
+
+function isRetryableDraftError(error: unknown) {
+  return (
+    NoObjectGeneratedError.isInstance(error) ||
+    error instanceof DraftProposalValidationError
+  )
+}
+
+async function generateProposalDocument({
+  mode,
+  template,
+  currentDocumentText,
+  structuredContext,
+  transcript,
+}: {
+  mode: 'generate' | 'enhance'
+  template: Awaited<ReturnType<typeof resolveMeetingTemplate>>
+  currentDocumentText: string
+  structuredContext: string
+  transcript: string
+}) {
+  let firstPassFailureReason: string | null = null
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const { object } = await generateObject({
+        model: openai(ENHANCEMENT_MODEL),
+        schema: draftProposalSchema,
+        temperature: 0.2,
+        providerOptions: {
+          openai: {
+            strictJsonSchema: true,
+          },
+        },
+        prompt: buildDraftProposalPrompt({
+          mode,
+          template,
+          currentDocumentText,
+          structuredContext,
+          transcript,
+          repairFeedback: attempt === 2 ? firstPassFailureReason : null,
+        }),
+      })
+
+      const proposal = validateDraftProposal(object)
+      const proposedDocument = compileDraftProposalToTiptap(proposal)
+
+      return {
+        proposal,
+        proposedDocument,
+        retryUsed: attempt === 2,
+        firstPassFailureReason,
+      }
+    } catch (error: unknown) {
+      const failureReason = getErrorMessage(error)
+
+      if (attempt === 1 && isRetryableDraftError(error)) {
+        firstPassFailureReason = failureReason
+        continue
+      }
+
+      if (isRetryableDraftError(error)) {
+        throw new EnhanceRouteError(
+          ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
+          'INVALID_PROPOSAL',
+          502,
+          failureReason,
+          true
+        )
+      }
+
+      throw new EnhanceRouteError(
+        ENHANCEMENT_MODEL_FAILED_MESSAGE,
+        'MODEL_FAILED',
+        502,
+        failureReason,
+        false
+      )
+    }
+  }
+
+  throw new EnhanceRouteError(
+    ENHANCEMENT_MODEL_FAILED_MESSAGE,
+    'MODEL_FAILED',
+    502,
+    'Draft generation exhausted unexpectedly',
+    true
+  )
 }
 
 export const maxDuration = 60
@@ -90,6 +220,7 @@ export async function POST(
   let action: 'generate' | 'complete' | null = null
   let persistedState: EnhancementState | null = null
   let meetingOwnerId: string | null = null
+  let generateLogContext: Record<string, unknown> | null = null
 
   const persistEnhancementState = async ({
     status,
@@ -124,7 +255,9 @@ export async function POST(
 
     action = parsedBody.data.action
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
@@ -143,14 +276,21 @@ export async function POST(
     meetingOwnerId = user.id
 
     if (!meeting.transcript || !meeting.transcript.trim()) {
-      return errorResponse('Transcript is required before generating note drafts', 'MISSING_TRANSCRIPT', 400)
+      return errorResponse(
+        'Transcript is required before generating note drafts',
+        'MISSING_TRANSCRIPT',
+        400
+      )
     }
 
     persistedState = normalizeEnhancementState(meeting.enhancement_state)
-    const template = await resolveMeetingTemplate(supabase as { from: (table: string) => any }, {
-      template_id: meeting.template_id,
-      user_id: user.id,
-    })
+    const template = await resolveMeetingTemplate(
+      supabase as { from: (table: string) => any },
+      {
+        template_id: meeting.template_id,
+        user_id: user.id,
+      }
+    )
 
     if (parsedBody.data.action === 'generate') {
       const sourceDocument = normalizeTiptapDocument(parsedBody.data.documentContent)
@@ -162,76 +302,60 @@ export async function POST(
         transcript: meeting.transcript,
       })
 
-      let completion: Awaited<ReturnType<ReturnType<typeof getOpenAI>['chat']['completions']['create']>>
-      try {
-        completion = await getOpenAI().chat.completions.create({
-          model: METADATA_MODEL,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'system',
-              content: buildDraftProposalPrompt({
-                mode: parsedBody.data.mode,
-                template,
-                currentDocumentText: shapedContext.currentDocumentText,
-                structuredContext: shapedContext.structuredContext,
-                transcript: shapedContext.transcript,
-              }),
-            },
-          ],
-        })
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Failed to contact the model'
-        throw new EnhanceRouteError(message, 'MODEL_FAILED', 502)
+      generateLogContext = {
+        meetingId: id,
+        mode: parsedBody.data.mode,
+        model: ENHANCEMENT_MODEL,
+        currentDocumentChars: shapedContext.currentDocumentText.length,
+        structuredContextChars: shapedContext.structuredContext.length,
+        transcriptChars: shapedContext.transcript.length,
       }
 
-      const content = completion.choices[0]?.message?.content
-      if (!content) {
-        throw new EnhanceRouteError('No proposal returned from AI', 'MODEL_FAILED', 502)
+      if (parsedBody.data.mode === 'enhance') {
+        try {
+          assertSupportedEnhancementSourceDocument(sourceDocument)
+        } catch (error: unknown) {
+          const failureReason = getErrorMessage(error)
+          throw new EnhanceRouteError(
+            ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
+            'INVALID_PROPOSAL',
+            409,
+            failureReason
+          )
+        }
       }
 
-      let parsedProposal: z.infer<typeof proposalSchema>
-      try {
-        parsedProposal = proposalSchema.parse(JSON.parse(content))
-      } catch {
-        throw new EnhanceRouteError(
-          'AI returned an invalid draft proposal',
-          'INVALID_PROPOSAL',
-          502
-        )
-      }
+      const generated = await generateProposalDocument({
+        mode: parsedBody.data.mode,
+        template,
+        currentDocumentText: shapedContext.currentDocumentText,
+        structuredContext: shapedContext.structuredContext,
+        transcript: shapedContext.transcript,
+      })
 
-      if (!isTiptapDocument(parsedProposal.proposed_document_content)) {
-        throw new EnhanceRouteError(
-          'AI returned an invalid draft proposal',
-          'INVALID_PROPOSAL',
-          502
-        )
-      }
-
-      const proposedDocument = parsedProposal.proposed_document_content as TiptapDocument
-      const proposedHasContent = hasTiptapContent(proposedDocument)
+      const proposedHasContent = hasTiptapContent(generated.proposedDocument)
       const sourceHasContent = hasTiptapContent(sourceDocument)
-      const proposedHash = hashDocumentContent(proposedDocument)
+      const proposedHash = hashDocumentContent(generated.proposedDocument)
 
       if (!proposedHasContent) {
         throw new EnhanceRouteError(
-          'AI returned an empty draft proposal',
+          ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
           'INVALID_PROPOSAL',
-          502
+          502,
+          'Compiled proposal had no content'
         )
       }
 
       if (
         sourceHash === proposedHash ||
         (sourceHasContent &&
-          tiptapToPlainText(proposedDocument).trim() === currentDocumentText)
+          tiptapToPlainText(generated.proposedDocument).trim() === currentDocumentText)
       ) {
         throw new EnhanceRouteError(
-          'No useful changes were proposed',
+          ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
           'NO_USEFUL_CHANGES',
-          409
+          409,
+          'Generated proposal was materially identical to the source document'
         )
       }
 
@@ -247,11 +371,18 @@ export async function POST(
         }
       }
 
+      logEnhancementGenerate('success', {
+        ...generateLogContext,
+        retryUsed: generated.retryUsed,
+        firstPassFailureReason: generated.firstPassFailureReason,
+        outcomeCode: 'OK',
+      })
+
       return NextResponse.json({
         mode: parsedBody.data.mode,
         sourceHash,
-        summary: parsedProposal.summary,
-        proposedDocument,
+        summary: generated.proposal.summary,
+        proposedDocument: generated.proposedDocument,
       })
     }
 
@@ -259,13 +390,21 @@ export async function POST(
     const currentHash = hashDocumentContent(currentDocument)
 
     if (currentHash !== parsedBody.data.sourceHash) {
-      return errorResponse('The note changed before this review was completed', 'STALE_SOURCE_HASH', 409)
+      return errorResponse(
+        'The note changed before this review was completed',
+        'STALE_SOURCE_HASH',
+        409
+      )
     }
 
     let nextDocument = currentDocument
     if (parsedBody.data.outcome === 'accepted') {
       if (!isTiptapDocument(parsedBody.data.documentContent)) {
-        return errorResponse('Accepted reviews must include documentContent', 'INVALID_DOCUMENT', 400)
+        return errorResponse(
+          'Accepted reviews must include documentContent',
+          'INVALID_DOCUMENT',
+          400
+        )
       }
 
       nextDocument = parsedBody.data.documentContent as TiptapDocument
@@ -313,10 +452,16 @@ export async function POST(
         : action === 'generate'
           ? 'MODEL_FAILED'
           : 'ENHANCEMENT_FAILED'
-    const status =
-      error instanceof EnhanceRouteError
-        ? error.status
-        : 500
+    const status = error instanceof EnhanceRouteError ? error.status : 500
+
+    if (action === 'generate' && generateLogContext) {
+      logEnhancementGenerate('failed', {
+        ...generateLogContext,
+        retryUsed: error instanceof EnhanceRouteError ? error.retryUsed : false,
+        finalReason: error instanceof EnhanceRouteError ? error.logReason ?? message : message,
+        outcomeCode: code,
+      })
+    }
 
     if ((action === 'generate' || action === 'complete') && id && userId) {
       try {

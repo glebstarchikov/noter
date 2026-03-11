@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -34,7 +34,10 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { clearChatMessages } from '@/lib/chat-storage'
 import { MeetingNoteSurface } from '@/components/meeting-note-surface'
-import { TranscriptDrawer } from '@/components/transcript-drawer'
+import {
+  buildAssistantTranscriptSegments,
+  MeetingAssistantBridge,
+} from '@/components/assistant-shell-context'
 import type { Meeting, ActionItem } from '@/lib/types'
 
 function formatDate(dateStr: string) {
@@ -62,6 +65,29 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const router = useRouter()
+  const transcriptSegments = useMemo(
+    () =>
+      buildAssistantTranscriptSegments({
+        transcript: meeting.transcript,
+        diarizedTranscript: meeting.diarized_transcript,
+      }),
+    [meeting.diarized_transcript, meeting.transcript]
+  )
+  const assistantContext = useMemo(
+    () => ({
+      sourceId: `meeting:${meeting.id}`,
+      meetingId: meeting.id,
+      meetingTitle: meeting.title,
+      transcriptAvailable: Boolean(meeting.transcript?.trim()) || transcriptSegments.length > 0,
+      transcriptText: meeting.transcript ?? '',
+      transcriptSegments,
+      recordingPhase: 'done' as const,
+      live: false,
+      isPaused: false,
+      durationSeconds: meeting.audio_duration ?? 0,
+    }),
+    [meeting.audio_duration, meeting.id, meeting.title, meeting.transcript, transcriptSegments]
+  )
 
   const togglePin = async () => {
     const newPinned = !isPinned
@@ -125,6 +151,8 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
   return (
     <>
+      <MeetingAssistantBridge context={assistantContext} />
+
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl space-y-3">
@@ -206,8 +234,6 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
         <MeetingNoteSurface meeting={meeting} />
       </div>
-
-      <TranscriptDrawer transcript={meeting.transcript} />
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

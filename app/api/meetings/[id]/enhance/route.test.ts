@@ -5,22 +5,34 @@ import {
   MAX_ENHANCEMENT_STRUCTURED_CHARS,
   MAX_ENHANCEMENT_TRANSCRIPT_CHARS,
 } from '@/lib/enhancement-context'
+import {
+  ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
+  ENHANCEMENT_MODEL_FAILED_MESSAGE,
+  ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
+} from '@/lib/enhancement-errors'
+import { compileDraftProposalToTiptap } from '@/lib/draft-proposal'
 import type { TiptapDocument } from '@/lib/tiptap-converter'
 
-const mockCompletionCreate = mock(() => {})
+const mockGenerateObject = mock(() => {})
+const mockOpenAI = mock((modelId: string) => ({ provider: 'openai', modelId }))
+
+class MockNoObjectGeneratedError extends Error {
+  static isInstance(error: unknown): error is MockNoObjectGeneratedError {
+    return error instanceof MockNoObjectGeneratedError
+  }
+}
+
+mock.module('ai', () => ({
+  generateObject: mockGenerateObject,
+  NoObjectGeneratedError: MockNoObjectGeneratedError,
+}))
+
+mock.module('@ai-sdk/openai', () => ({
+  openai: mockOpenAI,
+}))
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
-}))
-
-mock.module('@/lib/openai', () => ({
-  getOpenAI: mock(() => ({
-    chat: {
-      completions: {
-        create: mockCompletionCreate,
-      },
-    },
-  })),
 }))
 
 let POST: typeof import('./route').POST
@@ -49,6 +61,19 @@ function makeDocument(text: string): TiptapDocument {
       {
         type: 'paragraph',
         content: [{ type: 'text', text }],
+      },
+    ],
+  }
+}
+
+function makeProposal(paragraphText: string, summary = 'Tightens the next steps.') {
+  return {
+    schemaVersion: 1 as const,
+    summary,
+    blocks: [
+      {
+        type: 'paragraph' as const,
+        text: paragraphText,
       },
     ],
   }
@@ -142,30 +167,24 @@ function mockSupabase({
 describe('POST /api/meetings/[id]/enhance', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    ;(mockCompletionCreate as any).mockResolvedValue({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              summary: 'Tightens the next steps.',
-              proposed_document_content: makeDocument('Typed note from the user with clear next steps.'),
-            }),
-          },
-        },
-      ],
+    ;(mockGenerateObject as any).mockResolvedValue({
+      object: makeProposal('Typed note from the user with clear next steps.'),
     })
   })
 
   it('returns 401 if user is not authenticated', async () => {
     mockSupabase({ user: null })
 
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'enhance',
-      documentContent: makeDocument('Typed note from the user'),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(401)
     expect(await response.json()).toMatchObject({
@@ -191,13 +210,16 @@ describe('POST /api/meetings/[id]/enhance', () => {
   it('returns 400 when transcript is missing', async () => {
     mockSupabase({ user: { id: 'user-1' }, meetingData: makeMeeting({ transcript: '   ' }) })
 
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'enhance',
-      documentContent: makeDocument('Typed note from the user'),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
@@ -217,23 +239,28 @@ describe('POST /api/meetings/[id]/enhance', () => {
       }),
     })
 
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'generate',
-      documentContent: {
-        type: 'doc',
-        content: [{ type: 'paragraph' }],
-      },
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'generate',
+        documentContent: {
+          type: 'doc',
+          content: [{ type: 'paragraph' }],
+        },
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(200)
     expect(updateCalls).toHaveLength(0)
 
     const payload = await response.json()
     expect(payload.mode).toBe('generate')
-    expect(payload.proposedDocument).toEqual(makeDocument('Typed note from the user with clear next steps.'))
+    expect(payload.proposedDocument).toEqual(
+      compileDraftProposalToTiptap(makeProposal('Typed note from the user with clear next steps.'))
+    )
   })
 
   it('returns a refinement proposal for a populated note and uses template context softly', async () => {
@@ -243,22 +270,60 @@ describe('POST /api/meetings/[id]/enhance', () => {
     })
 
     const currentDocument = makeDocument('Typed note from the user')
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'enhance',
-      documentContent: currentDocument,
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: currentDocument,
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(200)
 
-    const completionCall = (mockCompletionCreate as any).mock.calls[0][0]
-    expect(completionCall.messages[0].content).toContain('Preserve the user\'s structure and tone whenever possible')
-    expect(completionCall.messages[0].content).toContain('Selected note format: 1:1 Meeting')
+    const generateCall = (mockGenerateObject as any).mock.calls[0][0]
+    expect(generateCall.model).toEqual({ provider: 'openai', modelId: 'gpt-4o-mini' })
+    expect(generateCall.prompt).toContain("Preserve the user's structure and tone whenever possible")
+    expect(generateCall.prompt).toContain('Selected note format: 1:1 Meeting')
+    expect(generateCall.prompt).toContain('"schemaVersion": 1')
+    expect(generateCall.prompt).toContain('Allowed block types only: heading, paragraph, bullet_list, task_list.')
 
     const payload = await response.json()
     expect(payload.sourceHash).toBe(hashDocumentContent(currentDocument))
+  })
+
+  it('clears a persisted generate error after a valid proposal is produced', async () => {
+    const { updateCalls } = mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: makeMeeting({
+        enhancement_state: {
+          lastReviewedSourceHash: null,
+          lastOutcome: null,
+          lastReviewedAt: null,
+          lastError: 'Older drafting failure',
+        },
+      }),
+    })
+
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
+
+    expect(response.status).toBe(200)
+    expect(updateCalls).toHaveLength(1)
+    expect(
+      ((updateCalls[0] as Record<string, unknown>).enhancement_state as Record<string, unknown>)
+        .lastError
+    ).toBeNull()
   })
 
   it('truncates long draft context before prompting the model', async () => {
@@ -271,29 +336,68 @@ describe('POST /api/meetings/[id]/enhance', () => {
       }),
     })
 
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'enhance',
-      documentContent: makeDocument('x'.repeat(MAX_ENHANCEMENT_DOCUMENT_CHARS + 200)),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('x'.repeat(MAX_ENHANCEMENT_DOCUMENT_CHARS + 200)),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(200)
 
-    const completionCall = (mockCompletionCreate as any).mock.calls[0][0]
-    expect(completionCall.messages[0].content).toContain(
+    const generateCall = (mockGenerateObject as any).mock.calls[0][0]
+    expect(generateCall.prompt).toContain(
       `[Current note truncated to ${MAX_ENHANCEMENT_DOCUMENT_CHARS} characters]`
     )
-    expect(completionCall.messages[0].content).toContain(
+    expect(generateCall.prompt).toContain(
       `[Structured metadata truncated to ${MAX_ENHANCEMENT_STRUCTURED_CHARS} characters]`
     )
-    expect(completionCall.messages[0].content).toContain(
+    expect(generateCall.prompt).toContain(
       `[Transcript truncated to ${MAX_ENHANCEMENT_TRANSCRIPT_CHARS} characters]`
     )
   })
 
-  it('returns NO_USEFUL_CHANGES and persists the generate failure state', async () => {
+  it('retries once after a schema-safe validation failure and then succeeds', async () => {
+    mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: makeMeeting(),
+    })
+
+    ;(mockGenerateObject as any)
+      .mockResolvedValueOnce({
+        object: {
+          schemaVersion: 1,
+          summary: 'Broken proposal',
+          blocks: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        object: makeProposal('Typed note from the user with clearer next steps.'),
+      })
+
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2)
+    expect((mockGenerateObject as any).mock.calls[1][0].prompt).toContain(
+      'Previous attempt failed this safety check:'
+    )
+  })
+
+  it('returns NO_USEFUL_CHANGES and persists a neutral generate message', async () => {
     const sourceDocument = makeDocument('Typed note from the user')
     const { updateCalls } = mockSupabase({
       user: { id: 'user-1' },
@@ -302,30 +406,24 @@ describe('POST /api/meetings/[id]/enhance', () => {
       }),
     })
 
-    ;(mockCompletionCreate as any).mockResolvedValueOnce({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              summary: 'No change',
-              proposed_document_content: sourceDocument,
-            }),
-          },
-        },
-      ],
+    ;(mockGenerateObject as any).mockResolvedValueOnce({
+      object: makeProposal('Typed note from the user', 'No changes'),
     })
 
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'enhance',
-      documentContent: sourceDocument,
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: sourceDocument,
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(409)
     expect(await response.json()).toMatchObject({
-      error: 'No useful changes were proposed',
+      error: ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
       code: 'NO_USEFUL_CHANGES',
     })
     expect(updateCalls).toHaveLength(1)
@@ -333,43 +431,111 @@ describe('POST /api/meetings/[id]/enhance', () => {
     expect(
       ((updateCalls[0] as Record<string, unknown>).enhancement_state as Record<string, unknown>)
         .lastError
-    ).toBe('No useful changes were proposed')
+    ).toBe(ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE)
   })
 
-  it('returns INVALID_PROPOSAL and persists the generate failure state', async () => {
+  it('returns INVALID_PROPOSAL after the repair retry is exhausted and persists the safe message', async () => {
     const { updateCalls } = mockSupabase({
       user: { id: 'user-1' },
       meetingData: makeMeeting(),
     })
 
-    ;(mockCompletionCreate as any).mockResolvedValueOnce({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              summary: 'Broken proposal',
-              proposed_document_content: { type: 'paragraph' },
-            }),
-          },
+    ;(mockGenerateObject as any)
+      .mockResolvedValueOnce({
+        object: {
+          schemaVersion: 1,
+          summary: 'Broken proposal',
+          blocks: [],
         },
-      ],
-    })
+      })
+      .mockResolvedValueOnce({
+        object: {
+          schemaVersion: 1,
+          summary: 'Still broken',
+          blocks: [],
+        },
+      })
 
-    const response = await POST(makeRequest({
-      action: 'generate',
-      mode: 'enhance',
-      documentContent: makeDocument('Typed note from the user'),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(502)
     expect(await response.json()).toMatchObject({
-      error: 'AI returned an invalid draft proposal',
+      error: ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
       code: 'INVALID_PROPOSAL',
     })
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2)
     expect(updateCalls).toHaveLength(1)
     expect((updateCalls[0] as Record<string, unknown>).enhancement_status).toBe('error')
+  })
+
+  it('returns MODEL_FAILED when the provider call fails', async () => {
+    const { updateCalls } = mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: makeMeeting(),
+    })
+
+    ;(mockGenerateObject as any).mockRejectedValueOnce(new Error('provider offline'))
+
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
+
+    expect(response.status).toBe(502)
+    expect(await response.json()).toMatchObject({
+      error: ENHANCEMENT_MODEL_FAILED_MESSAGE,
+      code: 'MODEL_FAILED',
+    })
+    expect(updateCalls).toHaveLength(1)
+  })
+
+  it('fails safely when the current note contains unsupported top-level blocks', async () => {
+    const { updateCalls } = mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: makeMeeting(),
+    })
+
+    const response = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: {
+          type: 'doc',
+          content: [
+            {
+              type: 'orderedList',
+              content: [],
+            },
+          ],
+        },
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({
+      error: ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
+      code: 'INVALID_PROPOSAL',
+    })
+    expect(mockGenerateObject).not.toHaveBeenCalled()
+    expect(updateCalls).toHaveLength(1)
   })
 
   it('persists accepted reviews and records lightweight enhancement metadata', async () => {
@@ -382,14 +548,17 @@ describe('POST /api/meetings/[id]/enhance', () => {
       }),
     })
 
-    const response = await POST(makeRequest({
-      action: 'complete',
-      outcome: 'accepted',
-      sourceHash: hashDocumentContent(sourceDocument),
-      documentContent: acceptedDocument,
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'complete',
+        outcome: 'accepted',
+        sourceHash: hashDocumentContent(sourceDocument),
+        documentContent: acceptedDocument,
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(200)
     expect(updateCalls).toHaveLength(1)
@@ -397,11 +566,15 @@ describe('POST /api/meetings/[id]/enhance', () => {
     const updatePayload = updateCalls[0] as Record<string, unknown>
     expect(updatePayload.document_content).toEqual(acceptedDocument)
     expect(updatePayload.enhancement_status).toBe('idle')
-    expect((updatePayload.enhancement_state as Record<string, unknown>).lastOutcome).toBe('accepted')
+    expect((updatePayload.enhancement_state as Record<string, unknown>).lastOutcome).toBe(
+      'accepted'
+    )
 
     const payload = await response.json()
     expect(payload.document_content).toEqual(acceptedDocument)
-    expect(payload.enhancement_state.lastReviewedSourceHash).toBe(hashDocumentContent(acceptedDocument))
+    expect(payload.enhancement_state.lastReviewedSourceHash).toBe(
+      hashDocumentContent(acceptedDocument)
+    )
     expect(payload.documentHash).toBe(hashDocumentContent(acceptedDocument))
   })
 
@@ -414,20 +587,25 @@ describe('POST /api/meetings/[id]/enhance', () => {
       }),
     })
 
-    const response = await POST(makeRequest({
-      action: 'complete',
-      outcome: 'dismissed',
-      sourceHash: hashDocumentContent(sourceDocument),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'complete',
+        outcome: 'dismissed',
+        sourceHash: hashDocumentContent(sourceDocument),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(200)
     expect(updateCalls).toHaveLength(1)
 
     const updatePayload = updateCalls[0] as Record<string, unknown>
     expect(updatePayload.document_content).toBeUndefined()
-    expect((updatePayload.enhancement_state as Record<string, unknown>).lastOutcome).toBe('dismissed')
+    expect((updatePayload.enhancement_state as Record<string, unknown>).lastOutcome).toBe(
+      'dismissed'
+    )
   })
 
   it('rejects stale source hashes', async () => {
@@ -440,14 +618,17 @@ describe('POST /api/meetings/[id]/enhance', () => {
       }),
     })
 
-    const response = await POST(makeRequest({
-      action: 'complete',
-      outcome: 'accepted',
-      sourceHash: 'stale-hash',
-      documentContent: makeDocument('Updated note'),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'complete',
+        outcome: 'accepted',
+        sourceHash: 'stale-hash',
+        documentContent: makeDocument('Updated note'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(409)
     expect(await response.json()).toMatchObject({
@@ -508,14 +689,17 @@ describe('POST /api/meetings/[id]/enhance', () => {
       from,
     } as never)
 
-    const response = await POST(makeRequest({
-      action: 'complete',
-      outcome: 'accepted',
-      sourceHash: hashDocumentContent(sourceDocument),
-      documentContent: makeDocument('Updated note'),
-    }), {
-      params: Promise.resolve({ id: 'meeting-1' }),
-    })
+    const response = await POST(
+      makeRequest({
+        action: 'complete',
+        outcome: 'accepted',
+        sourceHash: hashDocumentContent(sourceDocument),
+        documentContent: makeDocument('Updated note'),
+      }),
+      {
+        params: Promise.resolve({ id: 'meeting-1' }),
+      }
+    )
 
     expect(response.status).toBe(500)
     expect(await response.json()).toMatchObject({
@@ -523,6 +707,9 @@ describe('POST /api/meetings/[id]/enhance', () => {
       code: 'ENHANCEMENT_FAILED',
     })
     expect((updateCalls[1] as Record<string, unknown>).enhancement_status).toBe('error')
-    expect(((updateCalls[1] as Record<string, unknown>).enhancement_state as Record<string, unknown>).lastError).toBe('DB unavailable')
+    expect(
+      ((updateCalls[1] as Record<string, unknown>).enhancement_state as Record<string, unknown>)
+        .lastError
+    ).toBe('DB unavailable')
   })
 })

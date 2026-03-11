@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { hashDocumentContent } from '@/lib/document-hash'
+import { ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE } from '@/lib/enhancement-errors'
 import type { TiptapDocument } from '@/lib/tiptap-converter'
 import type { Meeting } from '@/lib/types'
 
@@ -230,10 +231,53 @@ describe('MeetingNoteSurface', () => {
       expect(screen.queryByRole('button', { name: /enhance/i })).toBeNull()
     })
 
+    await new Promise((resolve) => setTimeout(resolve, 0))
     fireEvent.click(screen.getByRole('button', { name: /simulate edit/i }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /enhance/i })).not.toBeNull()
+    })
+  })
+
+  it('renders no useful changes as neutral inline feedback instead of a destructive failure', async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url.endsWith('/document')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              documentHash: hashDocumentContent(makeDocument('Typed note from the user')),
+            }),
+            { status: 200 }
+          )
+        )
+      }
+
+      if (url.endsWith('/enhance')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
+              code: 'NO_USEFUL_CHANGES',
+            }),
+            { status: 409 }
+          )
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as unknown as typeof fetch
+
+    render(<MeetingNoteSurface meeting={makeMeeting()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /enhance/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/No changes suggested/i)).not.toBeNull()
+      expect(screen.getByText(ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE)).not.toBeNull()
+      expect(screen.queryByText(/Drafting needs another try/i)).toBeNull()
     })
   })
 })

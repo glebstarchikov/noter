@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -9,26 +9,13 @@ import {
   CheckCircle2,
   Clock,
   Copy,
-  Info,
   Loader2,
-  Mic,
   Monitor,
   MoreHorizontal,
-  Pause,
   Pin,
-  Play,
-  Square,
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,10 +39,12 @@ import { clearChatMessages } from '@/lib/chat-storage'
 import { toast } from 'sonner'
 import { useDeepgramTranscription } from '@/hooks/use-deepgram-transcription'
 import { MeetingNoteSurface } from '@/components/meeting-note-surface'
-import { TranscriptDrawer } from '@/components/transcript-drawer'
+import {
+  buildAssistantTranscriptSegments,
+  MeetingAssistantBridge,
+  type RecordingPhase,
+} from '@/components/assistant-shell-context'
 import type { ActionItem, DiarizedSegment, Meeting } from '@/lib/types'
-
-type RecordingPhase = 'setup' | 'recording' | 'stopping' | 'done'
 
 function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60)
@@ -277,7 +266,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     }
   }
 
-  const handleStartRecording = async () => {
+  const handleStartRecording = useCallback(async () => {
     try {
       let finalStream: MediaStream
       setHasSystemAudio(false)
@@ -337,7 +326,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Could not access audio')
     }
-  }
+  }, [recordSystemAudio, startTranscription])
 
   const togglePause = useCallback(() => {
     const recorder = mediaRecorderRef.current
@@ -459,10 +448,61 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   const showRecordingControls = meeting.status === 'recording'
   const live = showRecordingControls && (phase === 'recording' || phase === 'stopping')
   const transcriptForDrawer = savedTranscript || meeting.transcript
-  const transcriptSegments = liveSegments.length > 0 ? liveSegments : savedSegments
+  const assistantTranscriptSegments = useMemo(
+    () =>
+      liveSegments.length > 0
+        ? liveSegments.map((segment) => ({
+            speaker: segment.speaker,
+            text: segment.text,
+            isFinal: segment.isFinal,
+          }))
+        : buildAssistantTranscriptSegments({
+            transcript: transcriptForDrawer,
+            diarizedTranscript: savedSegments,
+          }),
+    [liveSegments, savedSegments, transcriptForDrawer]
+  )
+  const assistantContext = useMemo(
+    () => ({
+      sourceId: `meeting:${meeting.id}`,
+      meetingId: meeting.id,
+      meetingTitle: meeting.title,
+      transcriptAvailable:
+        Boolean(transcriptForDrawer?.trim()) || assistantTranscriptSegments.length > 0,
+      transcriptText: transcriptForDrawer ?? '',
+      transcriptSegments: assistantTranscriptSegments,
+      recordingPhase: phase,
+      live,
+      isPaused,
+      durationSeconds: duration,
+      recordSystemAudio,
+      hasSystemAudio,
+      onToggleRecordSystemAudio: setRecordSystemAudio,
+      onStartRecording: handleStartRecording,
+      onTogglePause: togglePause,
+      onStop: handleStop,
+    }),
+    [
+      assistantTranscriptSegments,
+      duration,
+      handleStartRecording,
+      handleStop,
+      hasSystemAudio,
+      isPaused,
+      live,
+      meeting.id,
+      meeting.title,
+      phase,
+      recordSystemAudio,
+      togglePause,
+      transcriptForDrawer,
+    ]
+  )
 
   return (
     <>
+      <MeetingAssistantBridge context={assistantContext} />
+
       <div className="flex flex-col gap-8">
         <PageHeader
           meeting={meeting}
@@ -512,82 +552,15 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
                 {formatTime(duration)}
               </span>
 
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {phase === 'setup' && (
-                  <>
-                    <TooltipProvider>
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          id="system-audio"
-                          checked={recordSystemAudio}
-                          onCheckedChange={setRecordSystemAudio}
-                        />
-                        <Label htmlFor="system-audio" className="flex cursor-pointer items-center gap-1.5 text-sm text-foreground">
-                          <Monitor className="size-3.5 text-muted-foreground" />
-                          Include system audio
-                        </Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost-icon"
-                              size="icon-xs"
-                              className="rounded-full"
-                              aria-label="What is system audio?"
-                            >
-                              <Info className="size-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[240px] text-xs">
-                            Capture audio from your computer, like Zoom or Google Meet. You&apos;ll be asked to share a tab or screen.
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TooltipProvider>
-
-                    <Button onClick={handleStartRecording} className="gap-2">
-                      <Mic className="size-4" />
-                      Start recording
-                    </Button>
-                  </>
-                )}
-
-                {phase !== 'setup' && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={togglePause}
-                      disabled={phase === 'stopping' || phase === 'done'}
-                      className="h-8 gap-1.5 border-border text-muted-foreground hover:text-foreground"
-                    >
-                      {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-                      <span className="text-xs">{isPaused ? 'Resume' : 'Pause'}</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleStop}
-                      disabled={phase === 'stopping' || phase === 'done'}
-                      className="h-8 gap-1.5 bg-foreground text-background hover:bg-foreground/90"
-                    >
-                      {phase === 'stopping' || phase === 'done'
-                        ? <Loader2 className="size-3.5 animate-spin" />
-                        : <Square className="size-3" />}
-                      <span className="text-xs">
-                        {phase === 'stopping' || phase === 'done' ? 'Working…' : 'Stop'}
-                      </span>
-                    </Button>
-                  </>
-                )}
-              </div>
             </div>
 
             <p className="text-sm leading-6 text-muted-foreground">
               {phase === 'setup'
-                ? 'Start recording when you are ready. Your note stays here while the transcript lives in the side transcript view.'
+                ? 'Use the assistant dock to start recording. Your note stays here while the live transcript and controls move into the assistant shell.'
                 : phase === 'done'
                   ? 'The recording is saved. noter is filling in the title, summary, and action items in the background.'
                   : isConnected
-                    ? 'The transcript is streaming live into the transcript view.'
+                    ? 'The transcript is streaming live into the assistant shell.'
                     : 'Connecting your microphone and live transcript…'}
             </p>
           </div>
@@ -625,14 +598,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           isRecordingComplete={phase === 'done' || meeting.status !== 'recording'}
         />
       </div>
-
-      <TranscriptDrawer
-        transcript={transcriptForDrawer}
-        liveSegments={transcriptSegments}
-        live={live}
-        alwaysVisible
-        emptyMessage="Transcript will appear here once recording starts."
-      />
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
