@@ -1,7 +1,7 @@
 import { gateway, streamText, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { errorResponse } from '@/lib/api-helpers'
-import { resolveChatModel } from '@/lib/ai-models'
+import { DEFAULT_CHAT_MODEL, resolveChatModel } from '@/lib/ai-models'
 import { buildChatModelMessages } from '@/lib/chat-message-utils'
 import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/prompts'
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const { messages } = parsedBody.data
 
     const result = streamText({
-      model: gateway(resolveChatModel('balanced')),
+      model: gateway(resolveChatModel(DEFAULT_CHAT_MODEL)),
       system: SUPPORT_CHAT_SYSTEM_PROMPT,
       messages: await buildChatModelMessages(messages as UIMessage[]),
       abortSignal: req.signal,

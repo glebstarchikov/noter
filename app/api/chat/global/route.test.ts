@@ -148,7 +148,7 @@ describe('POST /api/chat/global', () => {
 
     const response = await POST(makeRequest({
       messages: [],
-      modelTier: 'premium',
+      model: 'gpt-5.4',
       searchEnabled: false,
     }))
 

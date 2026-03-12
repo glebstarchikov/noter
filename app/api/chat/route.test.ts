@@ -127,7 +127,7 @@ describe('POST /api/chat', () => {
     const response = await POST(makeRequest({
       meetingId: 'meeting-1',
       messages: [],
-      modelTier: 'premium',
+      model: 'gpt-5.4',
       searchEnabled: false,
     }))
 

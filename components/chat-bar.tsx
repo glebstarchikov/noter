@@ -10,22 +10,25 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  MoreHorizontal,
   Paperclip,
   Search,
   Send,
-  Sparkles,
   X,
 } from 'lucide-react'
-import type { ChatModelTier } from '@/lib/ai-models'
+import {
+  CHAT_MODEL_OPTIONS,
+  DEFAULT_CHAT_MODEL,
+  getChatModelLabel,
+  type ChatModelId,
+} from '@/lib/ai-models'
 import { ChatMessageAttachments } from '@/components/chat-message-attachments'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuLabel,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -152,6 +155,12 @@ function getErrorMessage(error: Error | undefined) {
   return 'Something went wrong. Please try again.'
 }
 
+function getComposerPrompt(scope: ChatSurfaceScope) {
+  if (scope === 'support') return 'Ask about noter...'
+  if (scope === 'meeting') return 'Ask about this note...'
+  return 'Ask across your notes...'
+}
+
 export function ChatBar({
   authenticated,
   allowGlobalToggle = false,
@@ -162,7 +171,7 @@ export function ChatBar({
   const [activeScope, setActiveScope] = useState<ChatSurfaceScope>(defaultScope)
   const [input, setInput] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
-  const [modelTier, setModelTier] = useState<ChatModelTier>('balanced')
+  const [model, setModel] = useState<ChatModelId>(DEFAULT_CHAT_MODEL)
   const [searchEnabled, setSearchEnabled] = useState(false)
   const [files, setFiles] = useState<FileList | undefined>(undefined)
   const [hasHydratedMessages, setHasHydratedMessages] = useState(false)
@@ -242,13 +251,12 @@ export function ChatBar({
   }, [activeScope, hasHydratedMessages, meetingId, messages])
 
   useEffect(() => {
-    const focusComposer = () => {
-      inputRef.current?.focus()
-    }
-
     if (!isExpanded) return
 
-    const frame = window.requestAnimationFrame(focusComposer)
+    const frame = window.requestAnimationFrame(() => {
+      inputRef.current?.focus()
+    })
+
     return () => window.cancelAnimationFrame(frame)
   }, [isExpanded])
 
@@ -336,10 +344,10 @@ export function ChatBar({
   const isStreaming = status === 'streaming'
   const canAttach = authenticated && activeScope !== 'support'
   const canUseTools = activeScope !== 'support'
-  const selectedFiles = files ? Array.from(files) : []
-  const showTopAddon = activeScope === 'support' || allowGlobalToggle || selectedFiles.length > 0
+  const selectedFiles = useMemo(() => (files ? Array.from(files) : []), [files])
   const submitDisabled = isLoading || (!input.trim() && selectedFiles.length === 0)
   const errorMessage = getErrorMessage(error)
+  const prompt = getComposerPrompt(activeScope)
 
   const handleClearChat = useCallback(() => {
     clearStoredMessages(activeScope, meetingId)
@@ -363,59 +371,33 @@ export function ChatBar({
           activeScope === 'support'
             ? undefined
             : {
-                modelTier,
+                model,
                 searchEnabled,
               },
       })
 
       resetComposer()
     },
-    [
-      activeScope,
-      canAttach,
-      files,
-      modelTier,
-      resetComposer,
-      searchEnabled,
-      sendMessage,
-      submitDisabled,
-    ]
+    [activeScope, canAttach, files, model, resetComposer, searchEnabled, sendMessage, submitDisabled]
   )
 
-  const scopeLabel =
-    activeScope === 'support'
-      ? 'Support'
-      : activeScope === 'meeting'
-        ? 'This note'
-        : 'All notes'
+  const removeSelectedFile = useCallback(
+    (index: number) => {
+      const remainingFiles = selectedFiles.filter((_, fileIndex) => fileIndex !== index)
+      if (remainingFiles.length === 0) {
+        setFiles(undefined)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
 
-  const dockDescription =
-    activeScope === 'support'
-      ? 'Website and product help'
-      : activeScope === 'meeting'
-        ? 'Current note context'
-        : 'Across every note'
-
-  const placeholder =
-    activeScope === 'support'
-      ? 'Ask about noter...'
-      : activeScope === 'meeting'
-        ? 'Ask about this note...'
-        : 'Ask across all notes...'
-
-  const emptyStateTitle =
-    activeScope === 'support'
-      ? 'Support chat'
-      : activeScope === 'meeting'
-        ? 'Current note chat'
-        : 'Global note chat'
-
-  const emptyStateDescription =
-    activeScope === 'support'
-      ? 'Ask about noter features, setup, or how the product works.'
-      : activeScope === 'meeting'
-        ? 'Ask about the current note, compare attachments, or inspect transcript details.'
-        : 'Ask across your notes to find patterns, summaries, and follow-ups.'
+      const nextFiles = new DataTransfer()
+      remainingFiles.forEach((remainingFile) => nextFiles.items.add(remainingFile))
+      setFiles(nextFiles.files)
+    },
+    [selectedFiles]
+  )
 
   return (
     <>
@@ -431,108 +413,61 @@ export function ChatBar({
           ref={shellRef}
           data-slot="chatbar-shell"
           data-state={isExpanded ? 'expanded' : 'collapsed'}
+          data-generating={isLoading ? 'true' : 'false'}
           className={cn(
-            'liquid-glass-shell pointer-events-auto flex w-[calc(100vw-1rem)] max-w-[44rem] flex-col overflow-hidden rounded-[30px] transition-[height,transform] duration-200 ease-out',
+            'liquid-glass-shell pointer-events-auto flex w-[calc(100vw-1rem)] max-w-[44rem] flex-col overflow-hidden rounded-[30px] transition-[height,transform,box-shadow,border-color] duration-200 ease-out',
             isExpanded ? 'h-[min(70vh,32rem)]' : 'h-16'
           )}
         >
           {isExpanded ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{scopeLabel}</Badge>
-                  {searchEnabled && canUseTools ? (
-                    <Badge variant="outline" className="gap-1">
-                      <Search className="size-3" />
-                      Web
-                    </Badge>
-                  ) : null}
-                </div>
-
-                <div className="flex items-center gap-1">
-                  {messages.length > 0 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleClearChat}
-                      className="text-muted-foreground"
-                    >
-                      Clear
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost-icon"
-                    size="icon-sm"
-                    onClick={collapse}
-                    aria-label="Collapse chat"
-                    className="text-muted-foreground"
-                  >
-                    <ChevronDown />
-                  </Button>
-                </div>
-              </div>
-
               <ScrollArea className="min-h-0 flex-1">
-                <div className="flex min-h-full flex-col justify-end gap-4 px-4 py-4">
+                <div className="flex min-h-full flex-col justify-end gap-4 px-4 pb-2 pt-4">
                   <div role="log" aria-live="polite" className="flex flex-col gap-4">
-                    {messages.length === 0 ? (
-                      <div className="flex min-h-[10rem] flex-col items-start justify-center gap-2 rounded-[24px] border border-dashed border-border/70 bg-background/30 px-5 py-6 text-left">
-                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                          <Sparkles className="size-4 text-accent" />
-                          {emptyStateTitle}
+                    {messages.map((message) => {
+                      const text = getMessageText(message)
+
+                      return (
+                        <div
+                          key={message.id}
+                          className={cn(
+                            'flex flex-col gap-2',
+                            message.role === 'user' ? 'items-end' : 'items-start'
+                          )}
+                        >
+                          <span className="px-1 text-[11px] text-muted-foreground">
+                            {message.role === 'user' ? 'You' : 'noter'}
+                          </span>
+
+                          <ChatMessageAttachments message={message} />
+
+                          {text ? (
+                            <div
+                              className={cn(
+                                'max-w-[90%] rounded-[24px] px-4 py-3 text-sm leading-7',
+                                message.role === 'user'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'border border-border/60 bg-background/55 text-foreground'
+                              )}
+                            >
+                              {message.role === 'user' ? (
+                                <div className="whitespace-pre-wrap">{text}</div>
+                              ) : (
+                                <div className="prose prose-sm max-w-none break-words text-foreground dark:prose-invert [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:pl-5 [&>ol]:mb-2 [&>ol]:pl-5">
+                                  <ReactMarkdown>{text}</ReactMarkdown>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
-                        <p className="max-w-md text-sm leading-6 text-muted-foreground">
-                          {emptyStateDescription}
-                        </p>
-                      </div>
-                    ) : (
-                      messages.map((message) => {
-                        const text = getMessageText(message)
-
-                        return (
-                          <div
-                            key={message.id}
-                            className={cn(
-                              'flex flex-col gap-2',
-                              message.role === 'user' ? 'items-end' : 'items-start'
-                            )}
-                          >
-                            <span className="px-1 text-[11px] text-muted-foreground">
-                              {message.role === 'user' ? 'You' : 'noter'}
-                            </span>
-
-                            <ChatMessageAttachments message={message} />
-
-                            {text ? (
-                              <div
-                                className={cn(
-                                  'max-w-[90%] rounded-[24px] px-4 py-3 text-sm leading-7',
-                                  message.role === 'user'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'border border-border/60 bg-background/55 text-foreground'
-                                )}
-                              >
-                                {message.role === 'user' ? (
-                                  <div className="whitespace-pre-wrap">{text}</div>
-                                ) : (
-                                  <div className="prose prose-sm max-w-none break-words text-foreground dark:prose-invert [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:pl-5 [&>ol]:mb-2 [&>ol]:pl-5">
-                                    <ReactMarkdown>{text}</ReactMarkdown>
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
-                          </div>
-                        )
-                      })
-                    )}
+                      )
+                    })}
 
                     {isLoading ? (
                       <div className="flex items-start">
                         <div className="flex max-w-[90%] items-center gap-2 rounded-[24px] border border-border/60 bg-background/55 px-4 py-3 text-sm text-muted-foreground">
                           <Loader2 className="size-4 animate-spin" />
-                          {isStreaming ? 'Writing a response…' : 'Thinking…'}
+                          {isStreaming ? 'Writing a response...' : 'Thinking...'}
                         </div>
                       </div>
                     ) : null}
@@ -542,7 +477,7 @@ export function ChatBar({
                 </div>
               </ScrollArea>
 
-              <div className="border-t border-border/50 px-3 py-3">
+              <div className="px-3 pb-3 pt-2">
                 {errorMessage ? (
                   <Alert variant="destructive" className="mb-3 border-destructive/20 bg-destructive/5">
                     <AlertCircle />
@@ -556,59 +491,7 @@ export function ChatBar({
                     handleSubmit(input)
                   }}
                 >
-                  <InputGroup className="liquid-glass-input h-auto rounded-[26px] border-border/70 bg-background/55 shadow-none">
-                    {showTopAddon ? (
-                      <InputGroupAddon
-                        align="block-start"
-                        className="border-b border-border/50 flex-wrap gap-2"
-                      >
-                        {allowGlobalToggle ? (
-                          <ToggleGroup
-                            type="single"
-                            variant="outline"
-                            size="sm"
-                            value={activeScope === 'meeting' ? 'meeting' : 'global'}
-                            onValueChange={(value) => {
-                              if (value === 'meeting' || value === 'global') {
-                                setActiveScope(value)
-                              }
-                            }}
-                            aria-label="Chat scope"
-                          >
-                            <ToggleGroupItem value="meeting" aria-label="This note">
-                              This note
-                            </ToggleGroupItem>
-                            <ToggleGroupItem value="global" aria-label="All notes">
-                              All notes
-                            </ToggleGroupItem>
-                          </ToggleGroup>
-                        ) : activeScope === 'support' ? (
-                          <Badge variant="outline">Support</Badge>
-                        ) : null}
-
-                        {selectedFiles.map((file, index) => (
-                          <AttachmentChip
-                            key={`${file.name}-${index}`}
-                            file={file}
-                            onRemove={() => {
-                              const remainingFiles = selectedFiles.filter((_, fileIndex) => fileIndex !== index)
-                              if (remainingFiles.length === 0) {
-                                setFiles(undefined)
-                                if (fileInputRef.current) {
-                                  fileInputRef.current.value = ''
-                                }
-                                return
-                              }
-
-                              const nextFiles = new DataTransfer()
-                              remainingFiles.forEach((remainingFile) => nextFiles.items.add(remainingFile))
-                              setFiles(nextFiles.files)
-                            }}
-                          />
-                        ))}
-                      </InputGroupAddon>
-                    ) : null}
-
+                  <InputGroup className="liquid-glass-input h-auto rounded-[26px] border-border/60 shadow-none">
                     <InputGroupTextarea
                       ref={inputRef}
                       value={input}
@@ -620,16 +503,52 @@ export function ChatBar({
                           handleSubmit(input)
                         }
                       }}
-                      placeholder={placeholder}
+                      placeholder={prompt}
                       disabled={isLoading}
-                      aria-label={placeholder}
-                      className="max-h-36 min-h-24 overflow-y-auto px-4 py-3 text-sm"
+                      aria-label={prompt}
+                      className="max-h-36 min-h-24 overflow-y-auto px-4 py-4 text-sm"
                     />
 
-                    <InputGroupAddon
-                      align="block-end"
-                      className="border-t border-border/50 flex-wrap gap-2"
-                    >
+                    {selectedFiles.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 px-3 pb-1">
+                        {selectedFiles.map((file, index) => (
+                          <AttachmentChip
+                            key={`${file.name}-${index}`}
+                            file={file}
+                            onRemove={() => removeSelectedFile(index)}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <InputGroupAddon align="block-end" className="flex-wrap gap-2 pt-2">
+                      {allowGlobalToggle ? (
+                        <ToggleGroup
+                          type="single"
+                          variant="outline"
+                          size="sm"
+                          value={activeScope === 'meeting' ? 'meeting' : 'global'}
+                          onValueChange={(value) => {
+                            if (value === 'meeting' || value === 'global') {
+                              setActiveScope(value)
+                            }
+                          }}
+                          aria-label="Chat scope"
+                          className="liquid-glass-toolbar"
+                        >
+                          <ToggleGroupItem value="meeting" aria-label="This note">
+                            This note
+                          </ToggleGroupItem>
+                          <ToggleGroupItem value="global" aria-label="All notes">
+                            All notes
+                          </ToggleGroupItem>
+                        </ToggleGroup>
+                      ) : activeScope === 'support' ? (
+                        <Badge variant="secondary" className="rounded-full px-3 py-1">
+                          Support
+                        </Badge>
+                      ) : null}
+
                       {canAttach ? (
                         <>
                           <input
@@ -645,10 +564,10 @@ export function ChatBar({
                             }}
                           />
                           <InputGroupButton
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => fileInputRef.current?.click()}
-                            className="liquid-glass-control border-border/60"
+                            className="liquid-glass-control border border-border/40"
                           >
                             <Paperclip />
                             Add context
@@ -657,36 +576,69 @@ export function ChatBar({
                       ) : null}
 
                       {canUseTools ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <InputGroupButton
-                              variant="ghost"
-                              size="sm"
-                              className="liquid-glass-control border border-border/50"
-                            >
-                              Auto
-                            </InputGroupButton>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-56">
-                            <DropdownMenuLabel>Model</DropdownMenuLabel>
-                            <DropdownMenuRadioGroup
-                              value={modelTier}
-                              onValueChange={(value) => setModelTier(value as ChatModelTier)}
-                            >
-                              <DropdownMenuRadioItem value="fast">Fast</DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem value="balanced">Balanced</DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem value="premium">Premium</DropdownMenuRadioItem>
-                            </DropdownMenuRadioGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuCheckboxItem
-                              checked={searchEnabled}
-                              onCheckedChange={(checked) => setSearchEnabled(Boolean(checked))}
-                            >
-                              Web search
-                            </DropdownMenuCheckboxItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <>
+                          <InputGroupButton
+                            variant={searchEnabled ? 'secondary' : 'ghost'}
+                            size="sm"
+                            aria-pressed={searchEnabled}
+                            onClick={() => setSearchEnabled((current) => !current)}
+                            className="liquid-glass-control border border-border/40"
+                          >
+                            <Search />
+                            Search web
+                          </InputGroupButton>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <InputGroupButton
+                                variant="ghost"
+                                size="sm"
+                                className="liquid-glass-control border border-border/40"
+                              >
+                                {getChatModelLabel(model)}
+                                <ChevronDown />
+                              </InputGroupButton>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-52">
+                              <DropdownMenuRadioGroup
+                                value={model}
+                                onValueChange={(value) => setModel(value as ChatModelId)}
+                              >
+                                {CHAT_MODEL_OPTIONS.map((option) => (
+                                  <DropdownMenuRadioItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </DropdownMenuRadioItem>
+                                ))}
+                              </DropdownMenuRadioGroup>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
                       ) : null}
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <InputGroupButton
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="More chat actions"
+                            className="liquid-glass-control border border-border/40"
+                          >
+                            <MoreHorizontal />
+                          </InputGroupButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem
+                            disabled={messages.length === 0}
+                            onSelect={() => handleClearChat()}
+                          >
+                            Clear conversation
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={() => collapse()}>
+                            Collapse
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
 
                       <InputGroupButton
                         type="submit"
@@ -708,26 +660,12 @@ export function ChatBar({
               ref={dockButtonRef}
               type="button"
               onClick={() => setIsExpanded(true)}
-              className="liquid-glass-dock flex h-full w-full items-center justify-between rounded-[30px] px-4 text-left transition-transform"
+              className="liquid-glass-dock flex h-full w-full items-center justify-between gap-4 rounded-[30px] px-4 text-left transition-transform"
               aria-expanded="false"
               aria-label="Open chat"
             >
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="liquid-glass-orb flex size-10 items-center justify-center rounded-full">
-                  <Sparkles className="size-4 text-foreground" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">Chat with noter</p>
-                  <p className="truncate text-xs text-muted-foreground">{dockDescription}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="hidden sm:inline-flex">
-                  {scopeLabel}
-                </Badge>
-                <span className="hidden text-[11px] text-muted-foreground md:inline">⌘J</span>
-              </div>
+              <span className="truncate text-sm text-muted-foreground">{prompt}</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">⌘J</span>
             </button>
           )}
         </div>

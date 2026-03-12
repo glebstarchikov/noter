@@ -5,7 +5,7 @@ import { isStringArray, isActionItemArray } from '@/lib/type-guards'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
-import { resolveChatModel, resolveChatModelTier } from '@/lib/ai-models'
+import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
 import { buildChatModelMessages, getLastUserText } from '@/lib/chat-message-utils'
 import { tiptapToPlainText } from '@/lib/tiptap-converter'
 import { searchWeb } from '@/lib/tavily'
@@ -24,7 +24,7 @@ export const maxDuration = 60
 const chatRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
   messages: z.array(z.unknown()).default([]),
-  modelTier: z.enum(['fast', 'balanced', 'premium']).optional(),
+  model: z.enum(['gpt-5-mini', 'gpt-5.4']).optional(),
   searchEnabled: z.boolean().optional().default(false),
 })
 
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     const { meetingId, messages, searchEnabled } = parsedBody.data
-    const modelTier = resolveChatModelTier(parsedBody.data.modelTier)
+    const model = resolveChatModelId(parsedBody.data.model)
 
     const { data: meeting } = await supabase
       .from('meetings')
@@ -153,7 +153,7 @@ Here is the meeting context:
 ${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` : ''}`
 
     const result = streamText({
-      model: gateway(resolveChatModel(modelTier)),
+      model: gateway(resolveChatModel(model)),
       system: systemPrompt,
       messages: await buildChatModelMessages(messages as UIMessage[]),
       abortSignal: req.signal,

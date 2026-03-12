@@ -60,7 +60,7 @@ describe('POST /api/chat/support', () => {
 
     expect(response.status).toBe(200)
     expect(mockBuildChatModelMessages).toHaveBeenCalled()
-    expect(mockGateway).toHaveBeenCalledWith('anthropic/claude-sonnet-4.5')
+    expect(mockGateway).toHaveBeenCalledWith('openai/gpt-5-mini')
   })
 
   it('grounds the assistant in noter-only support instructions', async () => {

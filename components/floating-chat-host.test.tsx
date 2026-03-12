@@ -132,7 +132,8 @@ describe('FloatingChatHost', () => {
 
     expect((await screen.findAllByText('Support')).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /add context/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Auto$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /search web/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /GPT-5 mini/i })).toBeNull()
   })
 
   it('defaults note pages to meeting scope and hydrates the global thread when switched', async () => {
@@ -169,30 +170,36 @@ describe('FloatingChatHost', () => {
 
     render(<FloatingChatHost />)
 
+    expect(screen.getByText('⌘J')).not.toBeNull()
+
     fireEvent.click(screen.getByRole('button', { name: /open chat/i }))
 
-    expect(await screen.findByLabelText('Ask across all notes...')).not.toBeNull()
-    expect(
-      screen
-        .getByRole('region', { name: 'Chat with noter' })
-        .querySelector('[data-slot="chatbar-shell"]')
-        ?.getAttribute('data-state')
-    ).toBe('expanded')
+    expect(await screen.findByLabelText('Ask across your notes...')).not.toBeNull()
+
+    const shell = screen
+      .getByRole('region', { name: 'Chat with noter' })
+      .querySelector('[data-slot="chatbar-shell"]')
+
+    expect(shell?.getAttribute('data-state')).toBe('expanded')
+    expect(shell?.getAttribute('data-generating')).toBe('false')
+    expect(screen.getByText('GPT-5 mini')).not.toBeNull()
+    expect(screen.queryByText('Across every note')).toBeNull()
+    expect(screen.queryByText('Global note chat')).toBeNull()
 
     fireEvent.keyDown(window, { key: 'Escape' })
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('Ask across all notes...')).toBeNull()
+      expect(screen.queryByLabelText('Ask across your notes...')).toBeNull()
     })
 
     fireEvent.keyDown(window, { key: 'j', metaKey: true })
 
-    expect(await screen.findByLabelText('Ask across all notes...')).not.toBeNull()
+    expect(await screen.findByLabelText('Ask across your notes...')).not.toBeNull()
 
     fireEvent.mouseDown(document.body)
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('Ask across all notes...')).toBeNull()
+      expect(screen.queryByLabelText('Ask across your notes...')).toBeNull()
     })
   })
 
