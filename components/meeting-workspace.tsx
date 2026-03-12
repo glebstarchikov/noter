@@ -11,14 +11,22 @@ import {
   Clock,
   Copy,
   Loader2,
+  Mic,
   Monitor,
   MoreHorizontal,
+  Pause,
   Pin,
+  Play,
+  Square,
   Trash2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-shell'
 import { StatusPanel } from '@/components/status-panel'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   AlertDialog,
@@ -72,6 +80,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null)
 
   const { startTranscription, stopTranscription, isConnected, liveSegments } =
     useDeepgramTranscription()
@@ -101,6 +110,20 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       }
     }
   }, [])
+
+  // Auto-scroll live transcript to the latest segment
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [liveSegments])
+
+  // Toast when notes finish generating after recording
+  const prevStatusRef = useRef(meeting.status)
+  useEffect(() => {
+    if (prevStatusRef.current === 'generating' && meeting.status === 'done') {
+      toast.success('Your notes are ready.')
+    }
+    prevStatusRef.current = meeting.status
+  }, [meeting.status])
 
   const resetRecordingSurface = useCallback(() => {
     setPhase('setup')
@@ -450,57 +473,120 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           }
         />
 
-        {showRecordingControls ? (
+        {showRecordingControls && phase === 'setup' && (
+          <StatusPanel
+            icon={
+              <span className="relative flex size-2 shrink-0">
+                <span className="relative inline-flex size-2 rounded-full bg-muted-foreground/40" />
+              </span>
+            }
+            title="Ready to record"
+            description="Press Start to begin. The live transcript will appear as you speak."
+            actions={
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="lg"
+                  className="rounded-full gap-2"
+                  onClick={handleStartRecording}
+                >
+                  <Mic className="size-4" />
+                  Start recording
+                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={recordSystemAudio}
+                        onCheckedChange={setRecordSystemAudio}
+                      />
+                      <Label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Monitor className="size-3.5" />
+                        System audio
+                      </Label>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Also capture audio playing on your device</TooltipContent>
+                </Tooltip>
+              </div>
+            }
+          />
+        )}
+
+        {showRecordingControls && phase === 'recording' && (
           <StatusPanel
             icon={
               <span className="relative flex size-2 shrink-0">
                 <span
                   className={cn(
                     'absolute inline-flex h-full w-full rounded-full opacity-75',
-                    !isPaused && phase === 'recording' ? 'animate-ping bg-accent' : 'bg-muted-foreground'
+                    !isPaused ? 'animate-ping bg-accent' : 'bg-muted-foreground'
                   )}
                 />
                 <span
                   className={cn(
                     'relative inline-flex size-2 rounded-full',
-                    !isPaused && phase === 'recording' ? 'bg-accent' : 'bg-muted-foreground/40'
+                    !isPaused ? 'bg-accent' : 'bg-muted-foreground/40'
                   )}
                 />
               </span>
             }
             title={
               <span className="flex flex-wrap items-center gap-3">
-                <span>
-                  {phase === 'stopping'
-                    ? 'Saving your recording…'
-                    : phase === 'done'
-                      ? 'Preparing meeting metadata…'
-                      : phase === 'recording'
-                        ? (isPaused ? 'Paused' : 'Recording now')
-                        : 'Ready to record'}
-                </span>
-                {hasSystemAudio ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
+                <span>{isPaused ? 'Paused' : 'Recording now'}</span>
+                {hasSystemAudio && (
+                  <Badge variant="secondary" className="rounded-full">
                     <Monitor className="size-3" />
                     System audio
-                  </span>
-                ) : null}
+                  </Badge>
+                )}
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
                   {formatTime(duration)}
                 </span>
               </span>
             }
             description={
-              phase === 'setup'
-                ? 'Use the assistant dock to start recording. Your note stays here while the live transcript and controls move into the assistant shell.'
-                : phase === 'done'
-                  ? 'The recording is saved. noter is filling in the title, summary, and action items in the background.'
-                  : isConnected
-                    ? 'The transcript is streaming live into the assistant shell.'
-                    : 'Connecting your microphone and live transcript…'
+              isConnected
+                ? 'Live transcript appears below. Stop when you\u2019re done.'
+                : 'Connecting your microphone and live transcript\u2026'
+            }
+            actions={
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="rounded-full"
+                      onClick={togglePause}
+                    >
+                      {isPaused ? <Play className="size-4" /> : <Pause className="size-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{isPaused ? 'Resume' : 'Pause'}</TooltipContent>
+                </Tooltip>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="rounded-full gap-2"
+                  onClick={handleStop}
+                >
+                  <Square className="size-3.5" />
+                  Stop recording
+                </Button>
+              </div>
             }
           />
-        ) : (
+        )}
+
+        {showRecordingControls && phase === 'stopping' && (
+          <StatusPanel
+            icon={<Loader2 className="animate-spin text-accent" />}
+            title="Saving your recording\u2026"
+            description="Uploading audio and preparing your transcript."
+          />
+        )}
+
+        {showRecordingControls && phase === 'done' && (
           <StatusPanel
             tone={meeting.status === 'error' ? 'destructive' : 'default'}
             icon={
@@ -514,19 +600,105 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
             }
             title={
               meeting.status === 'generating'
-                ? 'Preparing meeting metadata in the background'
+                ? 'Building your notes'
                 : meeting.status === 'error'
                   ? 'Automatic note generation hit a problem'
                   : 'Recording complete'
             }
             description={
-              meeting.status === 'generating'
-                ? 'Your editor stays available while noter updates the meeting title, summary, and action items.'
-                : meeting.status === 'error'
-                  ? meeting.error_message || 'Please try again.'
-                  : 'Your note stays editable. Open the transcript only when you need more detail.'
+              meeting.status === 'generating' ? (
+                <span className="mt-2 flex flex-col gap-2">
+                  <span className="flex items-center gap-3">
+                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
+                    <span className="text-sm font-medium text-accent">Audio saved</span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
+                    <span className="text-sm font-medium text-accent">Transcript analyzed</span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <Loader2 className="size-4 shrink-0 animate-spin text-foreground" />
+                    <span className="text-sm font-semibold text-foreground">Writing your notes\u2026</span>
+                  </span>
+                </span>
+              ) : meeting.status === 'error'
+                ? meeting.error_message || 'Please try again.'
+                : 'Your note stays editable. Open the transcript only when you need more detail.'
             }
           />
+        )}
+
+        {!showRecordingControls && (
+          <StatusPanel
+            tone={meeting.status === 'error' ? 'destructive' : 'default'}
+            icon={
+              meeting.status === 'generating' ? (
+                <Loader2 className="animate-spin text-accent" />
+              ) : meeting.status === 'error' ? (
+                <AlertCircle className="text-destructive" />
+              ) : (
+                <CheckCircle2 className="text-accent" />
+              )
+            }
+            title={
+              meeting.status === 'generating'
+                ? 'Building your notes'
+                : meeting.status === 'error'
+                  ? 'Automatic note generation hit a problem'
+                  : 'Recording complete'
+            }
+            description={
+              meeting.status === 'generating' ? (
+                <span className="mt-2 flex flex-col gap-2">
+                  <span className="flex items-center gap-3">
+                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
+                    <span className="text-sm font-medium text-accent">Audio saved</span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
+                    <span className="text-sm font-medium text-accent">Transcript analyzed</span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <Loader2 className="size-4 shrink-0 animate-spin text-foreground" />
+                    <span className="text-sm font-semibold text-foreground">Writing your notes\u2026</span>
+                  </span>
+                </span>
+              ) : meeting.status === 'error'
+                ? meeting.error_message || 'Please try again.'
+                : 'Your note stays editable. Open the transcript only when you need more detail.'
+            }
+          />
+        )}
+
+        {live && (
+          <div className="surface-utility rounded-[24px] px-6 py-4">
+            <p className="mb-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+              Live transcript
+            </p>
+            <ScrollArea className="max-h-[280px]">
+              <div className="space-y-2">
+                {liveSegments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Transcript will appear here as you speak.
+                  </p>
+                ) : (
+                  liveSegments.map((segment, i) => (
+                    <p
+                      key={i}
+                      className={cn(
+                        'text-sm leading-7',
+                        !segment.isFinal && 'text-muted-foreground/60'
+                      )}
+                    >
+                      <span className="font-medium text-foreground">{segment.speaker}:</span>{' '}
+                      {segment.text}
+                    </p>
+                  ))
+                )}
+                <div ref={transcriptEndRef} />
+              </div>
+            </ScrollArea>
+          </div>
         )}
 
         <MeetingNoteSurface

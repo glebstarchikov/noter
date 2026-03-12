@@ -177,7 +177,7 @@ describe('POST /api/generate-notes', () => {
     expect(completionCall.messages[0].content).toContain('Selected note format: Sales Call')
 
     const finalUpdate = updateCalls[1] as Record<string, unknown>
-    expect(finalUpdate.document_content).toBeUndefined()
+    expect(finalUpdate.document_content).toBeDefined()
     expect(finalUpdate.title).toBe('Weekly sync')
     expect(finalUpdate.status).toBe('done')
   })

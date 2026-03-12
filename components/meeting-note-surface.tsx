@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
-import { AlertCircle, Loader2, RefreshCcw, Sparkles, Undo2, X } from 'lucide-react'
+import { AlertCircle, Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MeetingEditor } from '@/components/meeting-editor'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { hashDocumentContent } from '@/lib/document-hash'
 import {
   isDocumentSaveConflict,
@@ -17,6 +20,7 @@ import { isNeutralEnhancementMessage } from '@/lib/enhancement-errors'
 import { readApiError } from '@/lib/meeting-pipeline'
 import {
   hasTiptapContent,
+  legacyMeetingToTiptap,
   normalizeTiptapDocument,
   type TiptapDocument,
 } from '@/lib/tiptap-converter'
@@ -46,10 +50,12 @@ export function MeetingNoteSurface({
   transcript?: string | null
   isRecordingComplete?: boolean
 }) {
-  const initialDocument = useMemo(
-    () => normalizeTiptapDocument(meeting.document_content),
-    [meeting.document_content]
-  )
+  const initialDocument = useMemo(() => {
+    const doc = normalizeTiptapDocument(meeting.document_content)
+    if (hasTiptapContent(doc)) return doc
+    const legacy = legacyMeetingToTiptap(meeting)
+    return hasTiptapContent(legacy) ? legacy : doc
+  }, [meeting])
   const initialDocumentHash = useMemo(
     () => hashDocumentContent(initialDocument),
     [initialDocument]
@@ -102,6 +108,18 @@ export function MeetingNoteSurface({
     setReviewState(serverReviewState)
   }, [serverReviewState, undoDocument])
 
+  // Detect when document_content transitions from empty to populated (e.g. after note generation)
+  useEffect(() => {
+    if (meetingIdRef.current !== meeting.id) return
+    const nextDoc = normalizeTiptapDocument(meeting.document_content)
+    if (!hasTiptapContent(editorSeed) && hasTiptapContent(nextDoc)) {
+      setEditorSeed(nextDoc)
+      setCurrentDocument(nextDoc)
+      setAcknowledgedHash(hashDocumentContent(nextDoc))
+      setEditorRevision((v) => v + 1)
+    }
+  }, [meeting.document_content, meeting.id, editorSeed])
+
   const transcriptText = transcript ?? meeting.transcript ?? ''
   const currentHash = hashDocumentContent(currentDocument)
   const hasDocumentContent = hasTiptapContent(currentDocument)
@@ -122,11 +140,6 @@ export function MeetingNoteSurface({
     draftState === 'idle' &&
     !regenPromptDismissed &&
     !documentConflict
-
-  const showFab =
-    canReview &&
-    !documentConflict &&
-    (shouldShowAction || draftState !== 'idle')
 
   const fabIsLoading = draftState !== 'idle'
 
@@ -395,64 +408,82 @@ export function MeetingNoteSurface({
             </Alert>
           )}
 
-          {reviewState.lastError && draftState === 'idle' && (
-            <Alert
-              variant={isNeutralDraftFeedback ? 'default' : 'destructive'}
-              className={cn(
-                'rounded-2xl',
-                isNeutralDraftFeedback
-                  ? 'border-border/70 bg-secondary/40 text-muted-foreground'
-                  : 'border-destructive/20 bg-destructive/5'
-              )}
-            >
-              {!isNeutralDraftFeedback ? <AlertCircle /> : null}
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div className="flex flex-col gap-1">
-                  <AlertTitle className="line-clamp-none">
-                    {isNeutralDraftFeedback ? 'No changes suggested' : 'Drafting needs another try'}
-                  </AlertTitle>
-                  <AlertDescription>{reviewState.lastError}</AlertDescription>
-                </div>
-                {canReview && !documentConflict ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleDraftRequest()}
-                    className="h-8 rounded-full shadow-none"
-                  >
-                    <RefreshCcw className="size-4" />
-                    Retry draft
-                  </Button>
-                ) : null}
-              </div>
-            </Alert>
-          )}
+          {canReview && !documentConflict && (
+            <>
+              <div className="flex items-center justify-between gap-3 pb-1">
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="relative rounded-full gap-2"
+                        onClick={() => void handleDraftRequest()}
+                        disabled={fabIsLoading || (!shouldShowAction && draftState === 'idle')}
+                      >
+                        {fabIsLoading ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="size-4" />
+                        )}
+                        {fabIsLoading ? 'Improving\u2026' : 'Improve with AI'}
+                        {showRegenPrompt && (
+                          <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {showRegenPrompt
+                        ? 'Your note changed since the last improvement'
+                        : 'Use AI to improve your notes'}
+                    </TooltipContent>
+                  </Tooltip>
 
-          {showRegenPrompt && (
-            <div className="liquid-glass-chip glass-chip-enter flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm backdrop-blur">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Sparkles className="size-3.5 text-accent" />
-                <span>Your note has changed since the last generation</span>
+                  {undoDocument && draftState === 'idle' && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-full gap-1.5"
+                          onClick={handleUndo}
+                        >
+                          <Undo2 className="size-3.5" />
+                          Undo
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Revert AI changes</TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+
+                {reviewState.lastError && draftState === 'idle' && (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={isNeutralDraftFeedback ? 'secondary' : 'destructive'}
+                      className="rounded-full"
+                    >
+                      {isNeutralDraftFeedback ? 'No changes suggested' : 'Draft failed'}
+                    </Badge>
+                    {!isNeutralDraftFeedback && canReview && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 rounded-full gap-1"
+                        onClick={() => void handleDraftRequest()}
+                      >
+                        <RefreshCcw className="size-3" />
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => void handleDraftRequest()}
-                  className="rounded-full bg-foreground/[0.08] px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-foreground/[0.12]"
-                >
-                  Regenerate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRegenPromptDismissed(true)}
-                  aria-label="Dismiss"
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            </div>
+              <Separator />
+            </>
           )}
 
           <div className="relative">
@@ -464,23 +495,8 @@ export function MeetingNoteSurface({
               <div className="absolute inset-x-0 top-8 z-10 flex justify-center">
                 <div className="liquid-glass-chip flex items-center gap-2.5 rounded-full px-4 py-2 text-sm text-muted-foreground backdrop-blur">
                   <Loader2 className="size-4 animate-spin text-accent" />
-                  {actionMode === 'generate'
-                    ? 'Generating a first draft from the transcript…'
-                    : 'Drafting improvements…'}
+                  Improving your notes\u2026
                 </div>
-              </div>
-            )}
-
-            {undoDocument && draftState === 'idle' && (
-              <div className="mb-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  className="liquid-glass-chip glass-chip-enter liquid-glass-interactive flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground backdrop-blur hover:text-foreground"
-                >
-                  <Undo2 className="size-3.5" />
-                  Undo AI changes
-                </button>
               </div>
             )}
 
@@ -499,29 +515,6 @@ export function MeetingNoteSurface({
           </div>
         </div>
       </section>
-
-      {showFab && (
-        <div className="flex justify-center pt-5">
-          <Button
-            type="button"
-            onClick={() => void handleDraftRequest()}
-            disabled={fabIsLoading}
-            className="liquid-glass-fab glass-chip-enter h-11 rounded-full px-5 text-sm font-medium"
-          >
-            {fabIsLoading ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {actionMode === 'generate' ? 'Generating…' : 'Enhancing…'}
-              </>
-            ) : (
-              <>
-                <Sparkles className="size-4" />
-                {actionMode === 'generate' ? 'Generate notes' : 'Enhance'}
-              </>
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

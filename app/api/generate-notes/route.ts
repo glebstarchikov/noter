@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
 import { generateNotesFromTranscript } from '@/lib/notes-generation'
+import { generatedNotesToTiptap } from '@/lib/tiptap-converter'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -85,11 +86,14 @@ export async function POST(request: NextRequest) {
       audioDuration: meeting.audio_duration as number | null,
     })
 
-    // Save notes to database
+    // Save notes to database (including Tiptap document for the editor)
+    const tiptapDocument = generatedNotesToTiptap(normalizedNotes)
+
     await supabase
       .from('meetings')
       .update({
         ...normalizedNotes,
+        document_content: tiptapDocument,
         status: 'done',
         error_message: null,
         updated_at: new Date().toISOString(),

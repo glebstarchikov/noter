@@ -2,6 +2,22 @@
 
 Guidance for AI assistants working in this repository.
 
+---
+
+## Reference Docs
+
+Open these files for the task at hand — do not load all of them at once:
+
+| File | Read when… |
+|---|---|
+| `CONVENTIONS.md` | Writing any TypeScript, React, Next.js, or API route code |
+| `DESIGN.md` | Changing any UI, layout, color, or interaction |
+| `ARCHITECTURE.md` | Working on processing pipeline, status flow, async jobs, or chat |
+| `DATABASE.md` | Writing SQL, creating migrations, or querying Supabase |
+| `TESTING.md` | Writing or updating tests |
+
+---
+
 ## Project Overview
 
 **Easy Noter** is an AI-powered meeting notes application built with Next.js App Router (TypeScript). Users record or upload meeting audio, which is transcribed and converted into structured, editable notes. They can then chat with an AI about the meeting context.
@@ -149,161 +165,6 @@ test.setup.ts                      # Global test setup: mocks + env vars
 
 ---
 
-## Key Conventions
-
-### Code Architecture & Quality
-- **Always prefer the best architecture**: small composable modules, single responsibility, clean abstractions. Avoid monolithic components or functions.
-- **Prefer explicit over clever**: clear naming, obvious data flow, no magic side effects.
-- Use existing utilities and abstractions before inventing new ones; check `lib/` first.
-- Keep business logic in `lib/`, UI state in components, server logic in API routes.
-
-### TypeScript
-- Strict mode. Explicit types for public interfaces and API payloads. No implicit `any`.
-- Use `@/` path aliases — no deep relative imports (`@/lib/types`, `@/components/ui/button`).
-- Match existing code style (quotes, semicolons, formatting) in every file you touch.
-
-### Styling
-- **Tailwind CSS v4** — tokens in `app/globals.css` via `@theme inline`. **No** `tailwind.config.ts`.
-- Colors use **oklch** color space throughout.
-- Always use `cn()` from `lib/utils.ts` for conditional or merged class names.
-- Semantic tokens only (`bg-card`, `text-foreground`, `border-border`) — never hardcode colors.
-- Icons: **lucide-react** only.
-
-### Components
-- Mark `'use client'` only where required (event handlers, hooks, browser APIs). Default to server components.
-- Reuse `components/ui/*` primitives. Do not re-implement them.
-- Notifications: `toast()` from **sonner**.
-- Tiptap editor: use `lib/meeting-editor-extensions.ts` for extension config; convert content via `lib/tiptap-converter.ts`.
-
-### API Routes
-Every API route must:
-1. Export `maxDuration` (see structure above for per-route values).
-2. Authenticate the user with Supabase before any data access.
-3. Enforce ownership: `.eq('user_id', user.id)` on every query.
-4. Return `{ error: string, code: string }` with proper HTTP status (`400`, `401`, `404`, `429`, `500`).
-5. Follow the conditional rate-limiting pattern.
-
-Use `errorResponse()` from `@/lib/api-helpers`.
-
-### Supabase Client Selection
-| Context | Import |
-|---|---|
-| Client component | `@/lib/supabase/client` |
-| Server component / API route | `@/lib/supabase/server` |
-| Middleware session refresh | `@/lib/supabase/proxy` |
-| Admin / privileged ops | `@/lib/supabase/admin` |
-
-Never cross-use server vs. client Supabase clients.
-
-### Rate Limiting Pattern
-```typescript
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({ redis: Redis.fromEnv(), limiter: Ratelimit.slidingWindow(10, '10 s') })
-    : null
-
-if (ratelimit) {
-  const { success } = await ratelimit.limit(user.id)
-  if (!success) return errorResponse('Rate limit exceeded', 'RATE_LIMITED', 429)
-}
-```
-Window: `'10 s'` for chat, `'1 m'` for processing triggers.
-
-### AI Models
-Defined in `lib/ai-models.ts`. Use helpers (`resolveChatModel`, `getChatModelLabel`) — never hardcode model strings in routes.
-
-| Task | Model |
-|---|---|
-| Transcription | Deepgram (`@deepgram/sdk`) |
-| Notes generation | `gpt-4o-mini` (direct OpenAI SDK) |
-| Note enhancement | `ENHANCEMENT_MODEL` from `lib/ai-models.ts` |
-| Chat (per-meeting / global) | `resolveChatModel()` via AI SDK v6 `streamText` |
-
-**Content truncation safeguards (enforce on every AI call):**
-- Per-meeting chat: transcript ≤ 300,000 chars, each source ≤ 50,000 chars
-- Global chat: combined context ≤ 100,000 chars
-- Notes generation: transcript ≤ 400,000 chars
-
----
-
-## Meeting Status Lifecycle
-
-```
-recording → uploading → transcribing → generating → done
-                                 ↘          ↘
-                                   error ←←←←←
-```
-
-- Always transition **forward** or to `error`. Never skip steps or go backward.
-- On any processing failure: set `status = 'error'` and `error_message` in the catch block.
-
----
-
-## Async Processing System
-
-1. `/api/meetings/[id]/process` — enqueues a job (`processing_jobs` table, requires `SUPABASE_SERVICE_ROLE_KEY`)
-2. `/api/processing/worker` — background worker secured with `CRON_SECRET` bearer token
-   - Lock-based concurrency (10-minute lock timeout), retry with exponential backoff
-   - `MAX_TRANSCRIPT_CHARS = 400,000`
-
-Client-side polling: `waitForMeetingCompletion()` in `lib/meeting-pipeline.ts`.
-
----
-
-## Chat Storage
-
-Persisted client-side via `lib/chat-storage.ts`:
-- Per-meeting: key `noter-chat-{meetingId}`, capped at 50 messages
-- Global: key `noter-chat-__global__`, same cap
-- Do not store sensitive data or large payloads.
-
----
-
-## Testing
-
-- API route tests are **colocated**: `app/api/*/route.test.ts`.
-- Component tests are **colocated**: `components/*.test.tsx`.
-- Lib utility tests live in `lib/__tests__/`.
-- `test.setup.ts` mocks `next/server` and sets env vars (preloaded via `bunfig.toml`).
-- Use `mock.module()` and `mock()` from `bun:test`. Standard mock targets: `@/lib/supabase/server`, `@/lib/openai`, `ai`, `@ai-sdk/openai`, `@upstash/ratelimit`, `@upstash/redis`.
-- When changing API or component behavior, add or update the colocated test file.
-
----
-
-## Data Model
-
-### `meetings` table
-- `id`, `user_id`, `title`, `audio_url`, `audio_duration`
-- `transcript`, `summary`, `detailed_notes` (nullable text)
-- `action_items`, `key_decisions`, `topics`, `follow_ups` (JSONB arrays)
-- `document_content` (JSONB — Tiptap editor document)
-- `template_id` (references `note_templates`)
-- `diarized_transcript` (JSONB array of `DiarizedSegment`)
-- `status` (`MeetingStatus`), `error_message`
-- `is_pinned` (boolean, default false)
-- `enhancement_status`, `enhancement_state` (JSONB)
-- RLS enabled.
-
-### `meeting_sources` table
-- `id`, `meeting_id`, `user_id`, `name`, `file_type`, `content`
-- Cascade deletes. RLS enabled.
-
-### `processing_jobs` table
-- Async processing queue; see `scripts/004_create_processing_jobs_table.sql`.
-
-### `note_templates` table
-- Custom user note templates; see `app/api/note-templates/`.
-
-### `meeting-audio` storage bucket (private)
-- Path: `{user_id}/{meeting_id}.{ext}`
-
-### Schema changes
-Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code backward-compatible until applied.
-
-**Applied migrations:** `001` → `005` (meetings table, storage bucket, sources, processing jobs, is_pinned column).
-
----
-
 ## Environment Variables
 
 | Variable | Required | Purpose |
@@ -342,10 +203,28 @@ Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code b
 
 ---
 
+## AI Assistance Skills
+
+Use these `/everything-claude-code:*` skills proactively during development:
+
+| When | Skill |
+|---|---|
+| Writing new features or fixing bugs | `/everything-claude-code:tdd-workflow` — tests first, 80%+ coverage |
+| Adding auth, handling user input, creating API routes, touching secrets | `/everything-claude-code:security-review` |
+| Writing SQL, creating migrations in `scripts/`, designing schemas | `/everything-claude-code:postgres-patterns` + `/everything-claude-code:database-migrations` |
+| Adding/changing React components or Next.js pages | `/everything-claude-code:frontend-patterns` |
+| Adding/changing API routes in `app/api/` | `/everything-claude-code:backend-patterns` + `/everything-claude-code:api-design` |
+| Any code changes (TypeScript, React) | `/everything-claude-code:coding-standards` |
+| Touching AI calls (OpenAI, Deepgram, AI SDK) | `/everything-claude-code:cost-aware-llm-pipeline` |
+| Before marking a task complete | `/everything-claude-code:verification-loop` |
+
+---
+
 ## Recommended Workflow
 
 1. Read the relevant source files before making any changes.
-2. Implement the smallest correct change; prefer well-architected, composable code over quick patches.
-3. Run `bun run lint` and `bun run test` — fix all failures.
-4. Verify edge cases: unauthenticated requests, missing IDs, ownership failures, empty data.
-5. Write a clear commit message describing what changed and why.
+2. Check the Reference Docs table above — open the files relevant to the task.
+3. Implement the smallest correct change; prefer well-architected, composable code over quick patches.
+4. Run `bun run lint` and `bun run test` — fix all failures.
+5. Verify edge cases: unauthenticated requests, missing IDs, ownership failures, empty data.
+6. Write a clear commit message describing what changed and why.

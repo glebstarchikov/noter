@@ -105,7 +105,7 @@ describe('MeetingNoteSurface', () => {
     cleanup()
   })
 
-  it('shows Generate notes for an empty editor and Enhance for a populated one', () => {
+  it('shows Improve with AI button for both empty and populated editors', () => {
     const emptyMeeting = makeMeeting({ document_content: null })
     const populatedMeeting = makeMeeting({
       id: 'meeting-2',
@@ -113,10 +113,10 @@ describe('MeetingNoteSurface', () => {
     })
 
     const { rerender } = render(<MeetingNoteSurface meeting={emptyMeeting} />)
-    expect(screen.getByRole('button', { name: /generate notes/i })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
 
     rerender(<MeetingNoteSurface meeting={populatedMeeting} />)
-    expect(screen.getByRole('button', { name: /enhance/i })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
   })
 
   it('streams AI content into the editor and shows undo chip when done', async () => {
@@ -170,9 +170,11 @@ describe('MeetingNoteSurface', () => {
 
     const { container } = render(<MeetingNoteSurface meeting={makeMeeting()} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /enhance/i }))
+    fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
-    expect(screen.getByText(/Drafting improvements/i)).not.toBeNull()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /improving/i })).not.toBeNull()
+    })
     expect(container.querySelector('.fixed')).toBeNull()
 
     await waitFor(() => {
@@ -189,7 +191,7 @@ describe('MeetingNoteSurface', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /undo ai changes/i })).not.toBeNull()
+      expect(screen.getByRole('button', { name: /undo/i })).not.toBeNull()
     })
   })
 
@@ -249,23 +251,24 @@ describe('MeetingNoteSurface', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<MeetingNoteSurface meeting={makeMeeting({ document_content: null })} />)
+    render(<MeetingNoteSurface meeting={makeMeeting({ document_content: null, summary: null, detailed_notes: null })} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /generate notes/i }))
+    fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
-    // After streaming + saving, the undo chip appears and the CTA is hidden
+    // After streaming + saving, the undo chip appears and the improve button is disabled
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /undo ai changes/i })).not.toBeNull()
-      expect(screen.queryByRole('button', { name: /generate notes/i })).toBeNull()
-      expect(screen.queryByRole('button', { name: /enhance/i })).toBeNull()
+      expect(screen.getByRole('button', { name: /undo/i })).not.toBeNull()
+      const improveBtn = screen.getByRole('button', { name: /improve with ai/i })
+      expect(improveBtn.hasAttribute('disabled')).toBe(true)
     })
 
-    // Simulate a user edit — CTA should reappear, undo chip should disappear
+    // Simulate a user edit — improve button re-enables, undo chip disappears
     fireEvent.click(screen.getByRole('button', { name: /simulate edit/i }))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /enhance/i })).not.toBeNull()
-      expect(screen.queryByRole('button', { name: /undo ai changes/i })).toBeNull()
+      const improveBtn = screen.getByRole('button', { name: /improve with ai/i })
+      expect(improveBtn.hasAttribute('disabled')).toBe(false)
+      expect(screen.queryByRole('button', { name: /undo/i })).toBeNull()
     })
   })
 
@@ -302,12 +305,10 @@ describe('MeetingNoteSurface', () => {
 
     render(<MeetingNoteSurface meeting={makeMeeting()} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /enhance/i }))
+    fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/No changes suggested/i)).not.toBeNull()
-      expect(screen.getByText(ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE)).not.toBeNull()
-      expect(screen.queryByText(/Drafting needs another try/i)).toBeNull()
     })
   })
 })

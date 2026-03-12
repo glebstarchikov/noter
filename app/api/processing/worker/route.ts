@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { errorResponse } from '@/lib/api-helpers'
 import { transcribeAudioFromStorage } from '@/lib/transcription'
 import { generateNotesFromTranscript } from '@/lib/notes-generation'
+import { generatedNotesToTiptap } from '@/lib/tiptap-converter'
 import type { DiarizedSegment } from '@/lib/types'
 
 export const maxDuration = 300
@@ -243,10 +244,13 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
     audioDuration: meeting.audio_duration as number | null,
   })
 
+  const tiptapDocument = generatedNotesToTiptap(normalizedNotes)
+
   await admin
     .from('meetings')
     .update({
       ...normalizedNotes,
+      document_content: tiptapDocument,
       status: 'done',
       error_message: null,
       updated_at: new Date().toISOString(),
