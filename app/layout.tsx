@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'sonner'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from 'next-themes'
+import { FloatingChatHost } from '@/components/floating-chat-host'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body className="antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           {children}
+          <FloatingChatHost />
           <Toaster
             position="bottom-right"
             toastOptions={{

@@ -30,10 +30,10 @@ describe('normalizeActionItems', () => {
 
   it('normalizes valid action items', () => {
     const result = normalizeActionItems([
-      { task: 'Do thing', owner: 'Alice', done: false },
+      { task: 'Do thing', owner: 'Alice', due_date: null, done: false },
     ])
     expect(result).toEqual([
-      { task: 'Do thing', owner: 'Alice', done: false },
+      { task: 'Do thing', owner: 'Alice', due_date: null, done: false },
     ])
   })
 
@@ -42,7 +42,7 @@ describe('normalizeActionItems', () => {
       { task: '  Do thing  ', owner: '  Alice  ' },
     ])
     expect(result).toEqual([
-      { task: 'Do thing', owner: 'Alice', done: false },
+      { task: 'Do thing', owner: 'Alice', due_date: null, done: false },
     ])
   })
 
@@ -51,7 +51,7 @@ describe('normalizeActionItems', () => {
       { task: 'Do thing', owner: '' },
     ])
     expect(result).toEqual([
-      { task: 'Do thing', owner: null, done: false },
+      { task: 'Do thing', owner: null, due_date: null, done: false },
     ])
   })
 
@@ -60,7 +60,7 @@ describe('normalizeActionItems', () => {
       { task: 'Do thing', owner: '   ' },
     ])
     expect(result).toEqual([
-      { task: 'Do thing', owner: null, done: false },
+      { task: 'Do thing', owner: null, due_date: null, done: false },
     ])
   })
 
@@ -69,7 +69,7 @@ describe('normalizeActionItems', () => {
       { task: 'Do thing' },
     ])
     expect(result).toEqual([
-      { task: 'Do thing', owner: null, done: false },
+      { task: 'Do thing', owner: null, due_date: null, done: false },
     ])
   })
 
@@ -94,7 +94,7 @@ describe('normalizeActionItems', () => {
       { task: 'Valid task', owner: null },
     ])
     expect(result).toEqual([
-      { task: 'Valid task', owner: null, done: false },
+      { task: 'Valid task', owner: null, due_date: null, done: false },
     ])
   })
 })

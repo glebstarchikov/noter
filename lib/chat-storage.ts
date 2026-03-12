@@ -8,6 +8,8 @@ import {
 const STORAGE_KEY_PREFIX = 'noter-chat-'
 const INDEX_KEY = 'noter-chat-index'
 const MAX_STORED_CHATS = 50
+const GLOBAL_CHAT_KEY = `${STORAGE_KEY_PREFIX}__global__`
+const SUPPORT_CHAT_KEY = `${STORAGE_KEY_PREFIX}__support__`
 
 function isLocalStorageAvailable(): boolean {
   try {
@@ -69,6 +71,41 @@ function sanitizeMessages(messages: UIMessage[]): UIMessage[] {
   })
 }
 
+function readMessagesForKey(storageKey: string): UIMessage[] | undefined {
+  if (!isLocalStorageAvailable()) return undefined
+
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as UIMessage[]) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writeMessagesForKey(storageKey: string, messages: UIMessage[]): void {
+  if (!isLocalStorageAvailable()) return
+
+  const sanitizedMessages = sanitizeMessages(messages)
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(sanitizedMessages))
+  } catch {
+    // Quota exceeded — silent fail
+  }
+}
+
+function removeMessagesForKey(storageKey: string): void {
+  if (!isLocalStorageAvailable()) return
+
+  try {
+    localStorage.removeItem(storageKey)
+  } catch {
+    // silent
+  }
+}
+
 export function getChatMessages(meetingId: string): UIMessage[] | undefined {
   if (!isLocalStorageAvailable()) return undefined
 
@@ -127,44 +164,34 @@ export function clearChatMessages(meetingId: string): void {
 
 // --- Global chat storage (separate from meeting chats) ---
 
-const GLOBAL_CHAT_KEY = 'noter-chat-__global__'
-
 export function getGlobalChatMessages(): UIMessage[] | undefined {
-  if (!isLocalStorageAvailable()) return undefined
+  const messages = readMessagesForKey(GLOBAL_CHAT_KEY)
+  if (messages) return messages
 
-  try {
-    const raw = localStorage.getItem(GLOBAL_CHAT_KEY)
-    if (!raw) return undefined
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) {
-      clearGlobalChatMessages()
-      return undefined
-    }
-    return parsed as UIMessage[]
-  } catch {
-    clearGlobalChatMessages()
-    return undefined
-  }
+  removeMessagesForKey(GLOBAL_CHAT_KEY)
+  return undefined
 }
 
 export function saveGlobalChatMessages(messages: UIMessage[]): void {
-  if (!isLocalStorageAvailable()) return
-
-  const sanitizedMessages = sanitizeMessages(messages)
-
-  try {
-    localStorage.setItem(GLOBAL_CHAT_KEY, JSON.stringify(sanitizedMessages))
-  } catch {
-    // Quota exceeded — silent fail
-  }
+  writeMessagesForKey(GLOBAL_CHAT_KEY, messages)
 }
 
 export function clearGlobalChatMessages(): void {
-  if (!isLocalStorageAvailable()) return
+  removeMessagesForKey(GLOBAL_CHAT_KEY)
+}
 
-  try {
-    localStorage.removeItem(GLOBAL_CHAT_KEY)
-  } catch {
-    // silent
-  }
+export function getSupportChatMessages(): UIMessage[] | undefined {
+  const messages = readMessagesForKey(SUPPORT_CHAT_KEY)
+  if (messages) return messages
+
+  removeMessagesForKey(SUPPORT_CHAT_KEY)
+  return undefined
+}
+
+export function saveSupportChatMessages(messages: UIMessage[]): void {
+  writeMessagesForKey(SUPPORT_CHAT_KEY, messages)
+}
+
+export function clearSupportChatMessages(): void {
+  removeMessagesForKey(SUPPORT_CHAT_KEY)
 }

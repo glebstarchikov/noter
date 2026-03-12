@@ -7,6 +7,7 @@ import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normaliza
 import { generatedNotesSchema } from '@/lib/schemas'
 import { METADATA_MODEL } from '@/lib/ai-models'
 import { resolveMeetingTemplate } from '@/lib/note-template'
+import { formatTranscriptForNotes, countSpeakers, buildMeetingContextHeader } from '@/lib/transcript-formatter'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Verify user owns the meeting
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('id, user_id, transcript, template_id')
+      .select('id, user_id, transcript, template_id, diarized_transcript, audio_duration')
       .eq('id', meetingId)
       .eq('user_id', user.id)
       .single()
@@ -94,12 +95,26 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
     })
 
+    // Format transcript with speaker labels when diarization is available
+    const formattedTranscript = formatTranscriptForNotes(
+      truncatedTranscript,
+      meeting.diarized_transcript as Parameters<typeof formatTranscriptForNotes>[1]
+    )
+
+    // Build meeting context header to help the model calibrate output
+    const speakerCount = countSpeakers(meeting.diarized_transcript as Parameters<typeof countSpeakers>[0])
+    const contextHeader = buildMeetingContextHeader({
+      templateName: template.name,
+      audioDuration: meeting.audio_duration as number | null,
+      speakerCount,
+    })
+
     // Generate notes with GPT
     const completion = await getOpenAI().chat.completions.create({
       model: METADATA_MODEL,
       messages: [
         { role: 'system', content: buildNotesGenerationPrompt(template) },
-        { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
+        { role: 'user', content: `${contextHeader}\n\nTranscript:\n${formattedTranscript}` },
       ],
       temperature: 0.3,
       response_format: { type: 'json_object' },

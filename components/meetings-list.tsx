@@ -297,16 +297,8 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
             >
               <Link
                 href={`/dashboard/${meeting.id}`}
-                className="flex min-w-0 flex-1 items-start gap-4 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-w-0 flex-1 items-start rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {meeting.is_pinned ? (
-                  <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-accent/12 text-accent">
-                    <Pin className="size-3.5 fill-current" />
-                  </span>
-                ) : (
-                  <span className="mt-1 hidden size-7 shrink-0 rounded-full bg-secondary sm:block" />
-                )}
-
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-medium text-foreground">
                     {meeting.title}

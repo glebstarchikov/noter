@@ -7,6 +7,8 @@ import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normaliza
 import { buildNotesGenerationPrompt } from '@/lib/prompts'
 import { generatedNotesSchema } from '@/lib/schemas'
 import { resolveMeetingTemplate } from '@/lib/note-template'
+import { METADATA_MODEL } from '@/lib/ai-models'
+import { formatTranscriptForNotes, countSpeakers, buildMeetingContextHeader } from '@/lib/transcript-formatter'
 
 export const maxDuration = 300
 
@@ -192,7 +194,7 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
 
   const { data: meeting } = await admin
     .from('meetings')
-    .select('id, user_id, audio_url, transcript, diarized_transcript, template_id')
+    .select('id, user_id, audio_url, transcript, diarized_transcript, template_id, audio_duration')
     .eq('id', job.meeting_id)
     .eq('user_id', job.user_id)
     .single()
@@ -269,11 +271,25 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
     user_id: meeting.user_id,
   })
 
+  // Format transcript with speaker labels when diarization is available
+  const formattedTranscript = formatTranscriptForNotes(
+    truncatedTranscript,
+    meeting.diarized_transcript as Parameters<typeof formatTranscriptForNotes>[1]
+  )
+
+  // Build meeting context header to help the model calibrate output
+  const speakerCount = countSpeakers(meeting.diarized_transcript as Parameters<typeof countSpeakers>[0])
+  const contextHeader = buildMeetingContextHeader({
+    templateName: template.name,
+    audioDuration: meeting.audio_duration as number | null,
+    speakerCount,
+  })
+
   const completion = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: METADATA_MODEL,
     messages: [
       { role: 'system', content: buildNotesGenerationPrompt(template) },
-      { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
+      { role: 'user', content: `${contextHeader}\n\nTranscript:\n${formattedTranscript}` },
     ],
     temperature: 0.3,
     response_format: { type: 'json_object' },

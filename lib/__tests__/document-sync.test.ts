@@ -14,14 +14,14 @@ const testDoc: TiptapDocument = {
 
 describe('saveMeetingDocument', () => {
   beforeEach(() => {
-    globalThis.fetch = (() => {}) as typeof fetch
+    globalThis.fetch = (() => {}) as unknown as typeof fetch
   })
 
   it('returns success with documentHash on 200 response', async () => {
     globalThis.fetch = (() =>
       Promise.resolve(
         new Response(JSON.stringify({ documentHash: 'abc123' }), { status: 200 })
-      )) as typeof fetch
+      )) as unknown as typeof fetch
 
     const result = await saveMeetingDocument({
       meetingId: 'meeting-1',
@@ -37,7 +37,7 @@ describe('saveMeetingDocument', () => {
     globalThis.fetch = (() =>
       Promise.resolve(
         new Response(JSON.stringify({}), { status: 200 })
-      )) as typeof fetch
+      )) as unknown as typeof fetch
 
     const result = await saveMeetingDocument({
       meetingId: 'meeting-1',
@@ -64,7 +64,7 @@ describe('saveMeetingDocument', () => {
           }),
           { status: 409 }
         )
-      )) as typeof fetch
+      )) as unknown as typeof fetch
 
     const result = await saveMeetingDocument({
       meetingId: 'meeting-1',
@@ -83,7 +83,7 @@ describe('saveMeetingDocument', () => {
     globalThis.fetch = (() =>
       Promise.resolve(
         new Response(JSON.stringify({}), { status: 409 })
-      )) as typeof fetch
+      )) as unknown as typeof fetch
 
     const result = await saveMeetingDocument({
       meetingId: 'meeting-1',
@@ -101,7 +101,7 @@ describe('saveMeetingDocument', () => {
     globalThis.fetch = (() =>
       Promise.resolve(
         new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })
-      )) as typeof fetch
+      )) as unknown as typeof fetch
 
     await expect(
       saveMeetingDocument({
@@ -116,7 +116,7 @@ describe('saveMeetingDocument', () => {
     globalThis.fetch = (() =>
       Promise.resolve(
         new Response(JSON.stringify({}), { status: 500 })
-      )) as typeof fetch
+      )) as unknown as typeof fetch
 
     await expect(
       saveMeetingDocument({
@@ -136,7 +136,7 @@ describe('saveMeetingDocument', () => {
       return Promise.resolve(
         new Response(JSON.stringify({ documentHash: 'h' }), { status: 200 })
       )
-    }) as typeof fetch
+    }) as unknown as typeof fetch
 
     await saveMeetingDocument({
       meetingId: 'test-id',

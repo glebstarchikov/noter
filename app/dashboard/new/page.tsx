@@ -69,7 +69,7 @@ export default function NewMeetingPage() {
 
   if (processing) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-8 md:px-10 md:py-12">
+      <div className="flex flex-col gap-6 p-6 md:p-10">
         <ProcessingView
           meetingId={processing.meetingId}
           step={processing.step}
@@ -80,15 +80,15 @@ export default function NewMeetingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8 md:px-10 md:py-12">
-      <div className="mb-8 flex flex-col gap-2">
-        <h1 className="text-[30px] font-semibold tracking-tight text-foreground">Start a meeting</h1>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+    <div className="flex flex-col gap-6 p-6 md:p-10">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[26px] font-semibold tracking-tight text-foreground">Start a meeting</h1>
+        <p className="text-sm leading-6 text-muted-foreground">
           Capture a live conversation or bring in an existing recording. noter will shape the notes for you.
         </p>
       </div>
 
-      <div className="surface-utility mb-8 flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="surface-utility flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-foreground">Note format</p>
           <p className="text-sm text-muted-foreground">

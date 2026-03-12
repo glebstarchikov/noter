@@ -53,6 +53,7 @@ export interface CustomNoteTemplate {
 export interface ActionItem {
   task: string
   owner: string | null
+  due_date?: string | null
   done: boolean
 }
 
@@ -67,6 +68,11 @@ export type MeetingStatus =
 export type EnhancementStatus =
   | 'idle'
   | 'error'
+
+export type ChatSurfaceScope =
+  | 'support'
+  | 'global'
+  | 'meeting'
 
 export type EnhancementOutcome = 'accepted' | 'dismissed'
 

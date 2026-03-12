@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Loader2, RefreshCcw, Sparkles } from 'lucide-react'
+import type { Editor } from '@tiptap/react'
+import { AlertCircle, Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MeetingEditor } from '@/components/meeting-editor'
-import { MeetingInlineReview } from '@/components/meeting-inline-review'
 import { Button } from '@/components/ui/button'
 import { hashDocumentContent } from '@/lib/document-hash'
 import {
@@ -22,15 +22,9 @@ import {
 import type { EnhancementOutcome, EnhancementState, Meeting } from '@/lib/types'
 
 type DraftMode = 'generate' | 'enhance'
-type DraftUiState = 'idle' | 'generating' | 'reviewing' | 'saving'
+type DraftUiState = 'idle' | 'generating' | 'streaming' | 'saving'
 
-interface ReviewProposal {
-  sourceHash: string
-  summary: string
-  mode: DraftMode
-  baseDocument: TiptapDocument
-  proposedDocument: TiptapDocument
-}
+const STREAMING_BLOCK_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 50
 
 function normalizeReviewState(state: EnhancementState | null | undefined): EnhancementState {
   return {
@@ -63,7 +57,7 @@ export function MeetingNoteSurface({
   const [currentDocument, setCurrentDocument] = useState<TiptapDocument>(initialDocument)
   const [acknowledgedHash, setAcknowledgedHash] = useState(initialDocumentHash)
   const [draftState, setDraftState] = useState<DraftUiState>('idle')
-  const [proposal, setProposal] = useState<ReviewProposal | null>(null)
+  const [undoDocument, setUndoDocument] = useState<TiptapDocument | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [documentConflict, setDocumentConflict] = useState<DocumentSaveConflict | null>(null)
   const [reviewState, setReviewState] = useState<EnhancementState>(normalizeReviewState(meeting.enhancement_state))
@@ -73,15 +67,12 @@ export function MeetingNoteSurface({
   )
   const meetingIdRef = useRef(meeting.id)
   const draftStateRef = useRef(draftState)
-  const proposalRef = useRef(proposal)
+  const editorRef = useRef<Editor | null>(null)
+  const streamingCancelledRef = useRef(false)
 
   useEffect(() => {
     draftStateRef.current = draftState
   }, [draftState])
-
-  useEffect(() => {
-    proposalRef.current = proposal
-  }, [proposal])
 
   useEffect(() => {
     if (meetingIdRef.current === meeting.id) return
@@ -93,16 +84,17 @@ export function MeetingNoteSurface({
     setAcknowledgedHash(hashDocumentContent(nextDocument))
     setEditorRevision((value) => value + 1)
     setDraftState('idle')
-    setProposal(null)
+    setUndoDocument(null)
     setSaveError(null)
     setDocumentConflict(null)
     setReviewState(serverReviewState)
+    streamingCancelledRef.current = true
   }, [meeting.document_content, meeting.id, serverReviewState])
 
   useEffect(() => {
-    if (draftStateRef.current !== 'idle' || proposalRef.current) return
+    if (draftStateRef.current !== 'idle' || undoDocument) return
     setReviewState(serverReviewState)
-  }, [serverReviewState])
+  }, [serverReviewState, undoDocument])
 
   const transcriptText = transcript ?? meeting.transcript ?? ''
   const currentHash = hashDocumentContent(currentDocument)
@@ -118,6 +110,10 @@ export function MeetingNoteSurface({
 
   const actionMode: DraftMode = hasDocumentContent ? 'enhance' : 'generate'
 
+  const handleEditorReady = useCallback((editor: Editor | null) => {
+    editorRef.current = editor
+  }, [])
+
   const handleEditorContentChange = useCallback((document: unknown) => {
     const normalizedDocument = normalizeTiptapDocument(document)
     const nextHash = hashDocumentContent(normalizedDocument)
@@ -126,6 +122,7 @@ export function MeetingNoteSurface({
       hashDocumentContent(existingDocument) === nextHash ? existingDocument : normalizedDocument
     )
     setSaveError(null)
+    setUndoDocument(null)
   }, [])
 
   const handleAutosaveConflict = useCallback((payload: {
@@ -175,10 +172,11 @@ export function MeetingNoteSurface({
     setEditorSeed(documentConflict.currentDocument)
     setAcknowledgedHash(documentConflict.currentHash)
     setEditorRevision((value) => value + 1)
-    setProposal(null)
+    setUndoDocument(null)
     setDraftState('idle')
     setSaveError(null)
     setDocumentConflict(null)
+    streamingCancelledRef.current = true
   }, [documentConflict])
 
   const handleKeepLocalDraft = useCallback(async () => {
@@ -193,6 +191,87 @@ export function MeetingNoteSurface({
       toast.error(message)
     }
   }, [currentDocument, documentConflict, persistCurrentDocument])
+
+  const handleUndo = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor || !undoDocument) return
+
+    editor.commands.setContent(undoDocument, { emitUpdate: true })
+    setEditorSeed(undoDocument)
+    setUndoDocument(null)
+  }, [undoDocument])
+
+  const streamProposedDocument = async ({
+    sourceHash,
+    baseDocument,
+    proposedDocument,
+  }: {
+    sourceHash: string
+    baseDocument: TiptapDocument
+    proposedDocument: TiptapDocument
+  }) => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    streamingCancelledRef.current = false
+    setDraftState('streaming')
+
+    const blocks = proposedDocument.content ?? []
+
+    // Start with first block immediately — no blank flash
+    if (blocks.length > 0) {
+      editor.commands.setContent({ type: 'doc', content: [blocks[0]] }, { emitUpdate: false })
+    }
+
+    for (let i = 1; i < blocks.length; i++) {
+      await new Promise<void>((r) => setTimeout(r, STREAMING_BLOCK_DELAY_MS))
+      if (streamingCancelledRef.current) return
+      editor.commands.setContent(
+        { type: 'doc', content: blocks.slice(0, i + 1) },
+        { emitUpdate: false }
+      )
+    }
+
+    setDraftState('saving')
+
+    try {
+      const response = await fetch(`/api/meetings/${meetingIdRef.current}/enhance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'complete',
+          outcome: 'accepted' satisfies EnhancementOutcome,
+          sourceHash,
+          documentContent: proposedDocument,
+        }),
+      })
+
+      if (!response.ok) {
+        const { message } = await readApiError(response, 'Failed to save AI changes')
+        throw new Error(message)
+      }
+
+      const payload = (await response.json()) as {
+        enhancement_state: EnhancementState
+        document_content: TiptapDocument
+        documentHash: string
+      }
+
+      setReviewState(normalizeReviewState(payload.enhancement_state))
+      setAcknowledgedHash(payload.documentHash)
+      setEditorSeed(proposedDocument)
+      setDocumentConflict(null)
+      setUndoDocument(baseDocument)
+      setDraftState('idle')
+    } catch (error) {
+      // Revert editor to base content on failure
+      editor.commands.setContent(baseDocument, { emitUpdate: false })
+      setEditorSeed(baseDocument)
+      setDraftState('idle')
+      const message = error instanceof Error ? error.message : 'Failed to save AI changes'
+      toast.error(message)
+    }
+  }
 
   const handleDraftRequest = async () => {
     if (!shouldShowAction) return
@@ -227,19 +306,13 @@ export function MeetingNoteSurface({
         proposedDocument: TiptapDocument
       }
 
-      setProposal({
+      setReviewState((current) => ({ ...current, lastError: null }))
+      setDocumentConflict(null)
+      void streamProposedDocument({
         sourceHash: payload.sourceHash,
-        summary: payload.summary ?? '',
-        mode: payload.mode,
         baseDocument: currentDocument,
         proposedDocument: payload.proposedDocument,
       })
-      setReviewState((current) => ({
-        ...current,
-        lastError: null,
-      }))
-      setDocumentConflict(null)
-      setDraftState('reviewing')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to draft notes'
       const code =
@@ -256,68 +329,6 @@ export function MeetingNoteSurface({
       setDraftState('idle')
     }
   }
-
-  const handleApplyReview = async ({
-    document,
-    outcome,
-  }: {
-    document: TiptapDocument
-    outcome: EnhancementOutcome
-  }) => {
-    if (!proposal) return
-
-    setDraftState('saving')
-    setSaveError(null)
-
-    try {
-      const response = await fetch(`/api/meetings/${meeting.id}/enhance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'complete',
-          outcome,
-          sourceHash: proposal.sourceHash,
-          ...(outcome === 'accepted' ? { documentContent: document } : {}),
-        }),
-      })
-
-      if (!response.ok) {
-        const { message } = await readApiError(response, 'Failed to save reviewed note')
-        throw new Error(message)
-      }
-
-      const payload = (await response.json()) as {
-        enhancement_state: EnhancementState
-        document_content: TiptapDocument
-        documentHash: string
-      }
-      const nextDocument =
-        outcome === 'accepted'
-          ? normalizeTiptapDocument(payload.document_content)
-          : currentDocument
-
-      setReviewState(normalizeReviewState(payload.enhancement_state))
-      setProposal(null)
-      setDraftState('idle')
-      setSaveError(null)
-      setCurrentDocument(nextDocument)
-      setEditorSeed(nextDocument)
-      setAcknowledgedHash(payload.documentHash)
-      setDocumentConflict(null)
-      setEditorRevision((value) => value + 1)
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save reviewed note'
-      setSaveError(message)
-      setDraftState('reviewing')
-      toast.error(message)
-    }
-  }
-
-  const handleCancelReview = useCallback(() => {
-    setProposal(null)
-    setDraftState('idle')
-    setSaveError(null)
-  }, [])
 
   return (
     <section className="surface-document relative px-6 py-7 md:px-10 md:py-10">
@@ -388,15 +399,6 @@ export function MeetingNoteSurface({
           </div>
         )}
 
-        {draftState === 'generating' && (
-          <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin text-accent" />
-            {actionMode === 'generate'
-              ? 'Generating a first draft from the transcript…'
-              : 'Drafting one inline improvement from your note and transcript…'}
-          </div>
-        )}
-
         {shouldShowAction && (
           <div className="flex justify-end">
             <Button
@@ -411,29 +413,47 @@ export function MeetingNoteSurface({
           </div>
         )}
 
-        {proposal && draftState !== 'generating' ? (
-          <MeetingInlineReview
-            baseDocument={proposal.baseDocument}
-            proposedDocument={proposal.proposedDocument}
-            summary={proposal.summary}
-            isSaving={draftState === 'saving'}
-            saveError={saveError}
-            onApplyReview={handleApplyReview}
-            onCancelReview={handleCancelReview}
-          />
-        ) : (
+        <div className="relative">
+          {draftState === 'generating' && (
+            <>
+              <div className="enhance-shimmer-overlay rounded-3xl" />
+              <div className="absolute inset-x-0 top-6 z-10 flex justify-center">
+                <div className="liquid-glass-chip flex items-center gap-2.5 rounded-full px-4 py-2 text-sm text-muted-foreground backdrop-blur">
+                  <Loader2 className="size-4 animate-spin text-accent" />
+                  {actionMode === 'generate'
+                    ? 'Generating a first draft from the transcript…'
+                    : 'Drafting improvements…'}
+                </div>
+              </div>
+            </>
+          )}
+
+          {undoDocument && draftState === 'idle' && (
+            <div className="mb-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleUndo}
+                className="liquid-glass-chip glass-chip-enter liquid-glass-interactive flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground backdrop-blur hover:text-foreground"
+              >
+                <Undo2 className="size-3.5" />
+                Undo AI changes
+              </button>
+            </div>
+          )}
+
           <MeetingEditor
             key={`${meeting.id}:${editorRevision}`}
             meeting={meeting}
             editable={draftState === 'idle'}
             documentContent={editorSeed}
+            onEditorReady={handleEditorReady}
             onContentChange={handleEditorContentChange}
             autosaveBaseHash={acknowledgedHash}
-            autosaveEnabled={!documentConflict}
+            autosaveEnabled={!documentConflict && draftState === 'idle'}
             onAutosaveSuccess={handleAutosaveSuccess}
             onAutosaveConflict={handleAutosaveConflict}
           />
-        )}
+        </div>
       </div>
     </section>
   )

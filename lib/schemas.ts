@@ -9,6 +9,7 @@ export const generatedNotesSchema = z.object({
       z.object({
         task: z.string(),
         owner: z.string().nullable().optional(),
+        due_date: z.string().nullish(),
         done: z.boolean().optional(),
       })
     )

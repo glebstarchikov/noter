@@ -13,7 +13,7 @@ export const BUILTIN_TEMPLATES: NoteTemplate[] = [
   "summary": "A 1-2 sentence executive summary of the meeting",
   "detailed_notes": "Comprehensive meeting notes in markdown format. Use ## headers for each major topic discussed. Include: context, key discussion points, perspectives raised, conclusions reached, and nuances worth capturing.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
+    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact timeframe from transcript or null", "done": false }
   ],
   "key_decisions": ["Decision 1", "Decision 2"],
   "topics": ["Topic 1", "Topic 2"],
@@ -40,7 +40,7 @@ Rules:
   "summary": "1-2 sentence summary of the call outcome and deal stage",
   "detailed_notes": "Sales call notes in markdown format. Use these ## sections: ## Prospect Background, ## Pain Points & Challenges, ## Our Solution Discussed, ## Objections Raised, ## Objections Handled, ## Competitor Mentions, ## Pricing Discussion (if applicable). Be specific and capture exact language used.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
+    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact timeframe from transcript or null", "done": false }
   ],
   "key_decisions": ["Any commitments or decisions made"],
   "topics": ["Main topics covered"],
@@ -66,7 +66,7 @@ Rules:
   "summary": "1-2 sentence overall impression and recommendation",
   "detailed_notes": "Interview notes in markdown format. Use these ## sections: ## Candidate Background, ## Technical Assessment, ## Behavioural Signals, ## Cultural Fit, ## Strengths Observed, ## Concerns or Red Flags, ## Candidate Questions. Be objective and evidence-based.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
+    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact timeframe from transcript or null", "done": false }
   ],
   "key_decisions": ["Hiring decision or next steps decided"],
   "topics": ["Topics and competencies assessed"],
@@ -92,7 +92,7 @@ Rules:
   "summary": "1-2 sentence summary of the key themes and any important commitments",
   "detailed_notes": "1:1 notes in markdown format. Use these ## sections: ## Wins & Highlights, ## Challenges & Blockers, ## Projects & Work Updates, ## Career & Growth, ## Manager Support Needed, ## Personal Check-in (if discussed). Capture commitments explicitly.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
+    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact timeframe from transcript or null", "done": false }
   ],
   "key_decisions": ["Decisions or commitments made"],
   "topics": ["Main topics discussed"],
@@ -118,7 +118,7 @@ Rules:
   "summary": "1-2 sentence summary of sprint goal and total capacity committed",
   "detailed_notes": "Sprint planning notes in markdown format. Use these ## sections: ## Sprint Goal, ## Stories Committed (with estimates if mentioned), ## Stories Deferred, ## Technical Debt / Bugs, ## Risks & Blockers, ## Team Capacity Notes. List stories with their points if mentioned.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
+    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact timeframe from transcript or null", "done": false }
   ],
   "key_decisions": ["Scope decisions, story acceptance, technical decisions"],
   "topics": ["Epics, features, and themes discussed"],
@@ -144,7 +144,7 @@ Rules:
   "summary": "1-2 sentence summary of the participant's main pain and context",
   "detailed_notes": "Discovery notes in markdown format. Use these ## sections: ## Participant Context (role, company, workflow), ## Current Solutions & Workarounds, ## Pain Points (ranked by emotion/frequency), ## Jobs To Be Done, ## Key Insights, ## Verbatim Quotes (the most revealing statements, in quotes). Preserve the participant's exact language in quotes.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "done": false }
+    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact timeframe from transcript or null", "done": false }
   ],
   "key_decisions": ["Hypotheses confirmed or invalidated"],
   "topics": ["Themes and problem areas explored"],

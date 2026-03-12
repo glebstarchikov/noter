@@ -1,67 +1,112 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { usePathname } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport, type FileUIPart } from 'ai'
-import type { UIMessage } from 'ai'
+import { DefaultChatTransport, type FileUIPart, type UIMessage } from 'ai'
 import ReactMarkdown from 'react-markdown'
 import {
-  Send,
-  Sparkles,
-  Loader2,
-  Trash2,
+  AlertCircle,
   ChevronDown,
-  MessageSquare,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
   Paperclip,
   Search,
+  Send,
+  Sparkles,
   X,
-  Image as ImageIcon,
-  FileText,
 } from 'lucide-react'
+import type { ChatModelTier } from '@/lib/ai-models'
+import { ChatMessageAttachments } from '@/components/chat-message-attachments'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
-  getChatMessages,
-  saveChatMessages,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from '@/components/ui/input-group'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useIsMobile } from '@/hooks/use-mobile'
+import {
   clearChatMessages,
-  getGlobalChatMessages,
-  saveGlobalChatMessages,
   clearGlobalChatMessages,
+  clearSupportChatMessages,
+  getChatMessages,
+  getGlobalChatMessages,
+  getSupportChatMessages,
+  saveChatMessages,
+  saveGlobalChatMessages,
+  saveSupportChatMessages,
 } from '@/lib/chat-storage'
-import { ChatMessageAttachments } from '@/components/chat-message-attachments'
+import type { ChatSurfaceScope } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
-type ModelTier = 'fast' | 'balanced' | 'premium'
+interface ChatBarProps {
+  authenticated: boolean
+  allowGlobalToggle?: boolean
+  defaultScope: ChatSurfaceScope
+  meetingId?: string | null
+}
 
-function getMessageText(msg: UIMessage): string {
-  if (!msg.parts || !Array.isArray(msg.parts)) return ''
-  return msg.parts
+function getMessageText(message: UIMessage): string {
+  if (!Array.isArray(message.parts)) return ''
+
+  return message.parts
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('')
 }
 
-const GLOBAL_SUGGESTIONS = [
-  'What changed across recent notes?',
-  'What needs follow-up this week?',
-  'Summarize the biggest decisions',
-]
+function getStoredMessages(scope: ChatSurfaceScope, meetingId?: string | null) {
+  if (scope === 'support') return getSupportChatMessages()
+  if (scope === 'global') return getGlobalChatMessages()
+  if (!meetingId) return undefined
+  return getChatMessages(meetingId)
+}
 
-const MEETING_SUGGESTIONS = [
-  'What are the main takeaways?',
-  'Which deadlines were mentioned?',
-  'List the action items by owner',
-]
+function saveStoredMessages(scope: ChatSurfaceScope, messages: UIMessage[], meetingId?: string | null) {
+  if (scope === 'support') {
+    saveSupportChatMessages(messages)
+    return
+  }
 
-interface ChatBarProps {
-  meetingTitle?: string
+  if (scope === 'global') {
+    saveGlobalChatMessages(messages)
+    return
+  }
+
+  if (meetingId) {
+    saveChatMessages(meetingId, messages)
+  }
+}
+
+function clearStoredMessages(scope: ChatSurfaceScope, meetingId?: string | null) {
+  if (scope === 'support') {
+    clearSupportChatMessages()
+    return
+  }
+
+  if (scope === 'global') {
+    clearGlobalChatMessages()
+    return
+  }
+
+  if (meetingId) {
+    clearChatMessages(meetingId)
+  }
 }
 
 function AttachmentChip({
@@ -76,10 +121,10 @@ function AttachmentChip({
   const isImage = mediaType.startsWith('image/')
 
   return (
-    <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="liquid-glass-chip flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-muted-foreground">
       {isImage ? <ImageIcon className="size-3.5" /> : <FileText className="size-3.5" />}
-      <span className="max-w-40 truncate">{filename}</span>
-      {onRemove && (
+      <span className="max-w-32 truncate">{filename}</span>
+      {onRemove ? (
         <button
           type="button"
           onClick={onRemove}
@@ -88,405 +133,605 @@ function AttachmentChip({
         >
           <X className="size-3.5" />
         </button>
-      )}
+      ) : null}
     </div>
   )
 }
 
-export function ChatBar({ meetingTitle }: ChatBarProps) {
-  const pathname = usePathname()
-  const [isExpanded, setIsExpanded] = useState(false)
+function getErrorMessage(error: Error | undefined) {
+  if (!error) return null
+
+  if (error.message.includes('429') || error.message.includes('Too Many')) {
+    return 'You are sending messages too quickly. Please wait a moment.'
+  }
+
+  if (error.message.includes('No meetings')) {
+    return 'There are no notes to search yet.'
+  }
+
+  return 'Something went wrong. Please try again.'
+}
+
+export function ChatBar({
+  authenticated,
+  allowGlobalToggle = false,
+  defaultScope,
+  meetingId,
+}: ChatBarProps) {
+  const isMobile = useIsMobile()
+  const [activeScope, setActiveScope] = useState<ChatSurfaceScope>(defaultScope)
   const [input, setInput] = useState('')
-  const [modelTier, setModelTier] = useState<ModelTier>('balanced')
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [modelTier, setModelTier] = useState<ChatModelTier>('balanced')
   const [searchEnabled, setSearchEnabled] = useState(false)
   const [files, setFiles] = useState<FileList | undefined>(undefined)
   const [hasHydratedMessages, setHasHydratedMessages] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [spacerHeight, setSpacerHeight] = useState(96)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const dockButtonRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const endRef = useRef<HTMLDivElement>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const meetingId = useMemo(() => {
-    const match = pathname.match(/^\/dashboard\/([^/]+)$/)
-    return match ? match[1] : null
-  }, [pathname])
+  useEffect(() => {
+    setActiveScope(defaultScope)
+  }, [defaultScope, meetingId])
 
-  const isGlobal = !meetingId
-  const chatId = meetingId ?? '__global__'
+  const transport = useMemo(() => {
+    if (activeScope === 'support') {
+      return new DefaultChatTransport({ api: '/api/chat/support' })
+    }
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: isGlobal ? '/api/chat/global' : '/api/chat',
-        body: meetingId ? { meetingId } : undefined,
-      }),
-    [isGlobal, meetingId]
-  )
+    if (activeScope === 'global') {
+      return new DefaultChatTransport({ api: '/api/chat/global' })
+    }
+
+    return new DefaultChatTransport({
+      api: '/api/chat',
+      body: meetingId ? { meetingId } : undefined,
+    })
+  }, [activeScope, meetingId])
+
+  const chatId = useMemo(() => {
+    if (activeScope === 'support') return '__support__'
+    if (activeScope === 'global') return '__global__'
+    return meetingId ?? '__global__'
+  }, [activeScope, meetingId])
 
   const { messages, sendMessage, setMessages, status, error } = useChat({
     id: chatId,
     transport,
   })
 
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    setHasHydratedMessages(false)
-    const storedMessages = isGlobal ? getGlobalChatMessages() : getChatMessages(chatId)
-    setMessages(storedMessages ?? [])
-    setHasHydratedMessages(true)
-  }, [isGlobal, chatId, setMessages])
-
-  useEffect(() => {
-    if (!hasHydratedMessages) return
-    if (messages.length === 0) return
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    saveTimeoutRef.current = setTimeout(() => {
-      if (isGlobal) saveGlobalChatMessages(messages)
-      else saveChatMessages(chatId, messages)
-    }, 500)
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    }
-  }, [messages, isGlobal, chatId, hasHydratedMessages])
-
-  const handleClearChat = useCallback(() => {
-    if (isGlobal) clearGlobalChatMessages()
-    else clearChatMessages(chatId)
-    setMessages([])
-  }, [isGlobal, chatId, setMessages])
-
-  const isLoading = status === 'streaming' || status === 'submitted'
-  const isStreaming = status === 'streaming'
-
-  useEffect(() => {
-    if (scrollRef.current && isExpanded) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages, isExpanded, isLoading])
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'j') {
-        event.preventDefault()
-        setIsExpanded((prev) => !prev)
-        setTimeout(() => inputRef.current?.focus(), 100)
-      }
-      if (event.key === 'Escape' && isExpanded) {
-        setIsExpanded(false)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isExpanded])
-
-  const resetComposer = () => {
+  const resetComposer = useCallback(() => {
     setInput('')
-    setSearchEnabled(false)
     setFiles(undefined)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }
+  }, [])
 
-  const handleSubmit = (text: string) => {
-    if ((!text.trim() && !files?.length) || isLoading) return
-    if (!isExpanded) setIsExpanded(true)
-
-    void sendMessage(
-      text.trim()
-        ? { text: text.trim(), files }
-        : { files: files as FileList },
-      {
-        body: {
-          modelTier,
-          searchEnabled,
-        },
-      }
-    )
-
+  useEffect(() => {
     resetComposer()
-  }
+  }, [activeScope, resetComposer])
 
-  const suggestions = isGlobal ? GLOBAL_SUGGESTIONS : MEETING_SUGGESTIONS
-  const sectionLabel = isGlobal ? 'Across all notes' : 'This note'
-  const contextTitle = isGlobal
-    ? 'Ask noter'
-    : meetingTitle
-      ? `Ask noter about ${meetingTitle.length > 48 ? `${meetingTitle.slice(0, 48)}…` : meetingTitle}`
-      : 'Ask noter about this note'
+  useEffect(() => {
+    setHasHydratedMessages(false)
+    const storedMessages = getStoredMessages(activeScope, meetingId)
+    setMessages(storedMessages ?? [])
+    setHasHydratedMessages(true)
+  }, [activeScope, meetingId, setMessages])
 
+  useEffect(() => {
+    if (!hasHydratedMessages || messages.length === 0) return
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveStoredMessages(activeScope, messages, meetingId)
+    }, 300)
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [activeScope, hasHydratedMessages, meetingId, messages])
+
+  useEffect(() => {
+    const focusComposer = () => {
+      inputRef.current?.focus()
+    }
+
+    if (!isExpanded) return
+
+    const frame = window.requestAnimationFrame(focusComposer)
+    return () => window.cancelAnimationFrame(frame)
+  }, [isExpanded])
+
+  useEffect(() => {
+    if (!isExpanded) return
+
+    const frame = window.requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({ block: 'end' })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [isExpanded, messages, status])
+
+  useEffect(() => {
+    const measureShell = () => {
+      const nextHeight = shellRef.current?.getBoundingClientRect().height
+      if (!nextHeight) return
+      setSpacerHeight(Math.ceil(nextHeight) + 24)
+    }
+
+    measureShell()
+    window.addEventListener('resize', measureShell)
+
+    return () => window.removeEventListener('resize', measureShell)
+  }, [isExpanded, isMobile])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--floating-chatbar-offset', `${spacerHeight}px`)
+
+    return () => {
+      document.documentElement.style.removeProperty('--floating-chatbar-offset')
+    }
+  }, [spacerHeight])
+
+  const collapse = useCallback(() => {
+    setIsExpanded(false)
+    window.requestAnimationFrame(() => {
+      dockButtonRef.current?.focus()
+    })
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+        event.preventDefault()
+        if (isExpanded) {
+          collapse()
+        } else {
+          setIsExpanded(true)
+        }
+      }
+
+      if (event.key === 'Escape' && isExpanded) {
+        event.preventDefault()
+        collapse()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [collapse, isExpanded])
+
+  useEffect(() => {
+    if (!isExpanded) return
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (shellRef.current?.contains(target)) return
+      if (target.closest('[data-slot=dropdown-menu-content]')) return
+      if (target.closest('[data-radix-popper-content-wrapper]')) return
+      collapse()
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+    }
+  }, [collapse, isExpanded])
+
+  const isLoading = status === 'submitted' || status === 'streaming'
+  const isStreaming = status === 'streaming'
+  const canAttach = authenticated && activeScope !== 'support'
+  const canUseTools = activeScope !== 'support'
   const selectedFiles = files ? Array.from(files) : []
+  const showTopAddon = activeScope === 'support' || allowGlobalToggle || selectedFiles.length > 0
+  const submitDisabled = isLoading || (!input.trim() && selectedFiles.length === 0)
+  const errorMessage = getErrorMessage(error)
+
+  const handleClearChat = useCallback(() => {
+    clearStoredMessages(activeScope, meetingId)
+    setMessages([])
+  }, [activeScope, meetingId, setMessages])
+
+  const handleSubmit = useCallback(
+    (text: string) => {
+      if (submitDisabled) return
+
+      const trimmedText = text.trim()
+      const payload =
+        canAttach && files?.length
+          ? trimmedText
+            ? { text: trimmedText, files }
+            : { files: files as FileList }
+          : { text: trimmedText }
+
+      void sendMessage(payload, {
+        body:
+          activeScope === 'support'
+            ? undefined
+            : {
+                modelTier,
+                searchEnabled,
+              },
+      })
+
+      resetComposer()
+    },
+    [
+      activeScope,
+      canAttach,
+      files,
+      modelTier,
+      resetComposer,
+      searchEnabled,
+      sendMessage,
+      submitDisabled,
+    ]
+  )
+
+  const scopeLabel =
+    activeScope === 'support'
+      ? 'Support'
+      : activeScope === 'meeting'
+        ? 'This note'
+        : 'All notes'
+
+  const dockDescription =
+    activeScope === 'support'
+      ? 'Website and product help'
+      : activeScope === 'meeting'
+        ? 'Current note context'
+        : 'Across every note'
+
+  const placeholder =
+    activeScope === 'support'
+      ? 'Ask about noter...'
+      : activeScope === 'meeting'
+        ? 'Ask about this note...'
+        : 'Ask across all notes...'
+
+  const emptyStateTitle =
+    activeScope === 'support'
+      ? 'Support chat'
+      : activeScope === 'meeting'
+        ? 'Current note chat'
+        : 'Global note chat'
+
+  const emptyStateDescription =
+    activeScope === 'support'
+      ? 'Ask about noter features, setup, or how the product works.'
+      : activeScope === 'meeting'
+        ? 'Ask about the current note, compare attachments, or inspect transcript details.'
+        : 'Ask across your notes to find patterns, summaries, and follow-ups.'
 
   return (
-    <section className="border-t border-border/60 bg-background/96 px-4 py-3 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
-        {(isExpanded || messages.length > 0) && (
-          <div className="liquid-metal-panel flex flex-col gap-4 rounded-[28px] p-4 md:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="liquid-metal-icon flex size-8 items-center justify-center rounded-full">
-                    <Sparkles className="size-3.5" />
-                  </div>
-                  <span className="text-sm font-medium text-foreground">Ask noter</span>
-                  <span className="rounded-full bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                    {sectionLabel}
-                  </span>
-                </div>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {isGlobal
-                    ? 'Ask across your notes, switch models, add web search, or include a file for context.'
-                    : 'Ask about this note, bring in web search, or attach a file to compare against the meeting.'}
-                </p>
-              </div>
+    <>
+      <div aria-hidden="true" style={{ height: spacerHeight }} />
 
-              <div className="flex items-center gap-1">
-                {messages.length > 0 && (
+      <section
+        role="region"
+        aria-label="Chat with noter"
+        className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-2 md:px-4"
+        style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <div
+          ref={shellRef}
+          data-slot="chatbar-shell"
+          data-state={isExpanded ? 'expanded' : 'collapsed'}
+          className={cn(
+            'liquid-glass-shell pointer-events-auto flex w-[calc(100vw-1rem)] max-w-[44rem] flex-col overflow-hidden rounded-[30px] transition-[height,transform] duration-200 ease-out',
+            isExpanded ? 'h-[min(70vh,32rem)]' : 'h-16'
+          )}
+        >
+          {isExpanded ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{scopeLabel}</Badge>
+                  {searchEnabled && canUseTools ? (
+                    <Badge variant="outline" className="gap-1">
+                      <Search className="size-3" />
+                      Web
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {messages.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearChat}
+                      className="text-muted-foreground"
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearChat}
-                    className="h-8 gap-1.5 px-2 text-muted-foreground"
+                    variant="ghost-icon"
+                    size="icon-sm"
+                    onClick={collapse}
+                    aria-label="Collapse chat"
+                    className="text-muted-foreground"
                   >
-                    <Trash2 className="size-3.5" />
-                    Clear
+                    <ChevronDown />
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setIsExpanded(false)}
-                  className="text-muted-foreground"
-                >
-                  <ChevronDown className="size-4" />
-                  <span className="sr-only">Collapse chat</span>
-                </Button>
-              </div>
-            </div>
-
-            <div
-              ref={scrollRef}
-              className="max-h-80 space-y-4 overflow-y-auto"
-              role="log"
-              aria-live="polite"
-            >
-              {messages.length === 0 ? (
-                <div className="flex flex-col gap-4 py-2">
-                  <div className="flex items-center gap-2 text-sm text-foreground">
-                    <MessageSquare className="size-4 text-accent" />
-                    {contextTitle}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {suggestions.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => handleSubmit(suggestion)}
-                        disabled={isLoading}
-                        className="rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {messages.map((message) => {
-                    const text = getMessageText(message)
+              </div>
 
-                    return (
-                      <div
-                        key={message.id}
-                        className={cn(
-                          'flex flex-col gap-2',
-                          message.role === 'user' ? 'items-end' : 'items-start'
-                        )}
-                      >
-                        <span className="text-[11px] text-muted-foreground">
-                          {message.role === 'user' ? 'You' : 'noter'}
-                        </span>
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="flex min-h-full flex-col justify-end gap-4 px-4 py-4">
+                  <div role="log" aria-live="polite" className="flex flex-col gap-4">
+                    {messages.length === 0 ? (
+                      <div className="flex min-h-[10rem] flex-col items-start justify-center gap-2 rounded-[24px] border border-dashed border-border/70 bg-background/30 px-5 py-6 text-left">
+                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          <Sparkles className="size-4 text-accent" />
+                          {emptyStateTitle}
+                        </div>
+                        <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                          {emptyStateDescription}
+                        </p>
+                      </div>
+                    ) : (
+                      messages.map((message) => {
+                        const text = getMessageText(message)
 
-                        <ChatMessageAttachments message={message} />
-
-                        {text && (
+                        return (
                           <div
+                            key={message.id}
                             className={cn(
-                              'max-w-[88%] rounded-3xl px-4 py-3 text-sm leading-7',
-                              message.role === 'user'
-                                ? 'bg-background/85 text-foreground shadow-sm'
-                                : 'border border-border/60 bg-background/70 text-foreground'
+                              'flex flex-col gap-2',
+                              message.role === 'user' ? 'items-end' : 'items-start'
                             )}
                           >
-                            {message.role === 'user' ? (
-                              <div className="whitespace-pre-wrap">{text}</div>
-                            ) : (
-                              <div className="prose prose-sm max-w-none break-words text-foreground dark:prose-invert [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:pl-5 [&>ol]:mb-2 [&>ol]:pl-5">
-                                <ReactMarkdown>{text}</ReactMarkdown>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                            <span className="px-1 text-[11px] text-muted-foreground">
+                              {message.role === 'user' ? 'You' : 'noter'}
+                            </span>
 
-                  {isLoading && (
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-3xl border border-border/60 bg-background/70 px-4 py-3 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="size-3.5 animate-spin" />
+                            <ChatMessageAttachments message={message} />
+
+                            {text ? (
+                              <div
+                                className={cn(
+                                  'max-w-[90%] rounded-[24px] px-4 py-3 text-sm leading-7',
+                                  message.role === 'user'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'border border-border/60 bg-background/55 text-foreground'
+                                )}
+                              >
+                                {message.role === 'user' ? (
+                                  <div className="whitespace-pre-wrap">{text}</div>
+                                ) : (
+                                  <div className="prose prose-sm max-w-none break-words text-foreground dark:prose-invert [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:pl-5 [&>ol]:mb-2 [&>ol]:pl-5">
+                                    <ReactMarkdown>{text}</ReactMarkdown>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })
+                    )}
+
+                    {isLoading ? (
+                      <div className="flex items-start">
+                        <div className="flex max-w-[90%] items-center gap-2 rounded-[24px] border border-border/60 bg-background/55 px-4 py-3 text-sm text-muted-foreground">
+                          <Loader2 className="size-4 animate-spin" />
                           {isStreaming ? 'Writing a response…' : 'Thinking…'}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    ) : null}
+
+                    <div ref={endRef} />
+                  </div>
                 </div>
-              )}
-            </div>
+              </ScrollArea>
 
-            {error && (
-              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                {error.message?.includes('429') || error.message?.includes('Too Many')
-                  ? 'You are sending messages too quickly. Please wait a moment.'
-                  : error.message?.includes('No meetings')
-                    ? 'There are no notes to search yet.'
-                    : 'Something went wrong. Please try again.'}
-              </div>
-            )}
-          </div>
-        )}
+              <div className="border-t border-border/50 px-3 py-3">
+                {errorMessage ? (
+                  <Alert variant="destructive" className="mb-3 border-destructive/20 bg-destructive/5">
+                    <AlertCircle />
+                    <AlertDescription>{errorMessage}</AlertDescription>
+                  </Alert>
+                ) : null}
 
-        <div className="liquid-metal-panel flex flex-col gap-3 rounded-[28px] p-4 md:p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="liquid-metal-icon flex size-9 items-center justify-center rounded-full">
-              <Sparkles className="size-4" />
-            </div>
-
-            <Select value={modelTier} onValueChange={(value) => setModelTier(value as ModelTier)}>
-              <SelectTrigger size="sm" className="liquid-metal-control h-9 min-w-36 rounded-full border-0 bg-transparent shadow-none">
-                <SelectValue placeholder="Balanced" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fast">Fast</SelectItem>
-                <SelectItem value="balanced">Balanced</SelectItem>
-                <SelectItem value="premium">Premium</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setSearchEnabled((value) => !value)}
-              className={cn(
-                'liquid-metal-control rounded-full border-0 px-3 shadow-none',
-                searchEnabled && 'text-foreground'
-              )}
-            >
-              <Search className="size-4" />
-              Search
-            </Button>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.txt,.md,.docx,.png,.jpg,.jpeg,.webp"
-              className="hidden"
-              onChange={(event) => {
-                if (event.target.files) {
-                  setFiles(event.target.files)
-                }
-              }}
-            />
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              className="liquid-metal-control rounded-full border-0 px-3 shadow-none"
-            >
-              <Paperclip className="size-4" />
-              Attach
-            </Button>
-
-            <span className="ml-auto text-[11px] text-muted-foreground">
-              {sectionLabel}
-            </span>
-          </div>
-
-          {selectedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {selectedFiles.map((file, index) => (
-                <AttachmentChip
-                  key={`${file.name}-${index}`}
-                  file={file}
-                  onRemove={() => {
-                    const remaining = selectedFiles.filter((_, fileIndex) => fileIndex !== index)
-                    if (remaining.length === 0) {
-                      setFiles(undefined)
-                      if (fileInputRef.current) fileInputRef.current.value = ''
-                      return
-                    }
-
-                    const dataTransfer = new DataTransfer()
-                    remaining.forEach((remainingFile) => dataTransfer.items.add(remainingFile))
-                    setFiles(dataTransfer.files)
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    handleSubmit(input)
                   }}
-                />
-              ))}
-            </div>
-          )}
+                >
+                  <InputGroup className="liquid-glass-input h-auto rounded-[26px] border-border/70 bg-background/55 shadow-none">
+                    {showTopAddon ? (
+                      <InputGroupAddon
+                        align="block-start"
+                        className="border-b border-border/50 flex-wrap gap-2"
+                      >
+                        {allowGlobalToggle ? (
+                          <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            size="sm"
+                            value={activeScope === 'meeting' ? 'meeting' : 'global'}
+                            onValueChange={(value) => {
+                              if (value === 'meeting' || value === 'global') {
+                                setActiveScope(value)
+                              }
+                            }}
+                            aria-label="Chat scope"
+                          >
+                            <ToggleGroupItem value="meeting" aria-label="This note">
+                              This note
+                            </ToggleGroupItem>
+                            <ToggleGroupItem value="global" aria-label="All notes">
+                              All notes
+                            </ToggleGroupItem>
+                          </ToggleGroup>
+                        ) : activeScope === 'support' ? (
+                          <Badge variant="outline">Support</Badge>
+                        ) : null}
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              handleSubmit(input)
-            }}
-            className="flex items-end gap-3"
-          >
-            <div className="flex-1">
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <span>{searchEnabled ? 'Web search enabled for this message' : 'Compose a message'}</span>
-                {messages.length > 0 && (
-                  <span className="rounded-full bg-background/70 px-1.5 py-0.5 tabular-nums">
-                    {messages.length}
-                  </span>
-                )}
+                        {selectedFiles.map((file, index) => (
+                          <AttachmentChip
+                            key={`${file.name}-${index}`}
+                            file={file}
+                            onRemove={() => {
+                              const remainingFiles = selectedFiles.filter((_, fileIndex) => fileIndex !== index)
+                              if (remainingFiles.length === 0) {
+                                setFiles(undefined)
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = ''
+                                }
+                                return
+                              }
+
+                              const nextFiles = new DataTransfer()
+                              remainingFiles.forEach((remainingFile) => nextFiles.items.add(remainingFile))
+                              setFiles(nextFiles.files)
+                            }}
+                          />
+                        ))}
+                      </InputGroupAddon>
+                    ) : null}
+
+                    <InputGroupTextarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={(event) => setInput(event.target.value)}
+                      onFocus={() => setIsExpanded(true)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault()
+                          handleSubmit(input)
+                        }
+                      }}
+                      placeholder={placeholder}
+                      disabled={isLoading}
+                      aria-label={placeholder}
+                      className="max-h-36 min-h-24 overflow-y-auto px-4 py-3 text-sm"
+                    />
+
+                    <InputGroupAddon
+                      align="block-end"
+                      className="border-t border-border/50 flex-wrap gap-2"
+                    >
+                      {canAttach ? (
+                        <>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept=".pdf,.txt,.md,.docx,.png,.jpg,.jpeg,.webp"
+                            className="hidden"
+                            onChange={(event) => {
+                              if (event.target.files) {
+                                setFiles(event.target.files)
+                              }
+                            }}
+                          />
+                          <InputGroupButton
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="liquid-glass-control border-border/60"
+                          >
+                            <Paperclip />
+                            Add context
+                          </InputGroupButton>
+                        </>
+                      ) : null}
+
+                      {canUseTools ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <InputGroupButton
+                              variant="ghost"
+                              size="sm"
+                              className="liquid-glass-control border border-border/50"
+                            >
+                              Auto
+                            </InputGroupButton>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuLabel>Model</DropdownMenuLabel>
+                            <DropdownMenuRadioGroup
+                              value={modelTier}
+                              onValueChange={(value) => setModelTier(value as ChatModelTier)}
+                            >
+                              <DropdownMenuRadioItem value="fast">Fast</DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem value="balanced">Balanced</DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem value="premium">Premium</DropdownMenuRadioItem>
+                            </DropdownMenuRadioGroup>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem
+                              checked={searchEnabled}
+                              onCheckedChange={(checked) => setSearchEnabled(Boolean(checked))}
+                            >
+                              Web search
+                            </DropdownMenuCheckboxItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+
+                      <InputGroupButton
+                        type="submit"
+                        variant="default"
+                        size="icon-sm"
+                        disabled={submitDisabled}
+                        aria-label="Send"
+                        className="liquid-glass-button ml-auto"
+                      >
+                        {isLoading ? <Loader2 className="animate-spin" /> : <Send />}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                </form>
               </div>
-              <input
-                ref={inputRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onFocus={() => setIsExpanded(true)}
-                placeholder={contextTitle}
-                disabled={isLoading}
-                aria-label={contextTitle}
-                className="mt-1 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
-              />
             </div>
+          ) : (
+            <button
+              ref={dockButtonRef}
+              type="button"
+              onClick={() => setIsExpanded(true)}
+              className="liquid-glass-dock flex h-full w-full items-center justify-between rounded-[30px] px-4 text-left transition-transform"
+              aria-expanded="false"
+              aria-label="Open chat"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="liquid-glass-orb flex size-10 items-center justify-center rounded-full">
+                  <Sparkles className="size-4 text-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">Chat with noter</p>
+                  <p className="truncate text-xs text-muted-foreground">{dockDescription}</p>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <kbd className="rounded-md border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                ⌘J
-              </kbd>
-              <Button
-                type="submit"
-                size="icon-sm"
-                disabled={(!input.trim() && selectedFiles.length === 0) || isLoading}
-                className="liquid-metal-button size-10 rounded-full"
-              >
-                {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                <span className="sr-only">Send</span>
-              </Button>
-            </div>
-          </form>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="hidden sm:inline-flex">
+                  {scopeLabel}
+                </Badge>
+                <span className="hidden text-[11px] text-muted-foreground md:inline">⌘J</span>
+              </div>
+            </button>
+          )}
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   )
 }
