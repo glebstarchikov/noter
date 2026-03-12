@@ -6,6 +6,7 @@ import { DefaultChatTransport, type FileUIPart, type UIMessage } from 'ai'
 import ReactMarkdown from 'react-markdown'
 import {
   AlertCircle,
+  Check,
   ChevronDown,
   FileText,
   Image as ImageIcon,
@@ -25,35 +26,45 @@ import {
 import { ChatMessageAttachments } from '@/components/chat-message-attachments'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
 } from '@/components/ui/input-group'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useIsMobile } from '@/hooks/use-mobile'
 import {
-  clearChatMessages,
-  clearGlobalChatMessages,
-  clearSupportChatMessages,
-  getChatMessages,
-  getGlobalChatMessages,
-  getSupportChatMessages,
-  saveChatMessages,
-  saveGlobalChatMessages,
-  saveSupportChatMessages,
-} from '@/lib/chat-storage'
+  clearStoredMessages,
+  getActiveContextLabel,
+  getComposerPrompt,
+  getContextDescription,
+  getEmptyStateDescription,
+  getErrorMessage,
+  getMessageText,
+  getStoredMessages,
+  saveStoredMessages,
+} from '@/lib/chat-ui-helpers'
 import type { ChatSurfaceScope } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -64,52 +75,31 @@ interface ChatBarProps {
   meetingId?: string | null
 }
 
-function getMessageText(message: UIMessage): string {
-  if (!Array.isArray(message.parts)) return ''
-
-  return message.parts
-    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-    .map((part) => part.text)
-    .join('')
+const STARTER_PROMPTS: Record<ChatSurfaceScope, string[]> = {
+  support: [
+    'How do I get started with noter?',
+    'How do I upload a meeting?',
+    'How do I use the dashboard?',
+  ],
+  meeting: [
+    'Summarize this note',
+    'List action items from this note',
+    'Extract key decisions from this note',
+  ],
+  global: [
+    'Summarize notes from this week',
+    'List all action items across notes',
+    'Find recurring themes across notes',
+  ],
 }
 
-function getStoredMessages(scope: ChatSurfaceScope, meetingId?: string | null) {
-  if (scope === 'support') return getSupportChatMessages()
-  if (scope === 'global') return getGlobalChatMessages()
-  if (!meetingId) return undefined
-  return getChatMessages(meetingId)
-}
 
-function saveStoredMessages(scope: ChatSurfaceScope, messages: UIMessage[], meetingId?: string | null) {
-  if (scope === 'support') {
-    saveSupportChatMessages(messages)
-    return
-  }
-
-  if (scope === 'global') {
-    saveGlobalChatMessages(messages)
-    return
-  }
-
-  if (meetingId) {
-    saveChatMessages(meetingId, messages)
-  }
-}
-
-function clearStoredMessages(scope: ChatSurfaceScope, meetingId?: string | null) {
-  if (scope === 'support') {
-    clearSupportChatMessages()
-    return
-  }
-
-  if (scope === 'global') {
-    clearGlobalChatMessages()
-    return
-  }
-
-  if (meetingId) {
-    clearChatMessages(meetingId)
-  }
+function ContextChip({ label }: { label: string }) {
+  return (
+    <div className="liquid-glass-context-chip flex items-center rounded-full px-3 py-1.5 text-xs font-medium text-foreground">
+      {label}
+    </div>
+  )
 }
 
 function AttachmentChip({
@@ -139,26 +129,6 @@ function AttachmentChip({
       ) : null}
     </div>
   )
-}
-
-function getErrorMessage(error: Error | undefined) {
-  if (!error) return null
-
-  if (error.message.includes('429') || error.message.includes('Too Many')) {
-    return 'You are sending messages too quickly. Please wait a moment.'
-  }
-
-  if (error.message.includes('No meetings')) {
-    return 'There are no notes to search yet.'
-  }
-
-  return 'Something went wrong. Please try again.'
-}
-
-function getComposerPrompt(scope: ChatSurfaceScope) {
-  if (scope === 'support') return 'Ask about noter...'
-  if (scope === 'meeting') return 'Ask about this note...'
-  return 'Ask across your notes...'
 }
 
 export function ChatBar({
@@ -328,6 +298,7 @@ export function ChatBar({
       if (shellRef.current?.contains(target)) return
       if (target.closest('[data-slot=dropdown-menu-content]')) return
       if (target.closest('[data-radix-popper-content-wrapper]')) return
+      if (target.closest('[data-slot=popover-content]')) return
       collapse()
     }
 
@@ -344,10 +315,14 @@ export function ChatBar({
   const isStreaming = status === 'streaming'
   const canAttach = authenticated && activeScope !== 'support'
   const canUseTools = activeScope !== 'support'
+  const canShowContext = activeScope !== 'support'
   const selectedFiles = useMemo(() => (files ? Array.from(files) : []), [files])
   const submitDisabled = isLoading || (!input.trim() && selectedFiles.length === 0)
   const errorMessage = getErrorMessage(error)
   const prompt = getComposerPrompt(activeScope)
+  const activeContextLabel = getActiveContextLabel(activeScope)
+  const starterPrompts = STARTER_PROMPTS[activeScope]
+  const showContextRow = canShowContext || selectedFiles.length > 0
 
   const handleClearChat = useCallback(() => {
     clearStoredMessages(activeScope, meetingId)
@@ -356,11 +331,12 @@ export function ChatBar({
 
   const handleSubmit = useCallback(
     (text: string) => {
-      if (submitDisabled) return
-
       const trimmedText = text.trim()
+      const hasAttachments = canAttach && Boolean(files?.length)
+      if (isLoading || (!trimmedText && !hasAttachments)) return
+
       const payload =
-        canAttach && files?.length
+        hasAttachments
           ? trimmedText
             ? { text: trimmedText, files }
             : { files: files as FileList }
@@ -378,7 +354,14 @@ export function ChatBar({
 
       resetComposer()
     },
-    [activeScope, canAttach, files, model, resetComposer, searchEnabled, sendMessage, submitDisabled]
+    [activeScope, canAttach, files, isLoading, model, resetComposer, searchEnabled, sendMessage]
+  )
+
+  const handleStarterPrompt = useCallback(
+    (starterPrompt: string) => {
+      handleSubmit(starterPrompt)
+    },
+    [handleSubmit]
   )
 
   const removeSelectedFile = useCallback(
@@ -420,60 +403,107 @@ export function ChatBar({
           )}
         >
           {isExpanded ? (
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost-icon"
+                    size="icon-sm"
+                    onClick={collapse}
+                    aria-label="Close"
+                    className="liquid-glass-control absolute right-3 top-3 z-10 rounded-full border border-border/40"
+                  >
+                    <X />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close</TooltipContent>
+              </Tooltip>
+
               <ScrollArea className="min-h-0 flex-1">
-                <div className="flex min-h-full flex-col justify-end gap-4 px-4 pb-2 pt-4">
-                  <div role="log" aria-live="polite" className="flex flex-col gap-4">
-                    {messages.map((message) => {
-                      const text = getMessageText(message)
-
-                      return (
-                        <div
-                          key={message.id}
-                          className={cn(
-                            'flex flex-col gap-2',
-                            message.role === 'user' ? 'items-end' : 'items-start'
-                          )}
-                        >
-                          <span className="px-1 text-[11px] text-muted-foreground">
-                            {message.role === 'user' ? 'You' : 'noter'}
-                          </span>
-
-                          <ChatMessageAttachments message={message} />
-
-                          {text ? (
-                            <div
-                              className={cn(
-                                'max-w-[90%] rounded-[24px] px-4 py-3 text-sm leading-7',
-                                message.role === 'user'
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'border border-border/60 bg-background/55 text-foreground'
-                              )}
+                <div
+                  className={cn(
+                    'flex min-h-full flex-col gap-4 px-4 pb-2 pt-14',
+                    messages.length === 0 && !isLoading ? 'justify-center' : 'justify-end'
+                  )}
+                >
+                  {messages.length === 0 && !isLoading ? (
+                    <Empty className="mx-auto w-full max-w-[36rem] border-0 bg-transparent p-0">
+                      <EmptyHeader className="max-w-none items-start gap-2 text-left">
+                        <EmptyTitle className="text-base">Start with a prompt</EmptyTitle>
+                        <EmptyDescription className="max-w-xl text-left">
+                          {getEmptyStateDescription(activeScope)}
+                        </EmptyDescription>
+                      </EmptyHeader>
+                      <EmptyContent className="max-w-none items-stretch">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {starterPrompts.map((starterPrompt) => (
+                            <Button
+                              key={starterPrompt}
+                              type="button"
+                              variant="ghost"
+                              onClick={() => handleStarterPrompt(starterPrompt)}
+                              className="liquid-glass-prompt h-auto justify-start rounded-[20px] px-4 py-3 text-left whitespace-normal"
                             >
-                              {message.role === 'user' ? (
-                                <div className="whitespace-pre-wrap">{text}</div>
-                              ) : (
-                                <div className="prose prose-sm max-w-none break-words text-foreground dark:prose-invert [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:pl-5 [&>ol]:mb-2 [&>ol]:pl-5">
-                                  <ReactMarkdown>{text}</ReactMarkdown>
-                                </div>
-                              )}
-                            </div>
-                          ) : null}
+                              {starterPrompt}
+                            </Button>
+                          ))}
                         </div>
-                      )
-                    })}
+                      </EmptyContent>
+                    </Empty>
+                  ) : (
+                    <div role="log" aria-live="polite" className="flex flex-col gap-4">
+                      {messages.map((message) => {
+                        const text = getMessageText(message)
 
-                    {isLoading ? (
-                      <div className="flex items-start">
-                        <div className="flex max-w-[90%] items-center gap-2 rounded-[24px] border border-border/60 bg-background/55 px-4 py-3 text-sm text-muted-foreground">
-                          <Loader2 className="size-4 animate-spin" />
-                          {isStreaming ? 'Writing a response...' : 'Thinking...'}
+                        return (
+                          <div
+                            key={message.id}
+                            className={cn(
+                              'flex flex-col gap-2',
+                              message.role === 'user' ? 'items-end' : 'items-start'
+                            )}
+                          >
+                            <span className="px-1 text-[11px] text-muted-foreground">
+                              {message.role === 'user' ? 'You' : 'noter'}
+                            </span>
+
+                            <ChatMessageAttachments message={message} />
+
+                            {text ? (
+                              <div
+                                className={cn(
+                                  'max-w-[90%] rounded-[24px] px-4 py-3 text-sm leading-7',
+                                  message.role === 'user'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'border border-border/60 bg-background/55 text-foreground'
+                                )}
+                              >
+                                {message.role === 'user' ? (
+                                  <div className="whitespace-pre-wrap">{text}</div>
+                                ) : (
+                                  <div className="prose prose-sm max-w-none break-words text-foreground dark:prose-invert [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:pl-5 [&>ol]:mb-2 [&>ol]:pl-5">
+                                    <ReactMarkdown>{text}</ReactMarkdown>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+
+                      {isLoading ? (
+                        <div className="flex items-start">
+                          <div className="flex max-w-[90%] items-center gap-2 rounded-[24px] border border-border/60 bg-background/55 px-4 py-3 text-sm text-muted-foreground">
+                            <Loader2 className="size-4 animate-spin" />
+                            {isStreaming ? 'Writing a response...' : 'Thinking...'}
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
+                      ) : null}
 
-                    <div ref={endRef} />
-                  </div>
+                      <div ref={endRef} />
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
 
@@ -506,11 +536,12 @@ export function ChatBar({
                       placeholder={prompt}
                       disabled={isLoading}
                       aria-label={prompt}
-                      className="max-h-36 min-h-24 overflow-y-auto px-4 py-4 text-sm"
+                      className="min-h-[3.5rem] max-h-32 overflow-y-auto px-4 py-3 text-sm leading-6"
                     />
 
-                    {selectedFiles.length > 0 ? (
-                      <div className="flex flex-wrap gap-2 px-3 pb-1">
+                    {showContextRow ? (
+                      <div className="flex flex-wrap gap-2 px-3 pb-2">
+                        {canShowContext ? <ContextChip label={activeContextLabel} /> : null}
                         {selectedFiles.map((file, index) => (
                           <AttachmentChip
                             key={`${file.name}-${index}`}
@@ -522,31 +553,72 @@ export function ChatBar({
                     ) : null}
 
                     <InputGroupAddon align="block-end" className="flex-wrap gap-2 pt-2">
-                      {allowGlobalToggle ? (
-                        <ToggleGroup
-                          type="single"
-                          variant="outline"
-                          size="sm"
-                          value={activeScope === 'meeting' ? 'meeting' : 'global'}
-                          onValueChange={(value) => {
-                            if (value === 'meeting' || value === 'global') {
-                              setActiveScope(value)
-                            }
-                          }}
-                          aria-label="Chat scope"
-                          className="liquid-glass-toolbar"
-                        >
-                          <ToggleGroupItem value="meeting" aria-label="This note">
-                            This note
-                          </ToggleGroupItem>
-                          <ToggleGroupItem value="global" aria-label="All notes">
-                            All notes
-                          </ToggleGroupItem>
-                        </ToggleGroup>
-                      ) : activeScope === 'support' ? (
-                        <Badge variant="secondary" className="rounded-full px-3 py-1">
-                          Support
-                        </Badge>
+                      {canShowContext ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <InputGroupButton
+                              variant="ghost"
+                              size="sm"
+                              className="liquid-glass-control border border-border/40"
+                            >
+                              Context
+                              <ChevronDown data-icon="inline-end" />
+                            </InputGroupButton>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            className="liquid-glass-popover w-[18rem] rounded-[24px] border-border/40 p-4"
+                          >
+                            <div className="flex flex-col gap-4">
+                              <div className="flex flex-col gap-1">
+                                <p className="text-sm font-medium text-foreground">Active context</p>
+                                <p className="text-sm leading-6 text-muted-foreground">
+                                  {getContextDescription(activeScope, selectedFiles.length, allowGlobalToggle)}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <ContextChip label={activeContextLabel} />
+                                {selectedFiles.length > 0 ? (
+                                  <Badge variant="outline" className="rounded-full">
+                                    {selectedFiles.length} {selectedFiles.length === 1 ? 'file' : 'files'}
+                                  </Badge>
+                                ) : null}
+                              </div>
+
+                              {allowGlobalToggle ? (
+                                <>
+                                  <Separator />
+                                  <div className="flex flex-col gap-2">
+                                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                      Scope
+                                    </p>
+                                    <ToggleGroup
+                                      type="single"
+                                      variant="outline"
+                                      size="sm"
+                                      value={activeScope === 'meeting' ? 'meeting' : 'global'}
+                                      onValueChange={(value) => {
+                                        if (value === 'meeting' || value === 'global') {
+                                          setActiveScope(value)
+                                        }
+                                      }}
+                                      aria-label="Chat scope"
+                                      className="liquid-glass-toolbar w-full"
+                                    >
+                                      <ToggleGroupItem value="meeting" aria-label="This note">
+                                        This note
+                                      </ToggleGroupItem>
+                                      <ToggleGroupItem value="global" aria-label="All notes">
+                                        All notes
+                                      </ToggleGroupItem>
+                                    </ToggleGroup>
+                                  </div>
+                                </>
+                              ) : null}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       ) : null}
 
                       {canAttach ? (
@@ -569,8 +641,8 @@ export function ChatBar({
                             onClick={() => fileInputRef.current?.click()}
                             className="liquid-glass-control border border-border/40"
                           >
-                            <Paperclip />
-                            Add context
+                            <Paperclip data-icon="inline-start" />
+                            Add files
                           </InputGroupButton>
                         </>
                       ) : null}
@@ -581,11 +653,13 @@ export function ChatBar({
                             variant={searchEnabled ? 'secondary' : 'ghost'}
                             size="sm"
                             aria-pressed={searchEnabled}
+                            data-active={searchEnabled ? 'true' : 'false'}
                             onClick={() => setSearchEnabled((current) => !current)}
                             className="liquid-glass-control border border-border/40"
                           >
-                            <Search />
+                            <Search data-icon="inline-start" />
                             Search web
+                            {searchEnabled ? <Check data-icon="inline-end" /> : null}
                           </InputGroupButton>
 
                           <DropdownMenu>
@@ -596,7 +670,7 @@ export function ChatBar({
                                 className="liquid-glass-control border border-border/40"
                               >
                                 {getChatModelLabel(model)}
-                                <ChevronDown />
+                                <ChevronDown data-icon="inline-end" />
                               </InputGroupButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-52">
@@ -633,23 +707,24 @@ export function ChatBar({
                           >
                             Clear conversation
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={() => collapse()}>
-                            Collapse
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      <InputGroupButton
-                        type="submit"
-                        variant="default"
-                        size="icon-sm"
-                        disabled={submitDisabled}
-                        aria-label="Send"
-                        className="liquid-glass-button ml-auto"
-                      >
-                        {isLoading ? <Loader2 className="animate-spin" /> : <Send />}
-                      </InputGroupButton>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <InputGroupButton
+                            type="submit"
+                            variant="default"
+                            size="icon-sm"
+                            disabled={submitDisabled}
+                            aria-label="Send message"
+                            className="liquid-glass-button ml-auto"
+                          >
+                            {isLoading ? <Loader2 className="animate-spin" /> : <Send />}
+                          </InputGroupButton>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Send message</TooltipContent>
+                      </Tooltip>
                     </InputGroupAddon>
                   </InputGroup>
                 </form>

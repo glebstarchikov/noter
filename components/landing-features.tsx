@@ -9,21 +9,21 @@ const features = [
     icon: Mic,
     title: 'Record or upload',
     description:
-      'Capture audio directly in your browser or drop in an existing recording. Supports mp3, wav, m4a, and webm.',
+      'Capture audio directly in your browser or bring in an existing recording without changing how you already work.',
   },
   {
     step: '02',
     icon: FileText,
-    title: 'Instant transcription',
+    title: 'Transcribe quickly',
     description:
-      'OpenAI Whisper turns your audio into accurate text in seconds. No manual note-taking required.',
+      'noter turns the conversation into text in seconds, so the note can stay grounded in what was actually said.',
   },
   {
     step: '03',
     icon: Zap,
-    title: 'Structured notes',
+    title: 'Leave with structure',
     description:
-      'AI extracts a summary, action items, key decisions, topics discussed, and follow-ups from every meeting.',
+      'Summaries, action items, and decisions land in one place that is easy to revisit and easy to edit.',
   },
 ]
 
@@ -49,40 +49,37 @@ export function LandingFeatures() {
   }, [])
 
   return (
-    <section ref={sectionRef} className="border-t border-border px-6 py-24 md:px-12 md:py-32">
-      <div className="mx-auto max-w-4xl">
-        {/* Section heading */}
-        <div className="reveal-up mb-16 text-center">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-            How it works
+    <section ref={sectionRef} className="border-t border-border px-6 py-20 md:px-10 md:py-24">
+      <div className="mx-auto flex max-w-6xl flex-col gap-12">
+        <div className="reveal-up text-center">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+            One calm flow from audio to notes
           </h2>
-          <p className="mt-3 text-sm text-muted-foreground md:text-base">
-            Three steps from audio to actionable notes.
+          <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">
+            Every step keeps the note readable and the next action obvious.
           </p>
         </div>
 
-        {/* Feature cards */}
         <div className="grid gap-6 md:grid-cols-3">
-          {features.map((feature, i) => (
+          {features.map((feature, index) => (
             <div
               key={feature.title}
-              className="reveal-up group flex flex-col gap-4 rounded-xl border-l-2 border-accent/30 bg-secondary/40 p-6 transition-all duration-300 hover:border-accent hover:bg-secondary/60"
-              style={{ animationDelay: `${i * 120}ms` }}
+              className="surface-document reveal-up flex flex-col gap-5 px-6 py-6"
+              style={{ animationDelay: `${index * 120}ms` }}
             >
-              {/* Step number + Icon */}
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-medium tracking-widest text-accent">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                   {feature.step}
                 </span>
-                <div className="flex size-10 items-center justify-center rounded-lg bg-accent/10 transition-colors group-hover:bg-accent/15">
-                  <feature.icon className="size-5 text-accent" />
+                <div className="surface-utility flex size-10 items-center justify-center rounded-2xl">
+                  <feature.icon className="size-4 text-foreground" />
                 </div>
               </div>
 
-              <h3 className="text-sm font-medium text-foreground">
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
                 {feature.title}
               </h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-6 text-muted-foreground">
                 {feature.description}
               </p>
             </div>

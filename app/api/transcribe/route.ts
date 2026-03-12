@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
-import { getOpenAI } from '@/lib/openai'
+import { transcribeAudioFromStorage } from '@/lib/transcription'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -69,33 +69,7 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId)
       .eq('user_id', user.id)
 
-    // Download audio from Supabase Storage
-    const { data: audioData, error: downloadError } = await supabase.storage
-      .from('meeting-audio')
-      .download(storagePath)
-
-    if (downloadError || !audioData) {
-      throw new Error('Failed to download audio from storage')
-    }
-
-    // Determine file extension from path
-    const extension = storagePath.split('.').pop() || 'webm'
-    const mimeType = extension === 'webm' ? 'audio/webm'
-      : extension === 'mp3' ? 'audio/mpeg'
-      : extension === 'wav' ? 'audio/wav'
-      : extension === 'm4a' ? 'audio/mp4'
-      : extension === 'ogg' ? 'audio/ogg'
-      : 'audio/webm'
-
-    // Convert Blob to File for OpenAI API
-    const audioFile = new File([audioData], `audio.${extension}`, { type: mimeType })
-
-    // Transcribe with OpenAI Whisper
-    const transcription = await getOpenAI().audio.transcriptions.create({
-      file: audioFile,
-      model: 'whisper-1',
-      response_format: 'text',
-    })
+    const transcription = await transcribeAudioFromStorage(supabase, storagePath)
 
     // Save transcript
     await supabase

@@ -29,6 +29,17 @@ import {
   type TiptapDocument,
 } from '@/lib/tiptap-converter'
 import type { EnhancementOutcome, EnhancementState, Meeting } from '@/lib/types'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const ratelimit =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(5, '1 m'),
+      analytics: true,
+    })
+    : null
 
 const requestSchema = z.discriminatedUnion('action', [
   z.object({
@@ -262,6 +273,13 @@ export async function POST(
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
     userId = user.id
+
+    if (ratelimit) {
+      const { success } = await ratelimit.limit(`enhance_${user.id}`)
+      if (!success) {
+        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
+      }
+    }
 
     const { data: meeting } = await supabase
       .from('meetings')

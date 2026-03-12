@@ -1,73 +1,56 @@
 'use client'
 
 import Link from 'next/link'
-import { Sparkles, Send } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 export function LandingHero() {
   return (
-    <section className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-24 md:py-36">
-      {/* Dot grid background */}
-      <div
-        className="dot-grid pointer-events-none absolute inset-0"
-        aria-hidden="true"
-      />
+    <section className="flex flex-1 items-center px-6 py-20 md:px-10 md:py-28">
+      <div className="mx-auto flex max-w-4xl flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex max-w-3xl flex-col gap-6">
+          <Badge variant="secondary" className="landing-badge w-fit gap-1.5 rounded-full px-3 py-1">
+            <Sparkles className="size-3 text-accent" />
+            Calm AI meeting notes
+          </Badge>
 
-      {/* Radial fade at edges */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        aria-hidden="true"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,var(--background)_80%)]" />
-      </div>
+          <div className="flex flex-col gap-4">
+            <h1 className="landing-stagger text-balance text-4xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl md:text-6xl">
+              Record the meeting once. Keep the note readable after.
+            </h1>
+            <p className="landing-fade max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+              noter turns conversations into clear notes, action items, and decisions without making the rest of your workspace feel like a dashboard.
+            </p>
+          </div>
 
-      {/* Accent glow behind heading */}
-      <div
-        className="pointer-events-none absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[600px] rounded-full bg-accent/[0.06] blur-[100px]"
-        aria-hidden="true"
-      />
-
-      <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center gap-10 text-center">
-        {/* Badge with shimmer */}
-        <span className="landing-badge inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-medium text-muted-foreground">
-          <Sparkles className="size-3 text-accent" />
-          AI-powered meeting notes
-        </span>
-
-        {/* Heading with stagger animation */}
-        <h1 className="text-balance text-4xl font-semibold leading-[1.1] tracking-tighter text-foreground sm:text-5xl md:text-7xl lg:text-8xl">
-          <span className="landing-stagger inline-block" style={{ animationDelay: '0ms' }}>
-            Record.
-          </span>{' '}
-          <span className="landing-stagger inline-block" style={{ animationDelay: '120ms' }}>
-            Transcribe.
-          </span>
-          <br />
-          <span className="landing-stagger inline-block text-accent" style={{ animationDelay: '240ms' }}>
-            Understand.
-          </span>
-        </h1>
-
-        {/* Subheading */}
-        <p className="landing-fade max-w-lg text-pretty text-base leading-relaxed text-muted-foreground md:text-lg" style={{ animationDelay: '400ms' }}>
-          Drop in your meeting audio or record live. noter turns conversations into structured notes, action items, and decisions — instantly.
-        </p>
-
-        {/* CTA */}
-        <div className="landing-fade flex flex-col items-center gap-4 sm:flex-row" style={{ animationDelay: '500ms' }}>
-          <Button asChild size="lg" className="h-12 px-8 text-sm">
-            <Link href="/auth/sign-up">
-              Start for free
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="lg" className="h-12 px-8 text-sm">
-            <Link href="/auth/login">
-              Sign in
-            </Link>
-          </Button>
+          <div className="landing-fade flex flex-col items-start gap-4 sm:flex-row">
+            <Button asChild size="lg" className="h-11 rounded-xl px-6 text-sm">
+              <Link href="/auth/sign-up">Start for free</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="h-11 rounded-xl px-6 text-sm shadow-none">
+              <Link href="/auth/login">Sign in</Link>
+            </Button>
+          </div>
         </div>
 
-
+        <div className="surface-utility landing-fade flex max-w-md flex-col gap-4 rounded-[28px] px-6 py-6 text-left">
+          <p className="text-sm font-medium text-foreground">What noter keeps in view</p>
+          <div className="flex flex-col gap-3">
+            <div className="surface-document rounded-[22px] px-4 py-4">
+              <p className="text-sm font-medium text-foreground">Summary</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                A quick read of the meeting without hunting through the transcript.
+              </p>
+            </div>
+            <div className="surface-document rounded-[22px] px-4 py-4">
+              <p className="text-sm font-medium text-foreground">Action items</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Decisions and follow-ups stay attached to the note, not scattered across tabs.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   )

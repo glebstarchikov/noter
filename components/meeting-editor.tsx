@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor, JSONContent } from '@tiptap/react'
 import { Bold, Italic, Heading2, Heading3, List, ListTodo, Quote } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEditorAutosave } from '@/hooks/use-editor-autosave'
 import { createMeetingEditorExtensions } from '@/lib/meeting-editor-extensions'
@@ -42,22 +43,22 @@ function ToolbarButton({
   label: string
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant={active ? 'secondary' : 'ghost-icon'}
+      size="icon-xs"
       onMouseDown={(e) => {
         e.preventDefault()
         onClick()
       }}
       aria-label={label}
       className={cn(
-        'flex items-center justify-center rounded-md p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active
-          ? 'bg-secondary text-foreground'
-          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+        'rounded-md shadow-none',
+        active && 'text-foreground'
       )}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 

@@ -7,11 +7,12 @@ import {
   File,
   Trash2,
   Loader2,
-  AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +23,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { MeetingSource } from '@/lib/types'
+import { formatDateCompact } from '@/lib/date-formatter'
+import { fetchSources as fetchSourcesApi, uploadSource, deleteSource as deleteSourceApi } from '@/lib/source-api'
 
 const ALLOWED_EXTENSIONS = ['pdf', 'txt', 'md', 'docx']
 const MAX_SIZE_MB = 10
@@ -30,23 +42,6 @@ const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
 function formatFileType(type: string) {
   return type.toUpperCase()
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 || 12
-  return `${months[d.getMonth()]} ${d.getDate()}, ${hour12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-const TYPE_BADGE_STYLES: Record<string, string> = {
-  pdf: 'bg-secondary text-secondary-foreground border-border',
-  txt: 'bg-muted text-muted-foreground border-border',
-  md: 'bg-accent/15 text-accent-foreground border-accent/30',
-  docx: 'bg-card text-foreground border-border',
 }
 
 export function SourceManager({ meetingId }: { meetingId: string }) {
@@ -59,21 +54,10 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
 
   // Fetch sources on mount
   useEffect(() => {
-    const fetchSources = async () => {
-      try {
-        const res = await fetch(`/api/sources?meetingId=${meetingId}`)
-        if (!res.ok) throw new Error('Failed to fetch')
-        const data = await res.json()
-        if (data.sources) {
-          setSources(data.sources)
-        }
-      } catch {
-        toast.error('Failed to load sources')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchSources()
+    fetchSourcesApi(meetingId)
+      .then(setSources)
+      .catch(() => toast.error("We couldn't load your documents. Please try again."))
+      .finally(() => setIsLoading(false))
   }, [meetingId])
 
   const uploadFile = useCallback(
@@ -81,46 +65,23 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
       // Validate extension
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
       if (!ALLOWED_EXTENSIONS.includes(ext)) {
-        toast.error(`Unsupported file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`)
+        toast.error('We support PDF, Word, Markdown, and plain text files.')
         return
       }
 
       // Validate size
       if (file.size > MAX_SIZE_BYTES) {
-        toast.error(`File too large. Maximum ${MAX_SIZE_MB}MB.`)
+        toast.error('This file is too large. The maximum size is 10 MB.')
         return
       }
 
       setIsUploading(true)
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('meetingId', meetingId)
-
-        const res = await fetch('/api/sources', {
-          method: 'POST',
-          body: formData,
-        })
-
-        if (!res.ok) {
-          const textErr = await res.text()
-          let errorMessage = 'Upload failed'
-          try {
-            const jsonErr = JSON.parse(textErr)
-            errorMessage = jsonErr.error || errorMessage
-          } catch {
-            errorMessage = textErr || errorMessage
-          }
-          throw new Error(errorMessage)
-        }
-
-        const data = await res.json()
-
-
-        setSources((prev) => [data.source, ...prev])
+        const source = await uploadSource(meetingId, file)
+        setSources((prev) => [source, ...prev])
         toast.success(`${file.name} uploaded and processed`)
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Upload failed'
+        const message = error instanceof Error ? error.message : 'Something went wrong uploading this file. Please try again.'
         toast.error(message)
       } finally {
         setIsUploading(false)
@@ -129,22 +90,13 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
     [meetingId]
   )
 
-  const deleteSource = async (sourceId: string, name: string) => {
+  const deleteSource = async (sourceId: string) => {
     try {
-      const res = await fetch('/api/sources', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId }),
-      })
-
-      if (!res.ok) {
-        throw new Error('Delete failed')
-      }
-
+      await deleteSourceApi(sourceId)
       setSources((prev) => prev.filter((s) => s.id !== sourceId))
-      toast.success('Source removed')
+      toast.success('Document removed')
     } catch {
-      toast.error('Failed to remove source')
+      toast.error("We couldn't remove this document. Please try again.")
     } finally {
       setDeleteTarget(null)
     }
@@ -197,10 +149,10 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
             }
           }}
           className={cn(
-            'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'surface-utility flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed p-8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             isDragging
               ? 'border-accent bg-accent/5'
-              : 'border-border hover:border-muted-foreground',
+              : 'border-border hover:border-muted-foreground/60',
             isUploading && 'pointer-events-none opacity-50'
           )}
         >
@@ -234,8 +186,19 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
 
         {/* Sources list */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="surface-document flex items-center justify-between px-3 py-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-8 rounded-md" />
+                  <div className="flex flex-col gap-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="h-6 w-12 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : sources.length > 0 ? (
           <div className="flex flex-col gap-2">
@@ -245,10 +208,10 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
             {sources.map((source) => (
               <div
                 key={source.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5"
+                className="surface-document flex items-center justify-between rounded-[22px] px-3 py-2.5"
               >
                 <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary">
+                  <div className="surface-utility flex size-8 shrink-0 items-center justify-center rounded-md">
                     {source.file_type === 'pdf' ? (
                       <FileText className="size-4 text-muted-foreground" />
                     ) : (
@@ -258,39 +221,49 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
                   <div className="flex flex-col overflow-hidden">
                     <span className="truncate text-sm text-foreground">{source.name}</span>
                     <span className="text-[10px] text-muted-foreground">
-                      {formatDate(source.created_at)}
+                      {formatDateCompact(source.created_at)}
                     </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      'inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
-                      TYPE_BADGE_STYLES[source.file_type] || 'bg-secondary text-muted-foreground border-border'
-                    )}
-                  >
+                  <Badge variant="secondary" className="rounded-full px-2 py-0.5">
                     {formatFileType(source.file_type)}
-                  </span>
-                  <Button
-                    variant="ghost-destructive"
-                    size="icon-sm"
-                    onClick={() => setDeleteTarget({ id: source.id, name: source.name })}
-                  >
-                    <Trash2 className="size-3.5" />
-                    <span className="sr-only">Delete {source.name}</span>
-                  </Button>
+                  </Badge>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost-destructive"
+                        size="icon-sm"
+                        onClick={() => setDeleteTarget({ id: source.id, name: source.name })}
+                        aria-label={`Remove ${source.name}`}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Remove document</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <AlertCircle className="size-5 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">
-              No documents attached yet. Upload presentations, notes, or reference materials to enrich
-              the AI chatbot context.
-            </p>
-          </div>
+          <Empty className="surface-empty py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FileText />
+              </EmptyMedia>
+              <EmptyTitle>No documents attached yet</EmptyTitle>
+              <EmptyDescription>
+                Upload presentations, notes, or reference materials to enrich the note context when you need them.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" className="shadow-none" onClick={() => fileInputRef.current?.click()}>
+                <Upload />
+                Add a document
+              </Button>
+            </EmptyContent>
+          </Empty>
         )}
       </div>
 
@@ -298,15 +271,15 @@ export function SourceManager({ meetingId }: { meetingId: string }) {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove source?</AlertDialogTitle>
+            <AlertDialogTitle>Remove document?</AlertDialogTitle>
             <AlertDialogDescription>
-              Remove &ldquo;{deleteTarget?.name}&rdquo; from this meeting? This cannot be undone.
+              Remove &ldquo;{deleteTarget?.name}&rdquo; from this note? This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteTarget && deleteSource(deleteTarget.id, deleteTarget.name)}
+              onClick={() => deleteTarget && deleteSource(deleteTarget.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remove

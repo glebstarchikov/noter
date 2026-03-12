@@ -16,23 +16,11 @@ import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { MeetingStatus } from '@/lib/types'
-import {
-  readApiError,
-  waitForMeetingCompletion,
-  runLegacyPipeline,
-  STATUS_POLL_INTERVAL_MS,
-  STATUS_POLL_TIMEOUT_MS,
-  type ProcessingState,
-} from '@/lib/meeting-pipeline'
+import { formatTime } from '@/lib/date-formatter'
+import { uploadAndProcessMeeting } from '@/lib/meeting-upload'
 
 const MAX_DURATION_SECONDS = 60 * 60 // 60 minutes
 const WARNING_THRESHOLD = 55 * 60 // 55 minutes
-
-function formatTime(seconds: number) {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
 
 interface Props {
   onProcessing: (state: {
@@ -91,7 +79,7 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
     try {
       await startRecording({ recordSystemAudio })
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Could not start recording')
+      toast.error(err instanceof Error ? err.message : "We couldn't start recording. Please check your microphone permissions.")
     }
   }
 
@@ -106,7 +94,6 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Create meeting record
       const { data: meeting, error: insertError } = await supabase
         .from('meetings')
         .insert({
@@ -120,47 +107,16 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
         .single()
 
       if (insertError || !meeting) throw new Error('Failed to create meeting')
-
       currentMeetingId = meeting.id
-      onProcessing({ meetingId: meeting.id, step: 'uploading' })
 
-      // Upload audio directly to Supabase Storage (avoids serverless payload limits)
-      const storagePath = `${user.id}/${meeting.id}.webm`
-      const { error: uploadError } = await supabase.storage
-        .from('meeting-audio')
-        .upload(storagePath, audioBlob, {
-          contentType: 'audio/webm',
-        })
-
-      if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
-
-      // Save storage path to DB
-      await supabase
-        .from('meetings')
-        .update({ audio_url: storagePath })
-        .eq('id', meeting.id)
-
-      const processRes = await fetch(`/api/meetings/${meeting.id}/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+      await uploadAndProcessMeeting({
+        meetingId: meeting.id,
+        userId: user.id,
+        blob: audioBlob,
+        extension: 'webm',
+        contentType: 'audio/webm',
+        onProcessing,
       })
-
-      if (!processRes.ok) {
-        const processError = await readApiError(processRes, 'Failed to queue processing')
-        if (processError.code === 'QUEUE_UNAVAILABLE') {
-          await runLegacyPipeline(meeting.id, storagePath, onProcessing)
-          onProcessing({ meetingId: meeting.id, step: 'done' })
-          router.push(`/dashboard/${meeting.id}`)
-          return
-        }
-
-        throw new Error(processError.message)
-      }
-
-      onProcessing({ meetingId: meeting.id, step: 'transcribing' })
-      await waitForMeetingCompletion(meeting.id, onProcessing)
-      onProcessing({ meetingId: meeting.id, step: 'done' })
       router.push(`/dashboard/${meeting.id}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
@@ -173,7 +129,7 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-8 rounded-xl border border-border bg-card px-6 py-16">
+    <div className="surface-document flex flex-col items-center gap-8 rounded-[28px] px-6 py-16">
       {/* Timer */}
       <div className="font-mono text-5xl font-light tracking-wider text-foreground">
         {formatTime(duration)}
@@ -210,7 +166,7 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
             <Button
               onClick={handleStart}
               size="lg"
-              className="size-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/80"
+              className="size-14 rounded-full"
             >
               <Mic className="size-6" />
               <span className="sr-only">Start recording</span>
@@ -258,7 +214,7 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
                 onClick={handleSubmit}
                 size="lg"
                 disabled={isSubmitting}
-                className="rounded-lg bg-foreground px-8 text-background hover:bg-foreground/90"
+                className="rounded-xl px-8"
               >
                 {isSubmitting ? (
                   <>
@@ -311,7 +267,7 @@ export function AudioRecorder({ onProcessing, templateId }: Props) {
 
         {!isRecording && !audioBlob && (
           <TooltipProvider>
-            <div className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-2">
+            <div className="surface-utility flex items-center gap-2 rounded-full px-4 py-2">
               <Switch
                 id="system-audio"
                 checked={recordSystemAudio}

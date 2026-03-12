@@ -30,4 +30,18 @@ describe('TranscriptDrawer', () => {
     expect(handle).not.toBeNull()
     expect(screen.getByText('Transcript will appear here once recording starts.')).not.toBeNull()
   })
+
+  it('uses a provided trigger instead of the default transcript handle', () => {
+    render(
+      <TranscriptDrawer
+        transcript="Speaker: Hello there"
+        trigger={<button type="button">Open note transcript</button>}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /open note transcript/i }))
+
+    expect(screen.getByText('Speaker: Hello there')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /^transcript$/i })).toBeNull()
+  })
 })

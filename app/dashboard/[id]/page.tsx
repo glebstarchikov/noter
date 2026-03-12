@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
+import { PageShell } from '@/components/page-shell'
 import { ProcessingView } from '@/components/processing-view'
 import { shouldUseProcessingView } from '@/lib/meeting-workspace'
 import type { Meeting } from '@/lib/types'
@@ -27,7 +28,7 @@ export default async function MeetingPage({
 
   if (shouldUseProcessingView(meeting as Meeting)) {
     return (
-      <div className="p-6 md:p-10">
+      <PageShell size="detail">
         <ProcessingView
           meetingId={id}
           step={meeting.status}
@@ -35,7 +36,7 @@ export default async function MeetingPage({
             ? meeting.error_message || 'An unexpected error occurred during processing.'
             : undefined}
         />
-      </div>
+      </PageShell>
     )
   }
 

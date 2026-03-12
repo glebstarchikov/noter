@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
+  AlignLeft,
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
@@ -15,7 +16,10 @@ import {
   Pin,
   Trash2,
 } from 'lucide-react'
+import { PageHeader } from '@/components/page-shell'
+import { StatusPanel } from '@/components/status-panel'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,11 +36,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { TranscriptDrawer } from '@/components/transcript-drawer'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { readApiError } from '@/lib/meeting-pipeline'
-import { clearChatMessages } from '@/lib/chat-storage'
 import { toast } from 'sonner'
+import { deleteMeeting, toggleMeetingPin, copyMeetingNotes } from '@/lib/meeting-actions'
 import { useDeepgramTranscription } from '@/hooks/use-deepgram-transcription'
 import { MeetingNoteSurface } from '@/components/meeting-note-surface'
 import {
@@ -44,105 +49,8 @@ import {
   MeetingAssistantBridge,
   type RecordingPhase,
 } from '@/components/assistant-shell-context'
-import type { ActionItem, DiarizedSegment, Meeting } from '@/lib/types'
-
-function formatTime(seconds: number) {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ]
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 || 12
-  return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at ${hour12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatDuration(seconds: number) {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}m ${secs}s`
-}
-
-function PageHeader({
-  meeting,
-  isPinned,
-  onCopy,
-  onTogglePin,
-  onDelete,
-}: {
-  meeting: Meeting
-  isPinned: boolean
-  onCopy: () => void
-  onTogglePin: () => void
-  onDelete: () => void
-}) {
-  return (
-    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-      <div className="max-w-4xl space-y-3">
-        <Link
-          href="/dashboard"
-          className="flex w-fit items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="size-3" />
-          Back to notes
-        </Link>
-        <div className="space-y-2">
-          <h1 className="text-[30px] font-semibold tracking-tight text-foreground text-balance">
-            {meeting.title}
-          </h1>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Clock className="size-3.5" />
-              {formatDate(meeting.created_at)}
-            </span>
-            {meeting.audio_duration && (
-              <span className="font-mono text-xs tabular-nums text-muted-foreground/80">
-                {formatDuration(meeting.audio_duration)}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2 self-start">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon-sm" className="shadow-none">
-              <MoreHorizontal className="size-4" />
-              <span className="sr-only">Open meeting actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onSelect={onCopy}>
-              <Copy className="size-4" />
-              Copy notes
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onTogglePin}>
-              <Pin className={cn('size-4', isPinned && 'rotate-45')} />
-              {isPinned ? 'Unpin note' : 'Pin note'}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={onDelete}
-            >
-              <Trash2 className="size-4" />
-              Delete note
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  )
-}
+import type { DiarizedSegment, Meeting } from '@/lib/types'
+import { formatTime, formatDate, formatDuration } from '@/lib/date-formatter'
 
 export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   const router = useRouter()
@@ -206,61 +114,27 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   }, [])
 
   const togglePin = async () => {
-    const nextPinned = !isPinned
-    setIsPinned(nextPinned)
+    const prev = isPinned
+    setIsPinned(!prev)
     try {
-      const res = await fetch(`/api/meetings/${meeting.id}/pin`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinned: nextPinned }),
-      })
-      if (!res.ok) throw new Error('Failed to update pin')
+      await toggleMeetingPin(meeting.id, prev)
     } catch {
-      setIsPinned(!nextPinned)
-      toast.error('Failed to update pin status')
+      setIsPinned(prev)
+      toast.error("We couldn't update this note right now. Please try again.")
     }
   }
 
   const handleCopyNotes = useCallback(() => {
-    const actionItems: ActionItem[] = meeting.action_items || []
-    const followUps = meeting.follow_ups ?? []
-    const parts: string[] = []
-    if (meeting.title) parts.push(`# ${meeting.title}\n`)
-    if (meeting.summary) parts.push(`${meeting.summary}\n`)
-    if (meeting.detailed_notes) {
-      parts.push(meeting.detailed_notes)
-    } else {
-      const decisions = meeting.key_decisions ?? []
-      if (decisions.length > 0) {
-        parts.push(`## Key Decisions\n${decisions.map((decision) => `- ${decision}`).join('\n')}`)
-      }
-    }
-    if (actionItems.length > 0) {
-      parts.push(`## Action Items\n${actionItems.map((item) => `- [${item.done ? 'x' : ' '}] ${item.task}${item.owner ? ` (${item.owner})` : ''}`).join('\n')}`)
-    }
-    if (followUps.length > 0) {
-      parts.push(`## Follow-ups\n${followUps.map((followUp) => `- ${followUp}`).join('\n')}`)
-    }
-
-    navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
-      toast.success('Notes copied to clipboard')
-    }).catch(() => {
-      toast.error('Failed to copy notes')
-    })
+    copyMeetingNotes(meeting)
   }, [meeting])
 
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      const response = await fetch(`/api/meetings/${meeting.id}`, { method: 'DELETE' })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null)
-        throw new Error(payload?.error || 'Failed to delete meeting')
-      }
-      clearChatMessages(meeting.id)
+      await deleteMeeting(meeting.id)
       router.push('/dashboard')
     } catch {
-      toast.error('Failed to delete meeting')
+      toast.error("We couldn't delete this note. Please try again.")
       setIsDeleting(false)
       setShowDeleteDialog(false)
     }
@@ -324,7 +198,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       timerRef.current = setInterval(() => setDuration((value) => value + 1), 1000)
       setPhase('recording')
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Could not access audio')
+      toast.error(error instanceof Error ? error.message : "We couldn't access your microphone. Please check your permissions.")
     }
   }, [recordSystemAudio, startTranscription])
 
@@ -505,32 +379,98 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
 
       <div className="flex flex-col gap-8">
         <PageHeader
-          meeting={meeting}
-          isPinned={isPinned}
-          onCopy={handleCopyNotes}
-          onTogglePin={togglePin}
-          onDelete={() => setShowDeleteDialog(true)}
+          eyebrow={
+            <Link
+              href="/dashboard"
+              className="flex w-fit items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowLeft className="size-3" />
+              Back to notes
+            </Link>
+          }
+          title={meeting.title}
+          description={
+            <span className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Clock className="size-3.5" />
+                {formatDate(meeting.created_at)}
+              </span>
+              {meeting.audio_duration ? (
+                <span className="font-mono text-xs tabular-nums text-muted-foreground/80">
+                  {formatDuration(meeting.audio_duration)}
+                </span>
+              ) : null}
+            </span>
+          }
+          actions={
+            <>
+              <TranscriptDrawer
+                transcript={transcriptForDrawer}
+                liveSegments={assistantTranscriptSegments}
+                live={live}
+                alwaysVisible
+                emptyMessage="Transcript will appear here once recording starts."
+                trigger={
+                  <Button variant="outline" size="sm" className="gap-2 rounded-full shadow-none">
+                    <AlignLeft />
+                    Transcript
+                  </Button>
+                }
+              />
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon-sm" className="shadow-none" aria-label="More actions">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">More actions</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onSelect={handleCopyNotes}>
+                    <Copy className="size-4" />
+                    Copy notes
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={togglePin}>
+                    <Pin className={cn('size-4', isPinned && 'rotate-45')} />
+                    {isPinned ? 'Unpin note' : 'Pin note'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => setShowDeleteDialog(true)}
+                  >
+                    <Trash2 className="size-4" />
+                    Delete note
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          }
         />
 
         {showRecordingControls ? (
-          <div className="surface-utility flex flex-col gap-4 px-5 py-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-3">
-                <span className="relative flex size-2 shrink-0">
-                  <span
-                    className={cn(
-                      'absolute inline-flex h-full w-full rounded-full opacity-75',
-                      !isPaused && phase === 'recording' ? 'animate-ping bg-accent' : 'bg-muted-foreground'
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      'relative inline-flex size-2 rounded-full',
-                      !isPaused && phase === 'recording' ? 'bg-accent' : 'bg-muted-foreground/40'
-                    )}
-                  />
-                </span>
-                <span className="text-sm font-medium text-foreground">
+          <StatusPanel
+            icon={
+              <span className="relative flex size-2 shrink-0">
+                <span
+                  className={cn(
+                    'absolute inline-flex h-full w-full rounded-full opacity-75',
+                    !isPaused && phase === 'recording' ? 'animate-ping bg-accent' : 'bg-muted-foreground'
+                  )}
+                />
+                <span
+                  className={cn(
+                    'relative inline-flex size-2 rounded-full',
+                    !isPaused && phase === 'recording' ? 'bg-accent' : 'bg-muted-foreground/40'
+                  )}
+                />
+              </span>
+            }
+            title={
+              <span className="flex flex-wrap items-center gap-3">
+                <span>
                   {phase === 'stopping'
                     ? 'Saving your recording…'
                     : phase === 'done'
@@ -539,57 +479,54 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
                         ? (isPaused ? 'Paused' : 'Recording now')
                         : 'Ready to record'}
                 </span>
-              </div>
-
-              {hasSystemAudio && (
-                <span className="flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1">
-                  <Monitor className="size-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">System audio</span>
+                {hasSystemAudio ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
+                    <Monitor className="size-3" />
+                    System audio
+                  </span>
+                ) : null}
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {formatTime(duration)}
                 </span>
-              )}
-
-              <span className="font-mono text-sm tabular-nums text-muted-foreground">
-                {formatTime(duration)}
               </span>
-
-            </div>
-
-            <p className="text-sm leading-6 text-muted-foreground">
-              {phase === 'setup'
+            }
+            description={
+              phase === 'setup'
                 ? 'Use the assistant dock to start recording. Your note stays here while the live transcript and controls move into the assistant shell.'
                 : phase === 'done'
                   ? 'The recording is saved. noter is filling in the title, summary, and action items in the background.'
                   : isConnected
                     ? 'The transcript is streaming live into the assistant shell.'
-                    : 'Connecting your microphone and live transcript…'}
-            </p>
-          </div>
+                    : 'Connecting your microphone and live transcript…'
+            }
+          />
         ) : (
-          <div className="surface-utility flex items-start gap-3 px-5 py-4">
-            {meeting.status === 'generating' ? (
-              <Loader2 className="mt-0.5 size-4 animate-spin text-accent" />
-            ) : meeting.status === 'error' ? (
-              <AlertCircle className="mt-0.5 size-4 text-destructive" />
-            ) : (
-              <CheckCircle2 className="mt-0.5 size-4 text-accent" />
-            )}
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">
-                {meeting.status === 'generating'
-                  ? 'Preparing meeting metadata in the background'
-                  : meeting.status === 'error'
-                    ? 'Automatic note generation hit a problem'
-                    : 'Recording complete'}
-              </p>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {meeting.status === 'generating'
-                  ? 'Your editor stays available while noter updates the meeting title, summary, and action items.'
-                  : meeting.status === 'error'
-                    ? meeting.error_message || 'Please try again.'
-                    : 'Your note stays editable. Open the transcript only when you need more detail.'}
-              </p>
-            </div>
-          </div>
+          <StatusPanel
+            tone={meeting.status === 'error' ? 'destructive' : 'default'}
+            icon={
+              meeting.status === 'generating' ? (
+                <Loader2 className="animate-spin text-accent" />
+              ) : meeting.status === 'error' ? (
+                <AlertCircle className="text-destructive" />
+              ) : (
+                <CheckCircle2 className="text-accent" />
+              )
+            }
+            title={
+              meeting.status === 'generating'
+                ? 'Preparing meeting metadata in the background'
+                : meeting.status === 'error'
+                  ? 'Automatic note generation hit a problem'
+                  : 'Recording complete'
+            }
+            description={
+              meeting.status === 'generating'
+                ? 'Your editor stays available while noter updates the meeting title, summary, and action items.'
+                : meeting.status === 'error'
+                  ? meeting.error_message || 'Please try again.'
+                  : 'Your note stays editable. Open the transcript only when you need more detail.'
+            }
+          />
         )}
 
         <MeetingNoteSurface

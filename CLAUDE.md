@@ -1,20 +1,21 @@
 # CLAUDE.md
 
-Guidance for Claude Code and AI assistants working in this repository.
+Guidance for AI assistants working in this repository.
 
 ## Project Overview
 
-**Easy Noter** is an AI-powered meeting notes application built with Next.js App Router (TypeScript). Users record or upload meeting audio, which is transcribed and converted into structured notes, then can chat with an AI about the meeting context.
+**Easy Noter** is an AI-powered meeting notes application built with Next.js App Router (TypeScript). Users record or upload meeting audio, which is transcribed and converted into structured, editable notes. They can then chat with an AI about the meeting context.
 
 **Product flow:**
 1. Sign in → `/auth/login` or `/auth/sign-up`
 2. Create meeting via live recording (`components/audio-recorder.tsx`) or file upload (`components/audio-uploader.tsx`) at `/dashboard/new`
-3. Processing pipeline: audio → transcription (Whisper) → structured notes (GPT-4o-mini)
-4. Review summary, action items, transcript at `/dashboard/[id]`
-5. Chat with AI about the meeting (`components/meeting-chat.tsx`)
-6. Attach external source documents for contextual Q&A (`components/source-manager.tsx`)
-7. Pin/unpin meetings for quick access (`PATCH /api/meetings/[id]/pin`)
-8. Global chat across all meetings via `chat-bar.tsx` (uses `/api/chat/global`)
+3. Processing pipeline: audio → transcription (Deepgram/Whisper) → structured notes (GPT-4o-mini)
+4. Review and edit notes in the rich-text editor (`components/meeting-workspace.tsx`, `components/meeting-note-surface.tsx`)
+5. Chat with AI about the meeting (`components/floating-chat-host.tsx`, routed via `ChatSurfaceScope`)
+6. Attach external source documents (`components/source-manager.tsx`)
+7. Pin/unpin meetings (`PATCH /api/meetings/[id]/pin`)
+8. Global chat across all meetings (`/api/chat/global`)
+9. AI note enhancement suggestions reviewed in `meeting-note-surface.tsx`
 
 ---
 
@@ -24,17 +25,15 @@ Guidance for Claude Code and AI assistants working in this repository.
 |---|---|
 | Framework | Next.js 16 (App Router), React 19, TypeScript 5 (strict) |
 | Database / Auth / Storage | Supabase (PostgreSQL + RLS, Auth, Storage) |
-| AI | OpenAI Whisper (transcription), GPT-4o-mini (notes + chat), AI SDK v6 |
-| Styling | Tailwind CSS v4, shadcn/ui, Radix UI primitives, lucide-react icons |
+| AI | Deepgram (transcription), OpenAI / AI Gateway (notes + chat), AI SDK v6 |
+| Rich Text Editor | Tiptap v3 (StarterKit + extensions) |
+| Styling | Tailwind CSS v4, shadcn/ui, Radix UI primitives, lucide-react |
 | Forms | react-hook-form + Zod |
-| Notifications | sonner (primary) |
+| Notifications | sonner |
 | Rate Limiting | Upstash Redis (optional — conditionally enabled) |
 | Testing | bun:test, happy-dom, @testing-library/react |
-| Package Manager | **bun** (use `bun`, not `pnpm`, `npm` or `yarn`) |
-| Markdown | react-markdown |
-| Panels | react-resizable-panels |
-| Document Parsing | pdf-parse (PDF text extraction), jszip |
-| Drawer | vaul |
+| Package Manager | **bun** (use `bun`, not `pnpm`, `npm`, or `yarn`) |
+| Misc | react-markdown, react-resizable-panels, vaul, pdf-parse, jszip |
 
 ---
 
@@ -43,7 +42,6 @@ Guidance for Claude Code and AI assistants working in this repository.
 ```bash
 bun run dev          # Start development server
 bun run build        # Production build
-bun run start        # Start production server
 bun run lint         # ESLint (app/, components/, hooks/, lib/)
 bun run typecheck    # tsc --noEmit
 bun run test         # Run all tests once (bun:test)
@@ -58,13 +56,15 @@ bun run test:watch   # Tests in watch mode
 
 ```
 app/
-├── api/                           # API route handlers (colocated tests: route.test.ts)
+├── api/
 │   ├── chat/
 │   │   ├── route.ts               # Per-meeting AI chat streaming (maxDuration=60s)
-│   │   └── global/route.ts        # Global chat across all meetings (maxDuration=60s)
+│   │   ├── global/route.ts        # Global chat across all meetings (maxDuration=60s)
+│   │   └── support/route.ts       # Support/assistant chat endpoint
 │   ├── generate-notes/            # Notes generation from transcript (maxDuration=60s)
-│   ├── transcribe/                # Audio → text via Whisper (maxDuration=120s)
+│   ├── transcribe/                # Audio → text (maxDuration=120s)
 │   ├── sources/                   # Source document upload/list/delete (maxDuration=30s)
+│   ├── note-templates/            # CRUD for custom note templates
 │   ├── meetings/[id]/
 │   │   ├── route.ts               # Meeting CRUD
 │   │   ├── pin/route.ts           # Pin/unpin meeting (maxDuration=10s)
@@ -75,96 +75,115 @@ app/
 ├── dashboard/                     # Protected pages (list, [id] detail, new)
 │   └── layout.tsx                 # Dashboard layout: SidebarProvider + AppSidebar + header
 ├── layout.tsx                     # Root layout: fonts, SEO, ThemeProvider, Toaster, Analytics
-├── manifest.ts                    # PWA manifest
-├── robots.ts                      # robots.txt generation
-├── sitemap.ts                     # XML sitemap generation
-├── icon.tsx                       # Favicon generation
-├── apple-icon.tsx                 # Apple icon generation
+├── globals.css                    # Tailwind v4 @theme inline config + CSS custom properties (oklch)
 └── page.tsx                       # Public landing page
 
 components/
-├── ui/                            # Reusable Radix/shadcn primitives (button, dialog, tabs, etc.)
+├── ui/                            # Reusable Radix/shadcn primitives
 ├── app-sidebar.tsx                # Navigation sidebar + user profile dropdown + theme toggle
-├── auth-page-layout.tsx           # Layout wrapper for auth pages with branding panel
-├── meeting-detail-wrapper.tsx     # Split-pane: detail + chat panel
-├── meeting-detail.tsx             # Summary/Actions/Transcript tabs with resizable ScrollablePanel
-├── meeting-chat.tsx               # AI streaming chat panel (per-meeting)
+├── auth-page-layout.tsx           # Layout wrapper for auth pages
+├── meeting-workspace.tsx          # Main meeting workspace (notes editor + chat + sources)
+├── meeting-note-surface.tsx       # Tiptap rich-text note editor with enhancement overlay
+├── meeting-editor.tsx             # Tiptap editor wrapper
+├── meeting-detail.tsx             # Summary/Actions/Transcript tab view
+├── meeting-detail-wrapper.tsx     # Split-pane layout container
+├── floating-chat-host.tsx         # Floating chat panel (per-meeting, global, or support)
+├── assistant-shell-context.tsx    # Context provider for chat surface scope
+├── chat-bar.tsx                   # Global chat bar UI
+├── chat-message-attachments.tsx   # Attachment rendering in chat messages
+├── transcript-drawer.tsx          # Transcript viewer in a side drawer
+├── template-quick-pick.tsx        # Note template selector
 ├── audio-recorder.tsx             # Live recording UI
 ├── audio-uploader.tsx             # File upload UI
 ├── processing-view.tsx            # Real-time processing progress
 ├── source-manager.tsx             # Attached document manager
 ├── meetings-list.tsx              # Dashboard meetings list
-├── chat-bar.tsx                   # Floating global chat bar (AI chat across all meetings)
-├── landing-cta.tsx                # Landing page CTA section
-├── landing-hero.tsx               # Landing page hero section
-├── landing-features.tsx           # Landing page features showcase
-├── logo.tsx                       # App logo component
-├── theme-provider.tsx             # next-themes ThemeProvider wrapper
-└── theme-toggle.tsx               # Standalone theme toggle (sun/moon/system)
+├── landing-*.tsx                  # Landing page sections
+└── theme-*.tsx                    # Theme provider and toggle
 
 hooks/
 ├── use-audio-recorder.ts          # Audio recording logic
 └── use-mobile.ts                  # Mobile breakpoint detection
 
 lib/
-├── types.ts                       # Domain interfaces: Meeting, ActionItem, MeetingStatus, MeetingSource
+├── types.ts                       # Domain types: Meeting, ActionItem, MeetingStatus, DiarizedSegment,
+│                                  #   NoteTemplate, EnhancementStatus, ChatSurfaceScope, etc.
 ├── utils.ts                       # cn() helper (clsx + tailwind-merge)
-├── api-helpers.ts                 # errorResponse() utility for consistent API error shapes
-├── chat-storage.ts                # LocalStorage chat message persistence (50-chat limit per meeting)
-├── meeting-pipeline.ts            # Client-side pipeline: readApiError(), waitForMeetingCompletion()
-├── note-normalization.ts          # normalizeStringArray(), normalizeActionItems() for schema validation
-├── openai.ts                      # OpenAI singleton client initialization
-├── prompts.ts                     # NOTES_GENERATION_PROMPT constant
-├── schemas.ts                     # generatedNotesSchema Zod schema for notes validation
-├── type-guards.ts                 # isStringArray(), isActionItemArray() type guards
-├── __tests__/                     # Tests for lib utilities (e.g. chat-storage.test.ts)
+├── api-helpers.ts                 # errorResponse() for consistent API error shapes
+├── ai-models.ts                   # Chat model IDs, labels, resolver functions
+├── prompts.ts                     # AI prompt constants
+├── schemas.ts                     # Zod schemas for AI output validation
+├── chat-storage.ts                # localStorage chat persistence (50-message cap)
+├── chat-attachments.ts            # Chat attachment helpers
+├── chat-message-utils.ts          # Chat message formatting utilities
+├── meeting-pipeline.ts            # waitForMeetingCompletion(), readApiError()
+├── meeting-workspace.ts           # Workspace state helpers
+├── meeting-editor-extensions.ts  # Tiptap extension configuration
+├── tiptap-converter.ts            # Convert AI output ↔ Tiptap JSON
+├── note-normalization.ts          # normalizeStringArray(), normalizeActionItems()
+├── note-template.ts               # Built-in note template definitions
+├── templates.ts                   # Template prompt expansion
+├── draft-proposal.ts              # AI note enhancement draft/proposal logic
+├── enhancement-context.ts         # Enhancement context builder
+├── enhancement-errors.ts          # Enhancement error types
+├── document-hash.ts               # Content hashing for document sync
+├── document-sync.ts               # Detects when notes are out of sync
+├── attachment-kind.ts             # Attachment type classification
+├── transcript-formatter.ts        # Transcript display formatting
+├── global-chat-context.ts         # Global chat context builder
+├── file-text.ts                   # File → text extraction utilities
+├── openai.ts                      # OpenAI singleton client
+├── tavily.ts                      # Tavily search client (web search for chat)
+├── type-guards.ts                 # isStringArray(), isActionItemArray()
 └── supabase/
-    ├── client.ts                  # Browser Supabase client (client components)
-    ├── server.ts                  # Server Supabase client (server components, API routes)
-    ├── admin.ts                   # Admin client (service role key — privileged operations only)
+    ├── client.ts                  # Browser Supabase client
+    ├── server.ts                  # Server Supabase client
+    ├── admin.ts                   # Admin client (service role — privileged ops only)
     └── proxy.ts                   # Middleware session refresh helper
 
-styles/
-└── globals.css                    # Tailwind v4 @theme inline config + CSS custom properties (oklch)
-
-scripts/                           # SQL migrations (run in numbered order)
-proxy.ts                           # Next.js middleware (session refresh + /dashboard auth redirect)
+proxy.ts                           # Next.js middleware (session refresh + /dashboard auth guard)
 bunfig.toml                        # Bun config: test preload files
-happydom.ts                        # DOM globals registration for bun:test
-test.setup.ts                      # Global test setup: next/server mocks, env vars
+happydom.ts                        # DOM globals for bun:test
+test.setup.ts                      # Global test setup: mocks + env vars
 ```
 
 ---
 
 ## Key Conventions
 
+### Code Architecture & Quality
+- **Always prefer the best architecture**: small composable modules, single responsibility, clean abstractions. Avoid monolithic components or functions.
+- **Prefer explicit over clever**: clear naming, obvious data flow, no magic side effects.
+- Use existing utilities and abstractions before inventing new ones; check `lib/` first.
+- Keep business logic in `lib/`, UI state in components, server logic in API routes.
+
 ### TypeScript
 - Strict mode. Explicit types for public interfaces and API payloads. No implicit `any`.
-- Use `@/` path aliases — no deep relative imports (e.g., `@/lib/types`, `@/components/ui/button`).
-- Match existing style in files you touch (quotes, semicolons).
+- Use `@/` path aliases — no deep relative imports (`@/lib/types`, `@/components/ui/button`).
+- Match existing code style (quotes, semicolons, formatting) in every file you touch.
 
 ### Styling
-- **Tailwind CSS v4** — design tokens defined in `styles/globals.css` via `@theme inline` and CSS custom properties. **Do not** use a `tailwind.config.ts` file.
+- **Tailwind CSS v4** — tokens in `app/globals.css` via `@theme inline`. **No** `tailwind.config.ts`.
 - Colors use **oklch** color space throughout.
 - Always use `cn()` from `lib/utils.ts` for conditional or merged class names.
-- Use semantic tokens (`bg-card`, `text-foreground`, `border-border`) — **never** hardcode light/dark colors.
+- Semantic tokens only (`bg-card`, `text-foreground`, `border-border`) — never hardcode colors.
 - Icons: **lucide-react** only.
 
 ### Components
 - Mark `'use client'` only where required (event handlers, hooks, browser APIs). Default to server components.
 - Reuse `components/ui/*` primitives. Do not re-implement them.
-- Notifications: use `toast()` from **sonner**.
-- Fonts: Geist (sans) and Geist Mono (mono) via `next/font/google`.
+- Notifications: `toast()` from **sonner**.
+- Tiptap editor: use `lib/meeting-editor-extensions.ts` for extension config; convert content via `lib/tiptap-converter.ts`.
 
 ### API Routes
 Every API route must:
-1. Export `maxDuration` (chat=60, transcribe=120, generate-notes=60, sources=30, pin=10, process=30, worker=300).
+1. Export `maxDuration` (see structure above for per-route values).
 2. Authenticate the user with Supabase before any data access.
 3. Enforce ownership: `.eq('user_id', user.id)` on every query.
-4. Return consistent error shapes: `{ error: string, code: string }` with proper HTTP status codes (`400`, `401`, `404`, `429`, `500`).
-5. Follow the conditional rate-limiting pattern (see below).
+4. Return `{ error: string, code: string }` with proper HTTP status (`400`, `401`, `404`, `429`, `500`).
+5. Follow the conditional rate-limiting pattern.
 
-Use `errorResponse()` from `@/lib/api-helpers` to return errors consistently.
+Use `errorResponse()` from `@/lib/api-helpers`.
 
 ### Supabase Client Selection
 | Context | Import |
@@ -174,11 +193,9 @@ Use `errorResponse()` from `@/lib/api-helpers` to return errors consistently.
 | Middleware session refresh | `@/lib/supabase/proxy` |
 | Admin / privileged ops | `@/lib/supabase/admin` |
 
-Never use a server Supabase client in client components, or vice versa.
+Never cross-use server vs. client Supabase clients.
 
 ### Rate Limiting Pattern
-The window varies by route: use `'10 s'` for chat endpoints and `'1 m'` for processing triggers.
-
 ```typescript
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -190,6 +207,22 @@ if (ratelimit) {
   if (!success) return errorResponse('Rate limit exceeded', 'RATE_LIMITED', 429)
 }
 ```
+Window: `'10 s'` for chat, `'1 m'` for processing triggers.
+
+### AI Models
+Defined in `lib/ai-models.ts`. Use helpers (`resolveChatModel`, `getChatModelLabel`) — never hardcode model strings in routes.
+
+| Task | Model |
+|---|---|
+| Transcription | Deepgram (`@deepgram/sdk`) |
+| Notes generation | `gpt-4o-mini` (direct OpenAI SDK) |
+| Note enhancement | `ENHANCEMENT_MODEL` from `lib/ai-models.ts` |
+| Chat (per-meeting / global) | `resolveChatModel()` via AI SDK v6 `streamText` |
+
+**Content truncation safeguards (enforce on every AI call):**
+- Per-meeting chat: transcript ≤ 300,000 chars, each source ≤ 50,000 chars
+- Global chat: combined context ≤ 100,000 chars
+- Notes generation: transcript ≤ 400,000 chars
 
 ---
 
@@ -202,58 +235,38 @@ recording → uploading → transcribing → generating → done
 ```
 
 - Always transition **forward** or to `error`. Never skip steps or go backward.
-- On any processing failure: update `status = 'error'` and set `error_message` in the catch block.
+- On any processing failure: set `status = 'error'` and `error_message` in the catch block.
 
 ---
 
 ## Async Processing System
 
-Meeting audio processing runs asynchronously via a job queue stored in the `processing_jobs` table:
+1. `/api/meetings/[id]/process` — enqueues a job (`processing_jobs` table, requires `SUPABASE_SERVICE_ROLE_KEY`)
+2. `/api/processing/worker` — background worker secured with `CRON_SECRET` bearer token
+   - Lock-based concurrency (10-minute lock timeout), retry with exponential backoff
+   - `MAX_TRANSCRIPT_CHARS = 400,000`
 
-1. `/api/meetings/[id]/process` — enqueues a job (requires `SUPABASE_SERVICE_ROLE_KEY`)
-2. `/api/processing/worker` — background worker that picks up and executes jobs
-   - Secured with `CRON_SECRET` bearer token
-   - Uses lock-based concurrency control (10-minute lock timeout)
-   - Retry logic with exponential backoff; `MAX_TRANSCRIPT_CHARS = 400,000`
-   - Job statuses: `queued | running | retrying | completed | failed`
-
-**Client-side polling** is handled by `lib/meeting-pipeline.ts` (`waitForMeetingCompletion()`).
+Client-side polling: `waitForMeetingCompletion()` in `lib/meeting-pipeline.ts`.
 
 ---
 
 ## Chat Storage
 
-Chat messages are persisted client-side in **localStorage** via `lib/chat-storage.ts`:
-- Per-meeting chat: key `noter-chat-{meetingId}`, capped at 50 messages
-- Global chat (across all meetings): key `noter-chat-__global__`, same 50-message cap
-- Do not persist sensitive data or large payloads in chat storage.
-
----
-
-## AI / LLM Configuration
-
-| Task | Model | SDK | Notes |
-|---|---|---|---|
-| Transcription | `whisper-1` | `openai` SDK directly | `response_format: 'text'` |
-| Notes generation | `gpt-4o-mini` | `openai` SDK directly | `temperature: 0.3`, JSON output |
-| Chat (per-meeting) | `gpt-4o-mini` | AI SDK v6 (`streamText`) | Streaming `UIMessage` responses |
-| Chat (global) | `gpt-4o-mini` | AI SDK v6 (`streamText`) | Streaming; all-meetings context |
-
-**Content truncation safeguards** (enforce these on every AI call):
-- Per-meeting chat: transcript ≤ 300,000 chars, each source ≤ 50,000 chars
-- Global chat: combined meeting context ≤ 100,000 chars
-- Notes generation: transcript ≤ 400,000 chars
+Persisted client-side via `lib/chat-storage.ts`:
+- Per-meeting: key `noter-chat-{meetingId}`, capped at 50 messages
+- Global: key `noter-chat-__global__`, same cap
+- Do not store sensitive data or large payloads.
 
 ---
 
 ## Testing
 
-- Tests are **colocated** with route handlers: `app/api/*/route.test.ts`. Do not use `__tests__/` for API tests.
+- API route tests are **colocated**: `app/api/*/route.test.ts`.
+- Component tests are **colocated**: `components/*.test.tsx`.
 - Lib utility tests live in `lib/__tests__/`.
-- `test.setup.ts` mocks `next/server` and sets environment variables automatically (preloaded via `bunfig.toml`).
-- `happydom.ts` registers DOM globals (preloaded via `bunfig.toml`).
-- Use `mock.module()` and `mock()` from `bun:test` for mocking. Standard mock targets: `@/lib/supabase/server`, `@/lib/openai`, `ai`, `@ai-sdk/openai`, `@upstash/ratelimit`, `@upstash/redis`.
-- When changing API behavior, add or update the colocated `route.test.ts`.
+- `test.setup.ts` mocks `next/server` and sets env vars (preloaded via `bunfig.toml`).
+- Use `mock.module()` and `mock()` from `bun:test`. Standard mock targets: `@/lib/supabase/server`, `@/lib/openai`, `ai`, `@ai-sdk/openai`, `@upstash/ratelimit`, `@upstash/redis`.
+- When changing API or component behavior, add or update the colocated test file.
 
 ---
 
@@ -263,45 +276,49 @@ Chat messages are persisted client-side in **localStorage** via `lib/chat-storag
 - `id`, `user_id`, `title`, `audio_url`, `audio_duration`
 - `transcript`, `summary`, `detailed_notes` (nullable text)
 - `action_items`, `key_decisions`, `topics`, `follow_ups` (JSONB arrays)
+- `document_content` (JSONB — Tiptap editor document)
+- `template_id` (references `note_templates`)
+- `diarized_transcript` (JSONB array of `DiarizedSegment`)
 - `status` (`MeetingStatus`), `error_message`
-- `is_pinned` (boolean, default false) — pinned meetings sort first per user
-- RLS enabled — users access only their own rows.
+- `is_pinned` (boolean, default false)
+- `enhancement_status`, `enhancement_state` (JSONB)
+- RLS enabled.
 
 ### `meeting_sources` table
 - `id`, `meeting_id`, `user_id`, `name`, `file_type`, `content`
-- Cascade deletes on `meeting_id` and `user_id`. RLS enabled.
+- Cascade deletes. RLS enabled.
 
 ### `processing_jobs` table
-- Tracks async processing jobs; see `scripts/004_create_processing_jobs_table.sql`.
+- Async processing queue; see `scripts/004_create_processing_jobs_table.sql`.
+
+### `note_templates` table
+- Custom user note templates; see `app/api/note-templates/`.
 
 ### `meeting-audio` storage bucket (private)
-- Path pattern: `{user_id}/{meeting_id}.{ext}`
-- RLS policies scope access by user folder.
+- Path: `{user_id}/{meeting_id}.{ext}`
 
 ### Schema changes
-Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code backward-compatible until the migration is applied.
+Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code backward-compatible until applied.
 
-**Applied migrations:**
-- `scripts/001_create_meetings_table.sql`
-- `scripts/002_create_storage_bucket.sql`
-- `scripts/003_create_meeting_sources_table.sql`
-- `scripts/004_create_processing_jobs_table.sql`
-- `scripts/005_add_pinned_column.sql` — adds `is_pinned` to `meetings`
+**Applied migrations:** `001` → `005` (meetings table, storage bucket, sources, processing jobs, is_pinned column).
 
 ---
 
 ## Environment Variables
 
 | Variable | Required | Purpose |
-|---|---|---|
+|---|---|---:|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | All Supabase clients |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | All Supabase clients |
-| `OPENAI_API_KEY` | Yes | Transcription, notes generation, chat |
-| `SUPABASE_SERVICE_ROLE_KEY` | Required for async processing | Admin operations and job queueing |
-| `CRON_SECRET` | Required for async processing | Authorizes calls to `/api/processing/worker` |
+| `OPENAI_API_KEY` | Yes | Notes generation, chat |
+| `SUPABASE_SERVICE_ROLE_KEY` | For async processing | Admin ops and job queueing |
+| `CRON_SECRET` | For async processing | Authorizes `/api/processing/worker` |
+| `DEEPGRAM_API_KEY` | Yes | Audio transcription |
+| `AI_GATEWAY_API_KEY` | Optional | Routes AI calls through AI gateway |
+| `TAVILY_API_KEY` | Optional | Web search in chat |
 | `UPSTASH_REDIS_REST_URL` | Optional | Rate limiting |
 | `UPSTASH_REDIS_REST_TOKEN` | Optional | Rate limiting |
-| `NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL` | Optional | Override Supabase auth redirect URL in development |
+| `NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL` | Optional | Auth redirect override in dev |
 
 ---
 
@@ -310,16 +327,17 @@ Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code b
 - Skipping `user_id` ownership checks in server routes
 - Using the wrong Supabase client for the runtime context
 - Adding `'use client'` unnecessarily to server components
-- Re-implementing `components/ui/*` primitives instead of reusing them
+- Re-implementing `components/ui/*` primitives
 - Using Tailwind v3 config syntax (`tailwind.config.ts`)
 - Hardcoding colors instead of using CSS custom property tokens
-- Omitting `maxDuration` exports on new API routes
-- Forgetting rate limiting on new long-running or abuse-sensitive routes
-- Returning inconsistent error shapes — always use `errorResponse()` from `@/lib/api-helpers`
-- Skipping `status = 'error'` recovery in processing routes on failure
+- Hardcoding AI model strings — use `lib/ai-models.ts` helpers
+- Omitting `maxDuration` on new API routes
+- Forgetting rate limiting on long-running or abuse-sensitive routes
+- Returning inconsistent error shapes — always use `errorResponse()`
+- Omitting `status = 'error'` recovery in processing routes
 - Embedding large content in AI prompts without truncation safeguards
-- Storing large payloads or sensitive data in localStorage chat storage
-- Mixing unrelated refactors into a single commit
+- Storing sensitive data in localStorage chat storage
+- Building monolithic components or functions — prefer composition
 - Committing `.env` files, secrets, or API keys
 
 ---
@@ -327,7 +345,7 @@ Add a new numbered SQL script in `scripts/` (e.g., `006_*.sql`). Keep app code b
 ## Recommended Workflow
 
 1. Read the relevant source files before making any changes.
-2. Implement the smallest correct change for the task.
-3. Run `bun run lint` and `bun run test` — fix any failures.
+2. Implement the smallest correct change; prefer well-architected, composable code over quick patches.
+3. Run `bun run lint` and `bun run test` — fix all failures.
 4. Verify edge cases: unauthenticated requests, missing IDs, ownership failures, empty data.
 5. Write a clear commit message describing what changed and why.

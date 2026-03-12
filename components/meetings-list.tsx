@@ -4,7 +4,9 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, X, SlidersHorizontal, AudioLines, Pin } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
@@ -15,8 +17,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { toggleMeetingPin } from '@/lib/meeting-actions'
 import type { Meeting, MeetingStatus } from '@/lib/types'
 
 type StatusMeta = {
@@ -68,29 +79,7 @@ function StatusDot({ status }: { status: MeetingStatus }) {
   )
 }
 
-function formatRelativeDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterdayStart = new Date(todayStart.getTime() - 86400000)
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 || 12
-  const time = `${hour12}:${m.toString().padStart(2, '0')} ${period}`
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-  if (d >= todayStart) return `Today at ${time}`
-  if (d >= yesterdayStart) return 'Yesterday'
-
-  const weekAgo = new Date(todayStart.getTime() - 6 * 86400000)
-  if (d >= weekAgo) return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`
-
-  if (d.getFullYear() === now.getFullYear()) return `${months[d.getMonth()]} ${d.getDate()}`
-
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
-}
+import { formatRelativeDate } from '@/lib/date-formatter'
 
 const STATUS_OPTIONS: { value: MeetingStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All notes' },
@@ -127,25 +116,18 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
   const [, startTransition] = useTransition()
 
   const togglePin = async (meetingId: string, currentPinned: boolean) => {
-    const newPinned = !currentPinned
-
     setMeetings((prev) =>
-      prev.map((m) => (m.id === meetingId ? { ...m, is_pinned: newPinned } : m))
+      prev.map((m) => (m.id === meetingId ? { ...m, is_pinned: !currentPinned } : m))
     )
 
     try {
-      const res = await fetch(`/api/meetings/${meetingId}/pin`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinned: newPinned }),
-      })
-      if (!res.ok) throw new Error('Failed to update pin')
+      await toggleMeetingPin(meetingId, currentPinned)
       startTransition(() => router.refresh())
     } catch {
       setMeetings((prev) =>
         prev.map((m) => (m.id === meetingId ? { ...m, is_pinned: currentPinned } : m))
       )
-      toast.error('Couldn’t update this note right now.')
+      toast.error("Couldn't update this note right now. Please try again.")
     }
   }
 
@@ -186,18 +168,22 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
 
   if (meetings.length === 0) {
     return (
-      <div className="surface-utility flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
-        <AudioLines className="size-8 text-muted-foreground" />
-        <div className="flex flex-col gap-1.5">
-          <h2 className="text-base font-semibold text-foreground">Capture your first meeting</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
+      <Empty className="surface-empty">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <AudioLines />
+          </EmptyMedia>
+          <EmptyTitle>Capture your first meeting</EmptyTitle>
+          <EmptyDescription>
             Record live or upload audio and noter will turn it into clear, structured notes.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/dashboard/new">Start a meeting</Link>
-        </Button>
-      </div>
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button asChild>
+            <Link href="/dashboard/new">Start a meeting</Link>
+          </Button>
+        </EmptyContent>
+      </Empty>
     )
   }
 
@@ -235,11 +221,9 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
               className="h-11 rounded-2xl border-border/70 bg-card px-4 text-sm text-muted-foreground shadow-none"
             >
               <SlidersHorizontal className="size-4" />
-              View
+              Sort & filter
               {hasActiveControls && (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-foreground">
-                  Active
-                </span>
+                <Badge variant="secondary" className="rounded-full">Active</Badge>
               )}
             </Button>
           </DropdownMenuTrigger>
@@ -272,22 +256,26 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
       </div>
 
       {filteredMeetings.length === 0 ? (
-        <div className="surface-utility flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <p className="text-sm font-medium text-foreground">No notes match this view</p>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Try a different search or clear the filters to see all of your meetings again.
-          </p>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setSearchQuery('')
-              setStatusFilter('all')
-              setSortOrder('newest')
-            }}
-          >
-            Clear view options
-          </Button>
-        </div>
+        <Empty className="surface-empty">
+          <EmptyHeader>
+            <EmptyTitle>No notes match this view</EmptyTitle>
+            <EmptyDescription>
+              Try a different search or clear the filters to see all of your meetings again.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSearchQuery('')
+                setStatusFilter('all')
+                setSortOrder('newest')
+              }}
+            >
+              Clear filters
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="surface-document divide-y divide-border/60">
           {filteredMeetings.map((meeting) => (
@@ -310,22 +298,29 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
                 </div>
               </Link>
 
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  togglePin(meeting.id, meeting.is_pinned)
-                }}
-                aria-label={meeting.is_pinned ? 'Unpin note' : 'Pin note'}
-                className={cn(
-                  'rounded-full p-2 text-muted-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  meeting.is_pinned
-                    ? 'opacity-100 hover:text-foreground'
-                    : 'opacity-0 group-hover:opacity-100 hover:text-foreground'
-                )}
-              >
-                <Pin className={cn('size-3.5', meeting.is_pinned && 'fill-current')} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost-icon"
+                    size="icon-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      togglePin(meeting.id, meeting.is_pinned)
+                    }}
+                    aria-label={meeting.is_pinned ? 'Unpin note' : 'Pin note'}
+                    className={cn(
+                      'rounded-full text-muted-foreground shadow-none',
+                      meeting.is_pinned
+                        ? 'text-foreground'
+                        : 'hover:text-foreground'
+                    )}
+                  >
+                    <Pin className={cn('size-3.5', meeting.is_pinned && 'fill-current')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{meeting.is_pinned ? 'Unpin note' : 'Pin note'}</TooltipContent>
+              </Tooltip>
             </div>
           ))}
         </div>

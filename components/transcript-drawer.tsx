@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { AlignLeft, Dot } from 'lucide-react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from '@/components/ui/sheet'
 
 interface LiveSegmentLike {
@@ -24,6 +26,7 @@ interface TranscriptDrawerProps {
   live?: boolean
   alwaysVisible?: boolean
   emptyMessage?: string
+  trigger?: React.ReactNode
 }
 
 export function TranscriptDrawer({
@@ -32,6 +35,7 @@ export function TranscriptDrawer({
   live = false,
   alwaysVisible = false,
   emptyMessage = 'Transcript will appear here soon.',
+  trigger,
 }: TranscriptDrawerProps) {
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
@@ -41,25 +45,22 @@ export function TranscriptDrawer({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={cn(
-          'fixed z-40 flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-2 shadow-lg backdrop-blur transition-colors hover:border-muted-foreground/60 hover:text-foreground',
-          isMobile ? 'right-4 bottom-24' : 'right-4 top-1/2 -translate-y-1/2'
-        )}
-      >
-        <span className="relative flex items-center">
-          <AlignLeft className="size-4" />
-          {live && !open && (
-            <span className="absolute -right-1 -top-1 flex size-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
-              <span className="relative inline-flex size-2 rounded-full bg-accent" />
+      <SheetTrigger asChild>
+        {trigger ?? (
+          <Button variant="outline" size="sm" className="gap-2 rounded-full shadow-none">
+            <span className="relative flex items-center">
+              <AlignLeft />
+              {live && !open ? (
+                <span className="absolute -right-1 -top-1 flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-accent" />
+                </span>
+              ) : null}
             </span>
-          )}
-        </span>
-        <span className="text-sm font-medium">Transcript</span>
-      </button>
+            Transcript
+          </Button>
+        )}
+      </SheetTrigger>
 
       <SheetContent
         side={isMobile ? 'bottom' : 'right'}

@@ -2,8 +2,13 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -57,59 +62,51 @@ export default function SignUpPage() {
 
   return (
     <AuthPageLayout title="Create your account" description="Get started with noter for free">
-      <form onSubmit={handleSignUp} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email" className="text-sm text-muted-foreground">
-            Email
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="h-11 rounded-lg"
-          />
-        </div>
+      <form onSubmit={handleSignUp} className="flex flex-col gap-6">
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-11 rounded-xl"
+            />
+          </Field>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="password" className="text-sm text-muted-foreground">
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-11 rounded-lg"
-          />
-        </div>
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-11 rounded-xl"
+            />
+          </Field>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="repeat-password" className="text-sm text-muted-foreground">
-            Confirm password
-          </Label>
-          <Input
-            id="repeat-password"
-            type="password"
-            required
-            value={repeatPassword}
-            onChange={(e) => setRepeatPassword(e.target.value)}
-            className="h-11 rounded-lg"
-          />
-        </div>
+          <Field>
+            <FieldLabel htmlFor="repeat-password">Confirm password</FieldLabel>
+            <Input
+              id="repeat-password"
+              type="password"
+              required
+              value={repeatPassword}
+              onChange={(e) => setRepeatPassword(e.target.value)}
+              className="h-11 rounded-xl"
+            />
+          </Field>
+        </FieldGroup>
 
-        {error && (
-          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error ? <FieldError>{error}</FieldError> : null}
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-lg bg-accent text-accent-foreground hover:bg-accent/90"
+          className="h-11 w-full rounded-xl"
           disabled={isLoading}
         >
           {isLoading ? (
@@ -123,11 +120,11 @@ export default function SignUpPage() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground lg:text-left">
+      <p className="text-sm text-muted-foreground">
         Already have an account?{' '}
         <Link
           href="/auth/login"
-          className="font-medium text-foreground underline underline-offset-4 hover:text-accent"
+          className="font-medium text-foreground underline underline-offset-4"
         >
           Sign in
         </Link>

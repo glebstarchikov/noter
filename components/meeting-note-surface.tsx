@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
-import { AlertCircle, Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
+import { AlertCircle, Loader2, RefreshCcw, Sparkles, Undo2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { MeetingEditor } from '@/components/meeting-editor'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { hashDocumentContent } from '@/lib/document-hash'
 import {
@@ -20,6 +21,7 @@ import {
   type TiptapDocument,
 } from '@/lib/tiptap-converter'
 import type { EnhancementOutcome, EnhancementState, Meeting } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
 type DraftMode = 'generate' | 'enhance'
 type DraftUiState = 'idle' | 'generating' | 'streaming' | 'saving'
@@ -61,6 +63,8 @@ export function MeetingNoteSurface({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [documentConflict, setDocumentConflict] = useState<DocumentSaveConflict | null>(null)
   const [reviewState, setReviewState] = useState<EnhancementState>(normalizeReviewState(meeting.enhancement_state))
+  const [wasEverEnhanced, setWasEverEnhanced] = useState(false)
+  const [regenPromptDismissed, setRegenPromptDismissed] = useState(false)
   const serverReviewState = useMemo(
     () => normalizeReviewState(meeting.enhancement_state),
     [meeting.enhancement_state]
@@ -88,6 +92,8 @@ export function MeetingNoteSurface({
     setSaveError(null)
     setDocumentConflict(null)
     setReviewState(serverReviewState)
+    setWasEverEnhanced(false)
+    setRegenPromptDismissed(false)
     streamingCancelledRef.current = true
   }, [meeting.document_content, meeting.id, serverReviewState])
 
@@ -109,6 +115,20 @@ export function MeetingNoteSurface({
     currentHash !== reviewState.lastReviewedSourceHash
 
   const actionMode: DraftMode = hasDocumentContent ? 'enhance' : 'generate'
+
+  const showRegenPrompt =
+    wasEverEnhanced &&
+    shouldShowAction &&
+    draftState === 'idle' &&
+    !regenPromptDismissed &&
+    !documentConflict
+
+  const showFab =
+    canReview &&
+    !documentConflict &&
+    (shouldShowAction || draftState !== 'idle')
+
+  const fabIsLoading = draftState !== 'idle'
 
   const handleEditorReady = useCallback((editor: Editor | null) => {
     editorRef.current = editor
@@ -262,6 +282,8 @@ export function MeetingNoteSurface({
       setEditorSeed(proposedDocument)
       setDocumentConflict(null)
       setUndoDocument(baseDocument)
+      setWasEverEnhanced(true)
+      setRegenPromptDismissed(false)
       setDraftState('idle')
     } catch (error) {
       // Revert editor to base content on failure
@@ -274,8 +296,9 @@ export function MeetingNoteSurface({
   }
 
   const handleDraftRequest = async () => {
-    if (!shouldShowAction) return
+    if (!shouldShowAction && draftState === 'idle') return
 
+    setRegenPromptDismissed(false)
     setDraftState('generating')
     setSaveError(null)
 
@@ -331,93 +354,114 @@ export function MeetingNoteSurface({
   }
 
   return (
-    <section className="surface-document relative px-6 py-7 md:px-10 md:py-10">
-      <div className="mx-auto w-full max-w-4xl space-y-5">
-        {documentConflict && (
-          <div className="rounded-2xl border border-amber-300/60 bg-amber-50/80 px-4 py-4 text-sm text-amber-950">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 font-medium">
-                  <AlertCircle className="size-4" />
-                  A newer version of this note exists
-                </div>
-                <p className="leading-6 text-amber-900/80">
-                  {documentConflict.message}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLoadLatestVersion}
-                  className="h-8 rounded-full border-amber-300/70 bg-transparent shadow-none"
-                >
-                  Load latest
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => void handleKeepLocalDraft()}
-                  className="liquid-metal-button h-8 rounded-full"
-                >
-                  Replace with my draft
-                </Button>
-              </div>
-            </div>
-          </div>
+    <div className="flex flex-col">
+      <section
+        className={cn(
+          'surface-document relative px-6 py-6 md:px-8 md:py-8',
+          (draftState === 'generating' || draftState === 'streaming') && 'surface-thinking'
         )}
-
-        {reviewState.lastError && draftState === 'idle' && (
-          <div
-            className={
-              isNeutralDraftFeedback
-                ? 'rounded-2xl border border-border/70 bg-secondary/40 px-4 py-4 text-sm text-muted-foreground'
-                : 'rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4 text-sm text-destructive'
-            }
-          >
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-1">
-                <div className="font-medium">
-                  {isNeutralDraftFeedback ? 'No changes suggested' : 'Drafting needs another try'}
+      >
+        <div className="mx-auto w-full max-w-4xl space-y-4">
+          {documentConflict && (
+            <Alert className="rounded-2xl border-amber-300/60 bg-amber-50/80 text-amber-950">
+              <AlertCircle />
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-1">
+                  <AlertTitle className="line-clamp-none">A newer version of this note exists</AlertTitle>
+                  <AlertDescription className="text-amber-900/80">
+                    {documentConflict.message}
+                  </AlertDescription>
                 </div>
-                <p className="leading-6">{reviewState.lastError}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLoadLatestVersion}
+                    className="h-8 rounded-full border-amber-300/70 bg-transparent shadow-none"
+                  >
+                    Load latest
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void handleKeepLocalDraft()}
+                    className="liquid-glass-button h-8 rounded-full"
+                  >
+                    Replace with my draft
+                  </Button>
+                </div>
               </div>
-              {canReview && !documentConflict && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleDraftRequest()}
-                  className="h-8 rounded-full shadow-none"
-                >
-                  <RefreshCcw className="size-4" />
-                  Retry draft
-                </Button>
+            </Alert>
+          )}
+
+          {reviewState.lastError && draftState === 'idle' && (
+            <Alert
+              variant={isNeutralDraftFeedback ? 'default' : 'destructive'}
+              className={cn(
+                'rounded-2xl',
+                isNeutralDraftFeedback
+                  ? 'border-border/70 bg-secondary/40 text-muted-foreground'
+                  : 'border-destructive/20 bg-destructive/5'
               )}
-            </div>
-          </div>
-        )}
-
-        {shouldShowAction && (
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              onClick={() => void handleDraftRequest()}
-              disabled={draftState !== 'idle'}
-              className="liquid-metal-fab h-11 rounded-full px-4 text-sm font-medium"
             >
-              <Sparkles className="size-4" />
-              {actionMode === 'generate' ? 'Generate notes' : 'Enhance'}
-            </Button>
-          </div>
-        )}
+              {!isNeutralDraftFeedback ? <AlertCircle /> : null}
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-1">
+                  <AlertTitle className="line-clamp-none">
+                    {isNeutralDraftFeedback ? 'No changes suggested' : 'Drafting needs another try'}
+                  </AlertTitle>
+                  <AlertDescription>{reviewState.lastError}</AlertDescription>
+                </div>
+                {canReview && !documentConflict ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleDraftRequest()}
+                    className="h-8 rounded-full shadow-none"
+                  >
+                    <RefreshCcw className="size-4" />
+                    Retry draft
+                  </Button>
+                ) : null}
+              </div>
+            </Alert>
+          )}
 
-        <div className="relative">
-          {draftState === 'generating' && (
-            <>
+          {showRegenPrompt && (
+            <div className="liquid-glass-chip glass-chip-enter flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm backdrop-blur">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Sparkles className="size-3.5 text-accent" />
+                <span>Your note has changed since the last generation</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void handleDraftRequest()}
+                  className="rounded-full bg-foreground/[0.08] px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-foreground/[0.12]"
+                >
+                  Regenerate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegenPromptDismissed(true)}
+                  aria-label="Dismiss"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="relative">
+            {draftState === 'generating' && (
               <div className="enhance-shimmer-overlay rounded-3xl" />
-              <div className="absolute inset-x-0 top-6 z-10 flex justify-center">
+            )}
+
+            {(draftState === 'generating' || draftState === 'streaming') && (
+              <div className="absolute inset-x-0 top-8 z-10 flex justify-center">
                 <div className="liquid-glass-chip flex items-center gap-2.5 rounded-full px-4 py-2 text-sm text-muted-foreground backdrop-blur">
                   <Loader2 className="size-4 animate-spin text-accent" />
                   {actionMode === 'generate'
@@ -425,36 +469,59 @@ export function MeetingNoteSurface({
                     : 'Drafting improvements…'}
                 </div>
               </div>
-            </>
-          )}
+            )}
 
-          {undoDocument && draftState === 'idle' && (
-            <div className="mb-4 flex justify-end">
-              <button
-                type="button"
-                onClick={handleUndo}
-                className="liquid-glass-chip glass-chip-enter liquid-glass-interactive flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground backdrop-blur hover:text-foreground"
-              >
-                <Undo2 className="size-3.5" />
-                Undo AI changes
-              </button>
-            </div>
-          )}
+            {undoDocument && draftState === 'idle' && (
+              <div className="mb-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  className="liquid-glass-chip glass-chip-enter liquid-glass-interactive flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground backdrop-blur hover:text-foreground"
+                >
+                  <Undo2 className="size-3.5" />
+                  Undo AI changes
+                </button>
+              </div>
+            )}
 
-          <MeetingEditor
-            key={`${meeting.id}:${editorRevision}`}
-            meeting={meeting}
-            editable={draftState === 'idle'}
-            documentContent={editorSeed}
-            onEditorReady={handleEditorReady}
-            onContentChange={handleEditorContentChange}
-            autosaveBaseHash={acknowledgedHash}
-            autosaveEnabled={!documentConflict && draftState === 'idle'}
-            onAutosaveSuccess={handleAutosaveSuccess}
-            onAutosaveConflict={handleAutosaveConflict}
-          />
+            <MeetingEditor
+              key={`${meeting.id}:${editorRevision}`}
+              meeting={meeting}
+              editable={draftState === 'idle'}
+              documentContent={editorSeed}
+              onEditorReady={handleEditorReady}
+              onContentChange={handleEditorContentChange}
+              autosaveBaseHash={acknowledgedHash}
+              autosaveEnabled={!documentConflict && draftState === 'idle'}
+              onAutosaveSuccess={handleAutosaveSuccess}
+              onAutosaveConflict={handleAutosaveConflict}
+            />
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      {showFab && (
+        <div className="flex justify-center pt-5">
+          <Button
+            type="button"
+            onClick={() => void handleDraftRequest()}
+            disabled={fabIsLoading}
+            className="liquid-glass-fab glass-chip-enter h-11 rounded-full px-5 text-sm font-medium"
+          >
+            {fabIsLoading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                {actionMode === 'generate' ? 'Generating…' : 'Enhancing…'}
+              </>
+            ) : (
+              <>
+                <Sparkles className="size-4" />
+                {actionMode === 'generate' ? 'Generate notes' : 'Enhance'}
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

@@ -9,6 +9,7 @@ import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
 import { buildChatModelMessages, getLastUserText } from '@/lib/chat-message-utils'
 import { tiptapToPlainText } from '@/lib/tiptap-converter'
 import { searchWeb } from '@/lib/tavily'
+import { MAX_CHAT_TRANSCRIPT_CHARS } from '@/lib/truncation-limits'
 
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -124,8 +125,8 @@ export async function POST(req: Request) {
     }
 
     if (typeof meeting.transcript === 'string' && meeting.transcript.length > 0) {
-      const transcript = meeting.transcript.length > 300_000
-        ? `${meeting.transcript.slice(0, 300_000)}\n\n[Transcript truncated due to length]`
+      const transcript = meeting.transcript.length > MAX_CHAT_TRANSCRIPT_CHARS
+        ? `${meeting.transcript.slice(0, MAX_CHAT_TRANSCRIPT_CHARS)}\n\n[Transcript truncated due to length]`
         : meeting.transcript
       context += `## Transcript\n${transcript}\n\n`
     }

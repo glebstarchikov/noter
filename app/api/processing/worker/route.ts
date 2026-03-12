@@ -2,17 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { errorResponse } from '@/lib/api-helpers'
-import { getOpenAI } from '@/lib/openai'
-import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
-import { buildNotesGenerationPrompt } from '@/lib/prompts'
-import { generatedNotesSchema } from '@/lib/schemas'
-import { resolveMeetingTemplate } from '@/lib/note-template'
-import { METADATA_MODEL } from '@/lib/ai-models'
-import { formatTranscriptForNotes, countSpeakers, buildMeetingContextHeader } from '@/lib/transcript-formatter'
+import { transcribeAudioFromStorage } from '@/lib/transcription'
+import { generateNotesFromTranscript } from '@/lib/notes-generation'
+import type { DiarizedSegment } from '@/lib/types'
 
 export const maxDuration = 300
 
-const MAX_TRANSCRIPT_CHARS = 400_000
 const LOCK_TIMEOUT_MS = 10 * 60 * 1000
 const BASE_RETRY_DELAY_MS = 30 * 1000
 const MAX_RETRY_DELAY_MS = 15 * 60 * 1000
@@ -226,29 +221,7 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
       .eq('id', job.meeting_id)
       .eq('user_id', job.user_id)
 
-    const { data: audioData, error: downloadError } = await admin.storage
-      .from('meeting-audio')
-      .download(storagePath)
-
-    if (downloadError || !audioData) {
-      throw new Error('Failed to download audio from storage')
-    }
-
-    const extension = storagePath.split('.').pop() || 'webm'
-    const mimeType = extension === 'webm' ? 'audio/webm'
-      : extension === 'mp3' ? 'audio/mpeg'
-        : extension === 'wav' ? 'audio/wav'
-          : extension === 'm4a' ? 'audio/mp4'
-            : extension === 'ogg' ? 'audio/ogg'
-              : 'audio/webm'
-
-    const audioFile = new File([audioData], `audio.${extension}`, { type: mimeType })
-
-    transcript = await getOpenAI().audio.transcriptions.create({
-      file: audioFile,
-      model: 'whisper-1',
-      response_format: 'text',
-    })
+    transcript = await transcribeAudioFromStorage(admin, storagePath)
 
     await admin
       .from('meetings')
@@ -262,76 +235,18 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
       .eq('user_id', job.user_id)
   }
 
-  const truncatedTranscript = transcript.length > MAX_TRANSCRIPT_CHARS
-    ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'
-    : transcript
-
-  const template = await resolveMeetingTemplate(admin as { from: (table: string) => any }, {
-    template_id: meeting.template_id,
-    user_id: meeting.user_id,
-  })
-
-  // Format transcript with speaker labels when diarization is available
-  const formattedTranscript = formatTranscriptForNotes(
-    truncatedTranscript,
-    meeting.diarized_transcript as Parameters<typeof formatTranscriptForNotes>[1]
-  )
-
-  // Build meeting context header to help the model calibrate output
-  const speakerCount = countSpeakers(meeting.diarized_transcript as Parameters<typeof countSpeakers>[0])
-  const contextHeader = buildMeetingContextHeader({
-    templateName: template.name,
+  const normalizedNotes = await generateNotesFromTranscript(admin, {
+    transcript,
+    templateId: meeting.template_id,
+    userId: meeting.user_id,
+    diarizedTranscript: meeting.diarized_transcript as DiarizedSegment[] | null,
     audioDuration: meeting.audio_duration as number | null,
-    speakerCount,
   })
-
-  const completion = await getOpenAI().chat.completions.create({
-    model: METADATA_MODEL,
-    messages: [
-      { role: 'system', content: buildNotesGenerationPrompt(template) },
-      { role: 'user', content: `${contextHeader}\n\nTranscript:\n${formattedTranscript}` },
-    ],
-    temperature: 0.3,
-    response_format: { type: 'json_object' },
-  })
-
-  const content = completion.choices[0]?.message?.content
-  if (!content) {
-    throw new Error('No response from AI')
-  }
-
-  let parsedContent: unknown
-  try {
-    parsedContent = JSON.parse(content)
-  } catch {
-    throw new Error('AI returned invalid JSON. Please try again.')
-  }
-
-  const parsedNotes = generatedNotesSchema.safeParse(parsedContent)
-  if (!parsedNotes.success) {
-    throw new Error('AI returned invalid JSON. Please try again.')
-  }
-
-  const normalizedNotes = {
-    title: parsedNotes.data.title?.trim() || 'Untitled Meeting',
-    summary: parsedNotes.data.summary?.trim() || '',
-    detailed_notes: parsedNotes.data.detailed_notes?.trim() || '',
-    action_items: normalizeActionItems(parsedNotes.data.action_items),
-    key_decisions: normalizeStringArray(parsedNotes.data.key_decisions),
-    topics: normalizeStringArray(parsedNotes.data.topics),
-    follow_ups: normalizeStringArray(parsedNotes.data.follow_ups),
-  }
 
   await admin
     .from('meetings')
     .update({
-      title: normalizedNotes.title,
-      summary: normalizedNotes.summary,
-      detailed_notes: normalizedNotes.detailed_notes,
-      action_items: normalizedNotes.action_items,
-      key_decisions: normalizedNotes.key_decisions,
-      topics: normalizedNotes.topics,
-      follow_ups: normalizedNotes.follow_ups,
+      ...normalizedNotes,
       status: 'done',
       error_message: null,
       updated_at: new Date().toISOString(),

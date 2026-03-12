@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Mic, Upload, Loader2, ChevronDown } from 'lucide-react'
 import { AudioUploader } from '@/components/audio-uploader'
+import { PageHeader, PageShell } from '@/components/page-shell'
 import { ProcessingView } from '@/components/processing-view'
 import { Button } from '@/components/ui/button'
 import {
@@ -69,24 +70,22 @@ export default function NewMeetingPage() {
 
   if (processing) {
     return (
-      <div className="flex flex-col gap-6 p-6 md:p-10">
+      <PageShell>
         <ProcessingView
           meetingId={processing.meetingId}
           step={processing.step}
           error={processing.error}
         />
-      </div>
+      </PageShell>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 md:p-10">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[26px] font-semibold tracking-tight text-foreground">Start a meeting</h1>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Capture a live conversation or bring in an existing recording. noter will shape the notes for you.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Start a meeting"
+        description="Capture a live conversation or bring in an existing recording. noter will shape the notes for you."
+      />
 
       <div className="surface-utility flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
@@ -181,6 +180,6 @@ export default function NewMeetingPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

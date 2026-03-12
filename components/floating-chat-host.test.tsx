@@ -130,13 +130,14 @@ describe('FloatingChatHost', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open chat/i }))
 
-    expect((await screen.findAllByText('Support')).length).toBeGreaterThan(0)
-    expect(screen.queryByRole('button', { name: /add context/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /how do i get started with noter\?/i })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /^Context$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /add files/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /search web/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /GPT-5 mini/i })).toBeNull()
   })
 
-  it('defaults note pages to meeting scope and hydrates the global thread when switched', async () => {
+  it('defaults note pages to meeting scope and hydrates the global thread when switched from context', async () => {
     pathname = '/dashboard/meeting-1'
 
     saveChatMessages('meeting-1', [
@@ -160,12 +161,50 @@ describe('FloatingChatHost', () => {
 
     expect(await screen.findByText('Meeting-only answer')).not.toBeNull()
 
-    fireEvent.click(screen.getByText('All notes'))
+    fireEvent.click(screen.getByRole('button', { name: /^Context$/i }))
+    expect(await screen.findByText('Active context')).not.toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: /^All notes$/i }))
 
     expect(await screen.findByText('Global answer')).not.toBeNull()
   })
 
-  it('expands and collapses through click, keyboard shortcut, escape, and outside click', async () => {
+  it('shows starter prompts, explicit context controls, and attached files on dashboard chat', async () => {
+    pathname = '/dashboard'
+
+    const { container } = render(<FloatingChatHost />)
+
+    fireEvent.click(screen.getByRole('button', { name: /open chat/i }))
+
+    expect(await screen.findByRole('button', { name: /summarize notes from this week/i })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /^Context$/i })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /add files/i })).not.toBeNull()
+    expect(screen.getByText('All notes')).not.toBeNull()
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' })
+
+    fireEvent.change(fileInput, {
+      target: {
+        files: [file],
+      },
+    })
+
+    expect(await screen.findByText('notes.txt')).not.toBeNull()
+  })
+
+  it('submits starter prompts immediately and replaces the empty state with chat messages', async () => {
+    pathname = '/dashboard'
+
+    render(<FloatingChatHost />)
+
+    fireEvent.click(screen.getByRole('button', { name: /open chat/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /summarize notes from this week/i }))
+
+    expect(await screen.findByText('Stub answer')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /find recurring themes across notes/i })).toBeNull()
+  })
+
+  it('expands and collapses through click, close button, keyboard shortcut, escape, and outside click', async () => {
     pathname = '/dashboard'
 
     render(<FloatingChatHost />)
@@ -183,10 +222,21 @@ describe('FloatingChatHost', () => {
     expect(shell?.getAttribute('data-state')).toBe('expanded')
     expect(shell?.getAttribute('data-generating')).toBe('false')
     expect(screen.getByText('GPT-5 mini')).not.toBeNull()
-    expect(screen.queryByText('Across every note')).toBeNull()
-    expect(screen.queryByText('Global note chat')).toBeNull()
+    expect(screen.getByRole('button', { name: /^close$/i })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /^Context$/i })).not.toBeNull()
 
-    fireEvent.keyDown(window, { key: 'Escape' })
+    const textarea = screen.getByLabelText('Ask across your notes...')
+    expect(textarea.className.includes('min-h-[3.5rem]')).toBe(true)
+    expect(textarea.className.includes('overflow-y-auto')).toBe(true)
+
+    const searchButton = screen.getByRole('button', { name: /search web/i })
+    expect(searchButton.getAttribute('data-active')).toBe('false')
+
+    fireEvent.click(searchButton)
+
+    expect(searchButton.getAttribute('data-active')).toBe('true')
+
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }))
 
     await waitFor(() => {
       expect(screen.queryByLabelText('Ask across your notes...')).toBeNull()
@@ -194,6 +244,26 @@ describe('FloatingChatHost', () => {
 
     fireEvent.keyDown(window, { key: 'j', metaKey: true })
 
+    expect(await screen.findByLabelText('Ask across your notes...')).not.toBeNull()
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /more chat actions/i }), { button: 0 })
+
+    expect(await screen.findByText('Clear conversation')).not.toBeNull()
+    expect(screen.queryByText('Collapse')).toBeNull()
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Clear conversation')).toBeNull()
+    })
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Ask across your notes...')).toBeNull()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /open chat/i }))
     expect(await screen.findByLabelText('Ask across your notes...')).not.toBeNull()
 
     fireEvent.mouseDown(document.body)

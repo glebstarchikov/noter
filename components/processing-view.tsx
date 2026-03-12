@@ -6,6 +6,9 @@ import Link from 'next/link'
 import { Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { deleteMeeting } from '@/lib/meeting-actions'
+import { PageHeader } from '@/components/page-shell'
+import { StatusPanel } from '@/components/status-panel'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -135,16 +138,10 @@ export function ProcessingView({ meetingId, step, error }: Props) {
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      const response = await fetch(`/api/meetings/${meetingId}`, {
-        method: 'DELETE',
-      })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null)
-        throw new Error(payload?.error || 'Failed to delete meeting')
-      }
+      await deleteMeeting(meetingId)
       router.push('/dashboard')
     } catch {
-      toast.error('Failed to delete meeting')
+      toast.error("We couldn't delete this note. Please try again.")
       setIsDeleting(false)
       setShowDeleteDialog(false)
     }
@@ -154,44 +151,34 @@ export function ProcessingView({ meetingId, step, error }: Props) {
     return (
       <>
         <div className="flex flex-col gap-8">
-          <div className="space-y-2">
-            <h1 className="text-[30px] font-semibold tracking-tight text-foreground">
-              We hit a problem preparing this note
-            </h1>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              Nothing is lost. You can start a new note, or remove this one and try again.
-            </p>
-          </div>
+          <PageHeader
+            title="We hit a problem preparing this note"
+            description="Nothing is lost. You can start a new note or remove this one and try again."
+          />
 
-          <div className="surface-utility flex max-w-2xl flex-col gap-5 px-6 py-6">
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-                <AlertCircle className="size-5 text-destructive" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-base font-semibold text-foreground">Processing stopped early</p>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {currentError || 'An unexpected error occurred while preparing your note.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button asChild>
-                <Link href="/dashboard/new">Start a new note</Link>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-                disabled={isDeleting}
-                className="px-0 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="size-3.5" />
-                {isDeleting ? 'Deleting…' : 'Delete this note'}
-              </Button>
-            </div>
-          </div>
+          <StatusPanel
+            tone="destructive"
+            icon={<AlertCircle className="text-destructive" />}
+            title="Processing stopped early"
+            description={currentError || 'An unexpected error occurred while preparing your note.'}
+            actions={
+              <>
+                <Button asChild>
+                  <Link href="/dashboard/new">Start a new note</Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isDeleting}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                  {isDeleting ? 'Deleting…' : 'Delete this note'}
+                </Button>
+              </>
+            }
+          />
         </div>
 
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -222,17 +209,12 @@ export function ProcessingView({ meetingId, step, error }: Props) {
   return (
     <>
       <div className="flex flex-col gap-8">
-        <div className="space-y-2">
-          <h1 className="text-[30px] font-semibold tracking-tight text-foreground">
-            Preparing your note
-          </h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            We&apos;re turning the audio into a clear set of notes. You can leave this page while
-            we finish up.
-          </p>
-        </div>
+        <PageHeader
+          title="Preparing your note"
+          description="We&apos;re turning the audio into a clear set of notes. You can leave this page while we finish up."
+        />
 
-        <div className="flex flex-col gap-5">
+        <div className="surface-utility flex flex-col gap-5 rounded-[28px] px-6 py-6">
           {displaySteps.map((stepItem) => (
             <div key={stepItem.label} className="flex items-center gap-4">
               <div className="flex size-7 shrink-0 items-center justify-center">

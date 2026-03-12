@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Lock, Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -11,9 +12,24 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { PageHeader, PageShell } from '@/components/page-shell'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { BUILTIN_TEMPLATES } from '@/lib/templates'
 import type { CustomNoteTemplate } from '@/lib/types'
@@ -29,28 +45,26 @@ const EMPTY_FORM: EditForm = { name: '', description: '', prompt: '' }
 function FormatCard({
   title,
   description,
-  meta,
+  badge,
   children,
 }: {
   title: string
   description?: string | null
-  meta: string
+  badge: React.ReactNode
   children: React.ReactNode
 }) {
   return (
-    <div className="surface-document flex h-full flex-col gap-4 px-6 py-6">
-      <div className="space-y-2">
-        <span className="text-xs font-medium text-muted-foreground">{meta}</span>
-        <div className="space-y-1.5">
+    <div className="surface-document flex h-full flex-col gap-5 px-6 py-6">
+      <div className="flex flex-col gap-3">
+        <div>{badge}</div>
+        <div className="flex flex-col gap-1.5">
           <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
-          {description && (
+          {description ? (
             <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-          )}
+          ) : null}
         </div>
       </div>
-      <div className="mt-auto flex flex-wrap items-center gap-2">
-        {children}
-      </div>
+      <div className="mt-auto flex flex-wrap items-center gap-2">{children}</div>
     </div>
   )
 }
@@ -61,6 +75,7 @@ export default function TemplatesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditForm>(EMPTY_FORM)
+  const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -84,6 +99,7 @@ export default function TemplatesPage() {
   const openNew = () => {
     setEditingId(null)
     setForm(EMPTY_FORM)
+    setFormError(null)
     setDialogOpen(true)
   }
 
@@ -94,20 +110,24 @@ export default function TemplatesPage() {
       description: template.description ?? '',
       prompt: template.prompt,
     })
+    setFormError(null)
     setDialogOpen(true)
   }
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast.error('Name is required')
+      setFormError('Format name is required.')
       return
     }
+
     if (!form.prompt.trim()) {
-      toast.error('Instructions are required')
+      setFormError('Instructions are required.')
       return
     }
 
     setSaving(true)
+    setFormError(null)
+
     try {
       const url = editingId ? `/api/note-templates/${editingId}` : '/api/note-templates'
       const method = editingId ? 'PATCH' : 'POST'
@@ -123,7 +143,7 @@ export default function TemplatesPage() {
       setDialogOpen(false)
       await fetchCustom()
     } catch {
-      toast.error('Failed to save this format')
+      setFormError('Failed to save this format.')
     } finally {
       setSaving(false)
     }
@@ -150,29 +170,28 @@ export default function TemplatesPage() {
       description: template.description,
       prompt: template.prompt,
     })
+    setFormError(null)
     setDialogOpen(true)
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8 md:px-10 md:py-12">
-      <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-[30px] font-semibold tracking-tight text-foreground">Note formats</h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Choose the shape you want your notes to take. Start from a built-in format, or make one that matches your team.
-          </p>
-        </div>
-        <Button onClick={openNew} className="self-start">
-          <Plus className="size-4" />
-          New format
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Note formats"
+        description="Choose the shape you want your notes to take. Start from a built-in format or make one that matches your team."
+        actions={
+          <Button onClick={openNew}>
+            <Plus />
+            New format
+          </Button>
+        }
+      />
 
-      <div className="space-y-10">
-        <section className="space-y-4">
-          <div className="space-y-1">
+      <div className="flex flex-col gap-10">
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Built in</h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
               Reliable starting points for common meeting types.
             </p>
           </div>
@@ -183,12 +202,8 @@ export default function TemplatesPage() {
                 key={template.id}
                 title={template.name}
                 description={template.description}
-                meta="Included with noter"
+                badge={<Badge variant="secondary"><Lock /> Included with noter</Badge>}
               >
-                <div className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">
-                  <Lock className="size-3.5" />
-                  Read only
-                </div>
                 <Button
                   variant="ghost"
                   onClick={() => duplicateBuiltin(template)}
@@ -201,32 +216,43 @@ export default function TemplatesPage() {
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="space-y-1">
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Your formats</h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
               Personal formats you can refine for recurring meetings.
             </p>
           </div>
 
           {loading ? (
-            <div className="surface-utility flex items-center gap-3 px-5 py-5 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Loading your formats…
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="surface-document flex flex-col gap-4 px-6 py-6">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-16 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-24" />
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : custom.length === 0 ? (
-            <div className="surface-utility flex flex-col items-start gap-4 px-6 py-8">
-              <div className="space-y-1">
-                <p className="text-base font-semibold text-foreground">No custom formats yet</p>
-                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+            <Empty className="surface-empty items-start text-left">
+              <EmptyHeader className="items-start text-left">
+                <EmptyTitle>No custom formats yet</EmptyTitle>
+                <EmptyDescription>
                   When you want notes tailored to a team ritual or client workflow, create a custom format here.
-                </p>
-              </div>
-              <Button variant="outline" onClick={openNew} className="shadow-none">
-                <Plus className="size-4" />
-                Create a format
-              </Button>
-            </div>
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent className="items-start">
+                <Button variant="outline" onClick={openNew} className="shadow-none">
+                  <Plus />
+                  Create a format
+                </Button>
+              </EmptyContent>
+            </Empty>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {custom.map((template) => (
@@ -234,14 +260,14 @@ export default function TemplatesPage() {
                   key={template.id}
                   title={template.name}
                   description={template.description}
-                  meta="Custom format"
+                  badge={<Badge variant="outline">Custom format</Badge>}
                 >
                   <Button
                     variant="ghost"
                     onClick={() => openEdit(template)}
                     className="px-0 text-sm text-muted-foreground hover:text-foreground"
                   >
-                    <Pencil className="size-4" />
+                    <Pencil />
                     Edit
                   </Button>
                   <Button
@@ -250,11 +276,7 @@ export default function TemplatesPage() {
                     disabled={deletingId === template.id}
                     className="px-0 text-sm text-muted-foreground hover:text-destructive"
                   >
-                    {deletingId === template.id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
+                    {deletingId === template.id ? <Loader2 className="animate-spin" /> : <Trash2 />}
                     Delete
                   </Button>
                 </FormatCard>
@@ -270,43 +292,45 @@ export default function TemplatesPage() {
             <DialogTitle>{editingId ? 'Edit format' : 'Create a format'}</DialogTitle>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-name" className="text-xs font-medium">
-                Format name
-              </Label>
-              <Input
-                id="tpl-name"
-                value={form.name}
-                onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
-                placeholder="e.g. Client check-in"
-              />
-            </div>
+          <div className="py-2">
+            <FieldGroup>
+              <Field data-invalid={formError ? true : undefined}>
+                <FieldLabel htmlFor="tpl-name">Format name</FieldLabel>
+                <Input
+                  id="tpl-name"
+                  value={form.name}
+                  onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
+                  placeholder="e.g. Client check-in"
+                  aria-invalid={formError ? true : undefined}
+                />
+              </Field>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-desc" className="text-xs font-medium">
-                Short description
-              </Label>
-              <Input
-                id="tpl-desc"
-                value={form.description}
-                onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
-                placeholder="What makes this format useful?"
-              />
-            </div>
+              <Field>
+                <FieldLabel htmlFor="tpl-desc">Short description</FieldLabel>
+                <Input
+                  id="tpl-desc"
+                  value={form.description}
+                  onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
+                  placeholder="What makes this format useful?"
+                />
+              </Field>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-prompt" className="text-xs font-medium">
-                Instructions for noter
-              </Label>
-              <Textarea
-                id="tpl-prompt"
-                value={form.prompt}
-                onChange={(e) => setForm((current) => ({ ...current, prompt: e.target.value }))}
-                placeholder="Describe the sections, tone, and details this format should capture…"
-                className="min-h-[160px] resize-none text-sm"
-              />
-            </div>
+              <Field data-invalid={formError ? true : undefined}>
+                <FieldLabel htmlFor="tpl-prompt">Instructions for noter</FieldLabel>
+                <Textarea
+                  id="tpl-prompt"
+                  value={form.prompt}
+                  onChange={(e) => setForm((current) => ({ ...current, prompt: e.target.value }))}
+                  placeholder="Describe the sections, tone, and details this format should capture…"
+                  className="min-h-[160px] resize-none text-sm"
+                  aria-invalid={formError ? true : undefined}
+                />
+                <FieldDescription>
+                  Explain the structure, emphasis, and tone noter should use when shaping the note.
+                </FieldDescription>
+                {formError ? <FieldError>{formError}</FieldError> : null}
+              </Field>
+            </FieldGroup>
           </div>
 
           <DialogFooter>
@@ -316,7 +340,7 @@ export default function TemplatesPage() {
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
                 <>
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="animate-spin" />
                   Saving…
                 </>
               ) : (
@@ -326,6 +350,6 @@ export default function TemplatesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }
