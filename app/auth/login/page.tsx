@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AuthPageLayout } from '@/components/auth-page-layout'
 
@@ -58,7 +57,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-xl"
+              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
             />
           </Field>
 
@@ -70,7 +69,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-xl"
+              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
             />
           </Field>
         </FieldGroup>
@@ -79,25 +78,29 @@ export default function LoginPage() {
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-xl"
+          className="h-12 w-full rounded-xl liquid-glass-fab font-semibold group relative overflow-hidden"
           disabled={isLoading}
         >
           {isLoading ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Signing in…
-            </>
+             <div className="flex items-center gap-1.5 justify-center">
+               <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+               <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+               <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+             </div>
           ) : (
-            'Sign in'
+             <span className="relative z-10 flex items-center justify-center gap-2">
+                 Sign in
+             </span>
           )}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] dark:via-white/5" />
         </Button>
       </form>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground text-center mt-2">
         {"Don't have an account? "}
         <Link
           href="/auth/sign-up"
-          className="font-medium text-foreground underline underline-offset-4"
+          className="font-medium text-foreground hover:text-accent transition-colors"
         >
           Sign up
         </Link>

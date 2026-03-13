@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { AuthPageLayout } from '@/components/auth-page-layout'
 
 export default function SignUpPage() {
@@ -73,7 +72,7 @@ export default function SignUpPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-xl"
+              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
             />
           </Field>
 
@@ -85,7 +84,7 @@ export default function SignUpPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-xl"
+              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
             />
           </Field>
 
@@ -97,7 +96,7 @@ export default function SignUpPage() {
               required
               value={repeatPassword}
               onChange={(e) => setRepeatPassword(e.target.value)}
-              className="h-11 rounded-xl"
+              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
             />
           </Field>
         </FieldGroup>
@@ -106,25 +105,29 @@ export default function SignUpPage() {
 
         <Button
           type="submit"
-          className="h-11 w-full rounded-xl"
+          className="h-12 w-full rounded-xl liquid-glass-fab font-semibold group relative overflow-hidden"
           disabled={isLoading}
         >
           {isLoading ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Creating account…
-            </>
+             <div className="flex items-center gap-1.5 justify-center">
+               <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+               <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+               <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+             </div>
           ) : (
-            'Create account'
+            <span className="relative z-10 flex items-center justify-center gap-2">
+                 Create account
+            </span>
           )}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] dark:via-white/5" />
         </Button>
       </form>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground text-center mt-2">
         Already have an account?{' '}
         <Link
           href="/auth/login"
-          className="font-medium text-foreground underline underline-offset-4"
+          className="font-medium text-foreground hover:text-accent transition-colors"
         >
           Sign in
         </Link>

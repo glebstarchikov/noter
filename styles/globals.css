@@ -597,6 +597,16 @@
   animation: reveal-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Base shimmer animation for buttons/CTAs */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Glass chip entrance — floats in from above with a blur dissolve */
 @keyframes glass-chip-in {
   from {
