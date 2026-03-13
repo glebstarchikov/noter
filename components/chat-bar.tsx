@@ -57,6 +57,7 @@ import {
   getStoredMessages,
   saveStoredMessages,
 } from '@/lib/chat-ui-helpers'
+import { useAssistantShellContextSafe } from '@/components/assistant-shell-context'
 import type { ChatSurfaceScope } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -65,6 +66,7 @@ interface ChatBarProps {
   allowGlobalToggle?: boolean
   defaultScope: ChatSurfaceScope
   meetingId?: string | null
+  transcriptBubble?: React.ReactNode
 }
 
 const STARTER_PROMPTS: Record<ChatSurfaceScope, string[]> = {
@@ -128,7 +130,10 @@ export function ChatBar({
   allowGlobalToggle = false,
   defaultScope,
   meetingId,
+  transcriptBubble,
 }: ChatBarProps) {
+  const shellContext = useAssistantShellContextSafe()
+  const isTranscriptMode = shellContext?.mode === 'transcript'
   const isMobile = useIsMobile()
   const [activeScope, setActiveScope] = useState<ChatSurfaceScope>(defaultScope)
   const [input, setInput] = useState('')
@@ -384,16 +389,27 @@ export function ChatBar({
         className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-2 md:px-4"
         style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
-        <div
-          ref={shellRef}
-          data-slot="chatbar-shell"
-          data-state={isExpanded ? 'expanded' : 'collapsed'}
-          data-generating={isLoading ? 'true' : 'false'}
-          className={cn(
-            'liquid-glass-shell pointer-events-auto flex w-[calc(100vw-1rem)] max-w-[44rem] flex-col overflow-hidden rounded-[30px] transition-[height,transform,box-shadow,border-color] duration-200 ease-out',
-            isExpanded ? 'h-auto max-h-[min(70vh,32rem)]' : 'h-16'
-          )}
-        >
+        <div className={cn(
+          'flex w-full max-w-[48rem] gap-2',
+          isTranscriptMode
+            ? 'items-end justify-center'
+            : 'flex-col-reverse items-center md:flex-row md:items-end md:justify-center',
+        )}>
+          {transcriptBubble}
+          <div
+            ref={shellRef}
+            data-slot="chatbar-shell"
+            data-state={isExpanded ? 'expanded' : 'collapsed'}
+            data-generating={isLoading ? 'true' : 'false'}
+            className={cn(
+              'liquid-glass-shell pointer-events-auto flex max-w-[44rem] flex-col overflow-hidden rounded-[30px] transition-[width,height,opacity,transform,box-shadow,border-color] duration-200 ease-out',
+              isTranscriptMode
+                ? 'h-0 w-0 border-transparent opacity-0'
+                : isExpanded
+                  ? 'h-auto max-h-[min(70vh,32rem)] w-[calc(100vw-1rem)]'
+                  : 'h-16 w-[calc(100vw-1rem)]'
+            )}
+          >
           {isExpanded ? (
             <div className="relative flex min-h-0 flex-1 flex-col">
               <Tooltip>
@@ -730,6 +746,7 @@ export function ChatBar({
               <span className="shrink-0 text-[11px] text-muted-foreground">⌘J</span>
             </button>
           )}
+          </div>
         </div>
       </section>
     </>

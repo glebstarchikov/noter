@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { ChatBar } from '@/components/chat-bar'
+import { TranscriptBubble } from '@/components/transcript-bubble'
 import { createClient } from '@/lib/supabase/client'
 import type { ChatSurfaceScope } from '@/lib/types'
 
@@ -91,12 +92,15 @@ export function FloatingChatHost() {
     return null
   }
 
+  const hasMeeting = Boolean(config.meetingId)
+
   return (
     <ChatBar
       authenticated={config.authenticated}
       allowGlobalToggle={config.allowGlobalToggle}
       defaultScope={config.defaultScope}
       meetingId={config.meetingId}
+      transcriptBubble={hasMeeting ? <TranscriptBubble /> : undefined}
     />
   )
 }

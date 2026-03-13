@@ -72,7 +72,7 @@ export default function SignUpPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
+              className="h-11 rounded-lg bg-background border-border/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent transition-colors shadow-sm"
             />
           </Field>
 
@@ -84,7 +84,7 @@ export default function SignUpPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
+              className="h-11 rounded-lg bg-background border-border/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent transition-colors shadow-sm"
             />
           </Field>
 
@@ -96,7 +96,7 @@ export default function SignUpPage() {
               required
               value={repeatPassword}
               onChange={(e) => setRepeatPassword(e.target.value)}
-              className="h-12 rounded-xl bg-background/50 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent focus-visible:shadow-[inset_0_0_0_1px_theme(colors.accent.DEFAULT)] transition-all"
+              className="h-11 rounded-lg bg-background border-border/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent transition-colors shadow-sm"
             />
           </Field>
         </FieldGroup>
@@ -105,7 +105,7 @@ export default function SignUpPage() {
 
         <Button
           type="submit"
-          className="h-12 w-full rounded-xl liquid-glass-fab font-semibold group relative overflow-hidden"
+          className="h-12 w-full rounded-xl font-medium shadow-sm transition-transform hover:-translate-y-0.5 active:scale-95"
           disabled={isLoading}
         >
           {isLoading ? (
@@ -115,11 +115,8 @@ export default function SignUpPage() {
                <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
              </div>
           ) : (
-            <span className="relative z-10 flex items-center justify-center gap-2">
-                 Create account
-            </span>
+            "Create account"
           )}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] dark:via-white/5" />
         </Button>
       </form>
 
@@ -127,7 +124,7 @@ export default function SignUpPage() {
         Already have an account?{' '}
         <Link
           href="/auth/login"
-          className="font-medium text-foreground hover:text-accent transition-colors"
+          className="font-medium text-foreground hover:text-accent transition-colors underline underline-offset-4 decoration-border hover:decoration-accent"
         >
           Sign in
         </Link>

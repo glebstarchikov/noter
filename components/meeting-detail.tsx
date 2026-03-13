@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  AlignLeft,
   ArrowLeft,
   Clock,
   Copy,
@@ -34,7 +33,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { TranscriptDrawer } from '@/components/transcript-drawer'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { deleteMeeting, toggleMeetingPin, copyMeetingNotes } from '@/lib/meeting-actions'
@@ -133,16 +131,6 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           }
           actions={
             <>
-              <TranscriptDrawer
-                transcript={meeting.transcript}
-                liveSegments={transcriptSegments}
-                trigger={
-                  <Button variant="outline" size="sm" className="gap-2 rounded-full shadow-none">
-                    <AlignLeft />
-                    Transcript
-                  </Button>
-                }
-              />
               <DropdownMenu>
                 <Tooltip>
                   <TooltipTrigger asChild>

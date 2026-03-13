@@ -32,6 +32,8 @@ export interface MeetingAssistantContextValue {
   durationSeconds: number
   recordSystemAudio?: boolean
   hasSystemAudio?: boolean
+  analyserNode?: AnalyserNode | null
+  frozenBarHeights?: number[] | null
   onToggleRecordSystemAudio?: (checked: boolean) => void
   onStartRecording?: () => void | Promise<void>
   onTogglePause?: () => void | Promise<void>
@@ -135,6 +137,10 @@ export function useAssistantShellContext() {
   }
 
   return context
+}
+
+export function useAssistantShellContextSafe(): AssistantShellContextValue | null {
+  return useContext(AssistantShellContext)
 }
 
 export function MeetingAssistantBridge({

@@ -4,7 +4,6 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  AlignLeft,
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
@@ -25,7 +24,6 @@ import { StatusPanel } from '@/components/status-panel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
@@ -44,7 +42,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { TranscriptDrawer } from '@/components/transcript-drawer'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { readApiError } from '@/lib/meeting-pipeline'
@@ -74,13 +71,15 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   const [isPinned, setIsPinned] = useState(meeting.is_pinned)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [analyserReady, setAnalyserReady] = useState(false)
+  const [frozenBars, setFrozenBars] = useState<number[] | null>(null)
 
   const streamRef = useRef<MediaStream | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
-  const transcriptEndRef = useRef<HTMLDivElement | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
 
   const { startTranscription, stopTranscription, isConnected, liveSegments } =
     useDeepgramTranscription()
@@ -111,11 +110,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     }
   }, [])
 
-  // Auto-scroll live transcript to the latest segment
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [liveSegments])
-
   // Toast when notes finish generating after recording
   const prevStatusRef = useRef(meeting.status)
   useEffect(() => {
@@ -134,6 +128,8 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     mediaRecorderRef.current = null
     streamRef.current = null
     audioContextRef.current = null
+    analyserRef.current = null
+    setAnalyserReady(false)
   }, [])
 
   const togglePin = async () => {
@@ -189,8 +185,14 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           const micSource = audioContext.createMediaStreamSource(micStream)
           const systemSource = audioContext.createMediaStreamSource(systemStream)
           const destination = audioContext.createMediaStreamDestination()
-          micSource.connect(destination)
-          systemSource.connect(destination)
+          const analyser = audioContext.createAnalyser()
+          analyser.fftSize = 64
+          analyser.smoothingTimeConstant = 0.7
+          micSource.connect(analyser)
+          systemSource.connect(analyser)
+          analyser.connect(destination)
+          analyserRef.current = analyser
+          setAnalyserReady(true)
           finalStream = destination.stream
 
           systemStream.getVideoTracks()[0]?.stop()
@@ -200,6 +202,15 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           throw error
         }
       } else {
+        const audioContext = new AudioContext()
+        audioContextRef.current = audioContext
+        const micSource = audioContext.createMediaStreamSource(micStream)
+        const analyser = audioContext.createAnalyser()
+        analyser.fftSize = 64
+        analyser.smoothingTimeConstant = 0.7
+        micSource.connect(analyser)
+        analyserRef.current = analyser
+        setAnalyserReady(true)
         finalStream = micStream
       }
 
@@ -334,6 +345,22 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       streamRef.current = null
       mediaRecorderRef.current = null
       chunksRef.current = []
+      if (analyserRef.current) {
+        const data = new Uint8Array(analyserRef.current.frequencyBinCount)
+        analyserRef.current.getByteFrequencyData(data)
+        const binCount = data.length
+        const barCount = 6
+        const binsPerBar = Math.floor(binCount / barCount)
+        const bars: number[] = []
+        for (let i = 0; i < barCount; i++) {
+          let sum = 0
+          for (let j = 0; j < binsPerBar; j++) sum += data[i * binsPerBar + j]
+          bars.push(sum / (binsPerBar * 255))
+        }
+        setFrozenBars(bars)
+      }
+      analyserRef.current = null
+      setAnalyserReady(false)
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         void audioContextRef.current.close()
       }
@@ -374,14 +401,19 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       durationSeconds: duration,
       recordSystemAudio,
       hasSystemAudio,
+      analyserNode: analyserRef.current,
+      frozenBarHeights: frozenBars,
       onToggleRecordSystemAudio: setRecordSystemAudio,
       onStartRecording: handleStartRecording,
       onTogglePause: togglePause,
       onStop: handleStop,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analyserReady triggers recalc when analyser ref changes
     [
+      analyserReady,
       assistantTranscriptSegments,
       duration,
+      frozenBars,
       handleStartRecording,
       handleStop,
       hasSystemAudio,
@@ -427,19 +459,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           }
           actions={
             <>
-              <TranscriptDrawer
-                transcript={transcriptForDrawer}
-                liveSegments={assistantTranscriptSegments}
-                live={live}
-                alwaysVisible
-                emptyMessage="Transcript will appear here once recording starts."
-                trigger={
-                  <Button variant="outline" size="sm" className="gap-2 rounded-full shadow-none">
-                    <AlignLeft />
-                    Transcript
-                  </Button>
-                }
-              />
               <DropdownMenu>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -668,37 +687,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
                 : 'Your note stays editable. Open the transcript only when you need more detail.'
             }
           />
-        )}
-
-        {live && (
-          <div className="surface-utility rounded-[24px] px-6 py-4">
-            <p className="mb-3 text-[11px] uppercase tracking-wider text-muted-foreground">
-              Live transcript
-            </p>
-            <ScrollArea className="max-h-[280px]">
-              <div className="space-y-2">
-                {liveSegments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Transcript will appear here as you speak.
-                  </p>
-                ) : (
-                  liveSegments.map((segment, i) => (
-                    <p
-                      key={i}
-                      className={cn(
-                        'text-sm leading-7',
-                        !segment.isFinal && 'text-muted-foreground/60'
-                      )}
-                    >
-                      <span className="font-medium text-foreground">{segment.speaker}:</span>{' '}
-                      {segment.text}
-                    </p>
-                  ))
-                )}
-                <div ref={transcriptEndRef} />
-              </div>
-            </ScrollArea>
-          </div>
         )}
 
         <MeetingNoteSurface
