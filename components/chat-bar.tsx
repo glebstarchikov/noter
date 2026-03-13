@@ -36,13 +36,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '@/components/ui/empty'
-import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
@@ -59,7 +52,6 @@ import {
   getActiveContextLabel,
   getComposerPrompt,
   getContextDescription,
-  getEmptyStateDescription,
   getErrorMessage,
   getMessageText,
   getStoredMessages,
@@ -399,7 +391,7 @@ export function ChatBar({
           data-generating={isLoading ? 'true' : 'false'}
           className={cn(
             'liquid-glass-shell pointer-events-auto flex w-[calc(100vw-1rem)] max-w-[44rem] flex-col overflow-hidden rounded-[30px] transition-[height,transform,box-shadow,border-color] duration-200 ease-out',
-            isExpanded ? 'h-[min(70vh,32rem)]' : 'h-16'
+            isExpanded ? 'h-auto max-h-[min(70vh,32rem)]' : 'h-16'
           )}
         >
           {isExpanded ? (
@@ -423,36 +415,28 @@ export function ChatBar({
               <ScrollArea className="min-h-0 flex-1">
                 <div
                   className={cn(
-                    'flex min-h-full flex-col gap-4 px-4 pb-2 pt-14',
-                    messages.length === 0 && !isLoading ? 'justify-center' : 'justify-end'
+                    'flex min-h-full flex-col gap-4 px-4 pb-2',
+                    messages.length === 0 && !isLoading ? 'justify-end pt-8' : 'justify-end pt-14'
                   )}
                 >
                   {messages.length === 0 && !isLoading ? (
-                    <Empty className="mx-auto w-full max-w-[36rem] border-0 bg-transparent p-0">
-                      <EmptyHeader className="max-w-none items-start gap-2 text-left">
-                        <EmptyTitle className="text-base">Start with a prompt</EmptyTitle>
-                        <EmptyDescription className="max-w-xl text-left">
-                          {getEmptyStateDescription(activeScope)}
-                        </EmptyDescription>
-                      </EmptyHeader>
-                      <EmptyContent className="max-w-none items-stretch">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {starterPrompts.map((starterPrompt) => (
-                            <Button
-                              key={starterPrompt}
-                              type="button"
-                              variant="ghost"
-                              onClick={() => handleStarterPrompt(starterPrompt)}
-                              className="liquid-glass-prompt h-auto justify-start rounded-[20px] px-4 py-3 text-left whitespace-normal"
-                            >
-                              {starterPrompt}
-                            </Button>
-                          ))}
-                        </div>
-                      </EmptyContent>
-                    </Empty>
+                    <div className="flex w-full flex-col items-center justify-end pb-2">
+                      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 max-w-[36rem]">
+                        {starterPrompts.map((starterPrompt) => (
+                          <Button
+                            key={starterPrompt}
+                            type="button"
+                            variant="ghost"
+                            onClick={() => handleStarterPrompt(starterPrompt)}
+                            className="liquid-glass-prompt h-auto justify-start rounded-[20px] px-4 py-3 text-left whitespace-normal text-sm"
+                          >
+                            {starterPrompt}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
                   ) : (
-                    <div role="log" aria-live="polite" className="flex flex-col gap-4">
+                    <div role="log" aria-live="polite" className="flex flex-col gap-5">
                       {messages.map((message) => {
                         const text = getMessageText(message)
 
@@ -460,11 +444,11 @@ export function ChatBar({
                           <div
                             key={message.id}
                             className={cn(
-                              'flex flex-col gap-2',
+                              'flex flex-col gap-1.5',
                               message.role === 'user' ? 'items-end' : 'items-start'
                             )}
                           >
-                            <span className="px-1 text-[11px] text-muted-foreground">
+                            <span className="px-2 text-[11px] font-medium text-muted-foreground">
                               {message.role === 'user' ? 'You' : 'noter'}
                             </span>
 
@@ -473,10 +457,10 @@ export function ChatBar({
                             {text ? (
                               <div
                                 className={cn(
-                                  'max-w-[90%] rounded-[24px] px-4 py-3 text-sm leading-7',
+                                  'text-sm leading-7 text-foreground',
                                   message.role === 'user'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'border border-border/60 bg-background/55 text-foreground'
+                                    ? 'bg-secondary/40 px-4 py-2.5 rounded-[20px] max-w-[85%] self-end'
+                                    : 'px-2 prose prose-sm max-w-none break-words dark:prose-invert [&>p]:mb-3 [&>p:last-child]:mb-0 [&>ul]:mb-3 [&>ul]:pl-5 [&>ol]:mb-3 [&>ol]:pl-5'
                                 )}
                               >
                                 {message.role === 'user' ? (
@@ -493,9 +477,12 @@ export function ChatBar({
                       })}
 
                       {isLoading ? (
-                        <div className="flex items-start">
-                          <div className="flex max-w-[90%] items-center gap-2 rounded-[24px] border border-border/60 bg-background/55 px-4 py-3 text-sm text-muted-foreground">
-                            <Loader2 className="size-4 animate-spin" />
+                        <div className="flex items-start pb-2">
+                          <div className="flex px-2 py-2 items-center gap-3 text-sm text-muted-foreground">
+                            <span className="relative flex size-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-muted-foreground opacity-75"></span>
+                              <span className="relative inline-flex rounded-full size-2 bg-muted-foreground"></span>
+                            </span>
                             {isStreaming ? 'Writing a response...' : 'Thinking...'}
                           </div>
                         </div>
@@ -522,6 +509,19 @@ export function ChatBar({
                   }}
                 >
                   <InputGroup className="liquid-glass-input h-auto rounded-[26px] border-border/60 shadow-none">
+                    {showContextRow ? (
+                      <div className="flex w-full flex-wrap gap-2 px-4 pt-4 pb-0">
+                        {canShowContext ? <ContextChip label={activeContextLabel} /> : null}
+                        {selectedFiles.map((file, index) => (
+                          <AttachmentChip
+                            key={`${file.name}-${index}`}
+                            file={file}
+                            onRemove={() => removeSelectedFile(index)}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+
                     <InputGroupTextarea
                       ref={inputRef}
                       value={input}
@@ -536,21 +536,8 @@ export function ChatBar({
                       placeholder={prompt}
                       disabled={isLoading}
                       aria-label={prompt}
-                      className="min-h-[3.5rem] max-h-32 overflow-y-auto px-4 py-3 text-sm leading-6"
+                      className="min-h-[3rem] max-h-32 overflow-y-auto px-4 py-3 text-sm leading-6"
                     />
-
-                    {showContextRow ? (
-                      <div className="flex flex-wrap gap-2 px-3 pb-2">
-                        {canShowContext ? <ContextChip label={activeContextLabel} /> : null}
-                        {selectedFiles.map((file, index) => (
-                          <AttachmentChip
-                            key={`${file.name}-${index}`}
-                            file={file}
-                            onRemove={() => removeSelectedFile(index)}
-                          />
-                        ))}
-                      </div>
-                    ) : null}
 
                     <InputGroupAddon align="block-end" className="flex-wrap gap-2 pt-2">
                       {canShowContext ? (
@@ -650,7 +637,7 @@ export function ChatBar({
                       {canUseTools ? (
                         <>
                           <InputGroupButton
-                            variant={searchEnabled ? 'secondary' : 'ghost'}
+                            variant="ghost"
                             size="sm"
                             aria-pressed={searchEnabled}
                             data-active={searchEnabled ? 'true' : 'false'}

@@ -226,7 +226,7 @@ describe('FloatingChatHost', () => {
     expect(screen.getByRole('button', { name: /^Context$/i })).not.toBeNull()
 
     const textarea = screen.getByLabelText('Ask across your notes...')
-    expect(textarea.className.includes('min-h-[3.5rem]')).toBe(true)
+    expect(textarea.className.includes('min-h-[3rem]')).toBe(true)
     expect(textarea.className.includes('overflow-y-auto')).toBe(true)
 
     const searchButton = screen.getByRole('button', { name: /search web/i })
