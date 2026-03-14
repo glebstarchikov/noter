@@ -66,7 +66,6 @@ export function MeetingNoteSurface({
   const [acknowledgedHash, setAcknowledgedHash] = useState(initialDocumentHash)
   const [draftState, setDraftState] = useState<DraftUiState>('idle')
   const [undoDocument, setUndoDocument] = useState<TiptapDocument | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [documentConflict, setDocumentConflict] = useState<DocumentSaveConflict | null>(null)
   const [reviewState, setReviewState] = useState<EnhancementState>(normalizeReviewState(meeting.enhancement_state))
   const [wasEverEnhanced, setWasEverEnhanced] = useState(false)
@@ -95,7 +94,6 @@ export function MeetingNoteSurface({
     setEditorRevision((value) => value + 1)
     setDraftState('idle')
     setUndoDocument(null)
-    setSaveError(null)
     setDocumentConflict(null)
     setReviewState(serverReviewState)
     setWasEverEnhanced(false)
@@ -142,6 +140,17 @@ export function MeetingNoteSurface({
     !documentConflict
 
   const fabIsLoading = draftState !== 'idle'
+  const showDraftAction = fabIsLoading || shouldShowAction
+  const showToolbar =
+    canReview &&
+    !documentConflict &&
+    (showDraftAction || Boolean(undoDocument) || Boolean(reviewState.lastError))
+  const loadingLabel =
+    draftState === 'saving'
+      ? 'Saving changes…'
+      : draftState === 'streaming'
+        ? 'Applying draft…'
+        : 'Improving…'
 
   const handleEditorReady = useCallback((editor: Editor | null) => {
     editorRef.current = editor
@@ -154,7 +163,6 @@ export function MeetingNoteSurface({
     setCurrentDocument((existingDocument) =>
       hashDocumentContent(existingDocument) === nextHash ? existingDocument : normalizedDocument
     )
-    setSaveError(null)
     setUndoDocument(null)
   }, [])
 
@@ -168,7 +176,6 @@ export function MeetingNoteSurface({
       code: 'STALE_DOCUMENT',
       ...payload,
     })
-    setSaveError(null)
   }, [])
 
   const handleAutosaveSuccess = useCallback((payload: { documentHash: string }) => {
@@ -207,7 +214,6 @@ export function MeetingNoteSurface({
     setEditorRevision((value) => value + 1)
     setUndoDocument(null)
     setDraftState('idle')
-    setSaveError(null)
     setDocumentConflict(null)
     streamingCancelledRef.current = true
   }, [documentConflict])
@@ -292,7 +298,8 @@ export function MeetingNoteSurface({
 
       setReviewState(normalizeReviewState(payload.enhancement_state))
       setAcknowledgedHash(payload.documentHash)
-      setEditorSeed(proposedDocument)
+      setEditorSeed(payload.document_content)
+      setCurrentDocument(payload.document_content)
       setDocumentConflict(null)
       setUndoDocument(baseDocument)
       setWasEverEnhanced(true)
@@ -302,6 +309,7 @@ export function MeetingNoteSurface({
       // Revert editor to base content on failure
       editor.commands.setContent(baseDocument, { emitUpdate: false })
       setEditorSeed(baseDocument)
+      setCurrentDocument(baseDocument)
       setDraftState('idle')
       const message = error instanceof Error ? error.message : 'Failed to save AI changes'
       toast.error(message)
@@ -313,7 +321,6 @@ export function MeetingNoteSurface({
 
     setRegenPromptDismissed(false)
     setDraftState('generating')
-    setSaveError(null)
 
     try {
       await persistCurrentDocument(currentDocument)
@@ -370,8 +377,7 @@ export function MeetingNoteSurface({
     <div className="flex flex-col">
       <section
         className={cn(
-          'surface-document relative px-6 py-6 md:px-8 md:py-8',
-          (draftState === 'generating' || draftState === 'streaming') && 'surface-thinking'
+          'surface-document relative px-6 py-6 md:px-8 md:py-8'
         )}
       >
         <div className="mx-auto w-full max-w-4xl space-y-4">
@@ -408,17 +414,17 @@ export function MeetingNoteSurface({
             </Alert>
           )}
 
-          {canReview && !documentConflict && (
+          {showToolbar && (
             <>
-              <div className="flex items-center justify-between gap-3 pb-1">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pb-1">
+                {showDraftAction && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="relative rounded-full gap-2"
+                        className="relative gap-2 rounded-full border-border/70 bg-background/80 shadow-none"
                         onClick={() => void handleDraftRequest()}
                         disabled={fabIsLoading || (!shouldShowAction && draftState === 'idle')}
                       >
@@ -427,8 +433,8 @@ export function MeetingNoteSurface({
                         ) : (
                           <Sparkles className="size-4" />
                         )}
-                        {fabIsLoading ? 'Improving\u2026' : 'Improve with AI'}
-                        {showRegenPrompt && (
+                        {fabIsLoading ? loadingLabel : 'Improve with AI'}
+                        {showRegenPrompt && !fabIsLoading && (
                           <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" />
                         )}
                       </Button>
@@ -439,28 +445,28 @@ export function MeetingNoteSurface({
                         : 'Use AI to improve your notes'}
                     </TooltipContent>
                   </Tooltip>
+                )}
 
-                  {undoDocument && draftState === 'idle' && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="rounded-full gap-1.5"
-                          onClick={handleUndo}
-                        >
-                          <Undo2 className="size-3.5" />
-                          Undo
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Revert AI changes</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
+                {undoDocument && draftState === 'idle' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-full gap-1.5"
+                        onClick={handleUndo}
+                      >
+                        <Undo2 className="size-3.5" />
+                        Undo
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Revert AI changes</TooltipContent>
+                  </Tooltip>
+                )}
 
                 {reviewState.lastError && draftState === 'idle' && (
-                  <div className="flex items-center gap-2">
+                  <>
                     <Badge
                       variant={isNeutralDraftFeedback ? 'secondary' : 'destructive'}
                       className="rounded-full"
@@ -468,38 +474,30 @@ export function MeetingNoteSurface({
                       {isNeutralDraftFeedback ? 'No changes suggested' : 'Draft failed'}
                     </Badge>
                     {!isNeutralDraftFeedback && canReview && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 rounded-full gap-1"
-                        onClick={() => void handleDraftRequest()}
-                      >
-                        <RefreshCcw className="size-3" />
-                        Retry
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 rounded-full gap-1"
+                            onClick={() => void handleDraftRequest()}
+                          >
+                            <RefreshCcw className="size-3" />
+                            Retry
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Try again</TooltipContent>
+                      </Tooltip>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
               <Separator />
             </>
           )}
 
-          <div className="relative">
-            {draftState === 'generating' && (
-              <div className="enhance-shimmer-overlay rounded-3xl" />
-            )}
-
-            {(draftState === 'generating' || draftState === 'streaming') && (
-              <div className="absolute inset-x-0 top-8 z-10 flex justify-center">
-                <div className="liquid-glass-chip flex items-center gap-2.5 rounded-full px-4 py-2 text-sm text-muted-foreground backdrop-blur">
-                  <Loader2 className="size-4 animate-spin text-accent" />
-                  Improving your notes\u2026
-                </div>
-              </div>
-            )}
-
+          <div className={cn('relative transition-opacity duration-200', fabIsLoading && 'opacity-90')}>
             <MeetingEditor
               key={`${meeting.id}:${editorRevision}`}
               meeting={meeting}

@@ -234,7 +234,7 @@ describe('MeetingNoteSurface', () => {
               JSON.stringify({
                 ok: true,
                 enhancement_state: {
-                  lastReviewedSourceHash: emptyDocHash,
+                  lastReviewedSourceHash: proposedDocHash,
                   lastOutcome: 'accepted',
                   lastReviewedAt: '2026-03-10T09:00:00.000Z',
                   lastError: null,
@@ -255,19 +255,17 @@ describe('MeetingNoteSurface', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
-    // After streaming + saving, the undo chip appears and the improve button is disabled
+    // After streaming + saving, the undo chip remains but the improve CTA disappears.
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /undo/i })).not.toBeNull()
-      const improveBtn = screen.getByRole('button', { name: /improve with ai/i })
-      expect(improveBtn.hasAttribute('disabled')).toBe(true)
+      expect(screen.queryByRole('button', { name: /improve with ai/i })).toBeNull()
     })
 
     // Simulate a user edit — improve button re-enables, undo chip disappears
     fireEvent.click(screen.getByRole('button', { name: /simulate edit/i }))
 
     await waitFor(() => {
-      const improveBtn = screen.getByRole('button', { name: /improve with ai/i })
-      expect(improveBtn.hasAttribute('disabled')).toBe(false)
+      expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
       expect(screen.queryByRole('button', { name: /undo/i })).toBeNull()
     })
   })

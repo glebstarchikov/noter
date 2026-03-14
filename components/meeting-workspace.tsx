@@ -72,9 +72,9 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [analyserReady, setAnalyserReady] = useState(false)
-  const [frozenBars, setFrozenBars] = useState<number[] | null>(null)
 
   const streamRef = useRef<MediaStream | null>(null)
+  const sourceStreamsRef = useRef<MediaStream[]>([])
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -83,6 +83,34 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
 
   const { startTranscription, stopTranscription, isConnected, liveSegments } =
     useDeepgramTranscription()
+
+  const stopActiveStreams = useCallback(() => {
+    const seenTracks = new Set<MediaStreamTrack>()
+
+    for (const stream of [streamRef.current, ...sourceStreamsRef.current]) {
+      if (!stream) continue
+
+      for (const track of stream.getTracks()) {
+        if (seenTracks.has(track)) continue
+        seenTracks.add(track)
+        track.stop()
+      }
+    }
+
+    streamRef.current = null
+    sourceStreamsRef.current = []
+  }, [])
+
+  const closeAudioSession = useCallback(() => {
+    analyserRef.current = null
+    setAnalyserReady(false)
+
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      void audioContextRef.current.close()
+    }
+
+    audioContextRef.current = null
+  }, [])
 
   useEffect(() => {
     setIsPinned(meeting.is_pinned)
@@ -103,12 +131,10 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
-      streamRef.current?.getTracks().forEach((track) => track.stop())
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        void audioContextRef.current.close()
-      }
+      stopActiveStreams()
+      closeAudioSession()
     }
-  }, [])
+  }, [closeAudioSession, stopActiveStreams])
 
   // Toast when notes finish generating after recording
   const prevStatusRef = useRef(meeting.status)
@@ -120,17 +146,16 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   }, [meeting.status])
 
   const resetRecordingSurface = useCallback(() => {
+    stopActiveStreams()
+    closeAudioSession()
+
     setPhase('setup')
     setHasSystemAudio(false)
     setIsPaused(false)
     setDuration(0)
     chunksRef.current = []
     mediaRecorderRef.current = null
-    streamRef.current = null
-    audioContextRef.current = null
-    analyserRef.current = null
-    setAnalyserReady(false)
-  }, [])
+  }, [closeAudioSession, stopActiveStreams])
 
   const togglePin = async () => {
     const prev = isPinned
@@ -166,10 +191,11 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       setIsPaused(false)
       setDuration(0)
       const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      let systemStream: MediaStream | null = null
 
       if (recordSystemAudio) {
         try {
-          const systemStream = await navigator.mediaDevices.getDisplayMedia({
+          systemStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true,
           })
@@ -180,40 +206,47 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
             throw new Error('Check "Share system/tab audio" when selecting what to share.')
           }
 
-          const audioContext = new AudioContext()
-          audioContextRef.current = audioContext
-          const micSource = audioContext.createMediaStreamSource(micStream)
-          const systemSource = audioContext.createMediaStreamSource(systemStream)
-          const destination = audioContext.createMediaStreamDestination()
-          const analyser = audioContext.createAnalyser()
-          analyser.fftSize = 64
-          analyser.smoothingTimeConstant = 0.7
-          micSource.connect(analyser)
-          systemSource.connect(analyser)
-          analyser.connect(destination)
-          analyserRef.current = analyser
-          setAnalyserReady(true)
-          finalStream = destination.stream
-
           systemStream.getVideoTracks()[0]?.stop()
-          setHasSystemAudio(true)
         } catch (error) {
+          systemStream?.getTracks().forEach((track) => track.stop())
           micStream.getTracks().forEach((track) => track.stop())
           throw error
         }
-      } else {
-        const audioContext = new AudioContext()
-        audioContextRef.current = audioContext
+      }
+
+      const audioContext = new AudioContext()
+      audioContextRef.current = audioContext
+
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.45
+
+      const silentMonitor = audioContext.createGain()
+      silentMonitor.gain.value = 0
+      analyser.connect(silentMonitor)
+      silentMonitor.connect(audioContext.destination)
+
+      if (systemStream) {
         const micSource = audioContext.createMediaStreamSource(micStream)
-        const analyser = audioContext.createAnalyser()
-        analyser.fftSize = 64
-        analyser.smoothingTimeConstant = 0.7
+        const systemSource = audioContext.createMediaStreamSource(systemStream)
+        const destination = audioContext.createMediaStreamDestination()
+
+        micSource.connect(destination)
+        systemSource.connect(destination)
         micSource.connect(analyser)
-        analyserRef.current = analyser
-        setAnalyserReady(true)
+        systemSource.connect(analyser)
+
+        finalStream = destination.stream
+        setHasSystemAudio(true)
+      } else {
+        const micSource = audioContext.createMediaStreamSource(micStream)
+        micSource.connect(analyser)
         finalStream = micStream
       }
 
+      sourceStreamsRef.current = systemStream ? [micStream, systemStream] : [micStream]
+      analyserRef.current = analyser
+      setAnalyserReady(true)
       streamRef.current = finalStream
       await startTranscription(finalStream)
 
@@ -232,9 +265,13 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       timerRef.current = setInterval(() => setDuration((value) => value + 1), 1000)
       setPhase('recording')
     } catch (error: unknown) {
+      stopActiveStreams()
+      mediaRecorderRef.current = null
+      closeAudioSession()
+
       toast.error(error instanceof Error ? error.message : "We couldn't access your microphone. Please check your permissions.")
     }
-  }, [recordSystemAudio, startTranscription])
+  }, [closeAudioSession, recordSystemAudio, startTranscription, stopActiveStreams])
 
   const togglePause = useCallback(() => {
     const recorder = mediaRecorderRef.current
@@ -341,33 +378,13 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       resetRecordingSurface()
     } finally {
       if (timerRef.current) clearInterval(timerRef.current)
-      streamRef.current?.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
+      stopActiveStreams()
       mediaRecorderRef.current = null
       chunksRef.current = []
-      if (analyserRef.current) {
-        const data = new Uint8Array(analyserRef.current.frequencyBinCount)
-        analyserRef.current.getByteFrequencyData(data)
-        const binCount = data.length
-        const barCount = 6
-        const binsPerBar = Math.floor(binCount / barCount)
-        const bars: number[] = []
-        for (let i = 0; i < barCount; i++) {
-          let sum = 0
-          for (let j = 0; j < binsPerBar; j++) sum += data[i * binsPerBar + j]
-          bars.push(sum / (binsPerBar * 255))
-        }
-        setFrozenBars(bars)
-      }
-      analyserRef.current = null
-      setAnalyserReady(false)
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        void audioContextRef.current.close()
-      }
-      audioContextRef.current = null
+      closeAudioSession()
       setIsPaused(false)
     }
-  }, [duration, meeting.id, resetRecordingSurface, router, stopTranscription])
+  }, [closeAudioSession, duration, meeting.id, resetRecordingSurface, router, stopActiveStreams, stopTranscription])
 
   const showRecordingControls = meeting.status === 'recording'
   const live = showRecordingControls && (phase === 'recording' || phase === 'stopping')
@@ -402,7 +419,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       recordSystemAudio,
       hasSystemAudio,
       analyserNode: analyserRef.current,
-      frozenBarHeights: frozenBars,
       onToggleRecordSystemAudio: setRecordSystemAudio,
       onStartRecording: handleStartRecording,
       onTogglePause: togglePause,
@@ -413,7 +429,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       analyserReady,
       assistantTranscriptSegments,
       duration,
-      frozenBars,
       handleStartRecording,
       handleStop,
       hasSystemAudio,

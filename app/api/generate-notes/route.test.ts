@@ -226,6 +226,46 @@ describe('POST /api/generate-notes', () => {
     expect(completionCall.messages[0].content).toContain('Selected note format: General Meeting')
   })
 
+  it('retries without response_format when the provider rejects structured output options', async () => {
+    ;(mockCompletionCreate as any)
+      .mockRejectedValueOnce(new Error('400 Invalid input: response_format json_object is not supported'))
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: 'Weekly sync',
+                summary: 'Summary text',
+                detailed_notes: '## Notes\n- Follow up with finance',
+                action_items: [{ task: 'Do X', owner: 'Alice', done: false }],
+                key_decisions: ['Ship'],
+                topics: ['Planning'],
+                follow_ups: ['Review PR'],
+              }),
+            },
+          },
+        ],
+      })
+
+    mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: {
+        id: 'meeting-1',
+        user_id: 'user-1',
+        transcript: 'Transcript from DB',
+        template_id: null,
+      },
+    })
+
+    const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
+    expect(res.status).toBe(200)
+    expect((mockCompletionCreate as any).mock.calls).toHaveLength(2)
+    expect((mockCompletionCreate as any).mock.calls[0][0].response_format).toEqual({
+      type: 'json_object',
+    })
+    expect((mockCompletionCreate as any).mock.calls[1][0].response_format).toBeUndefined()
+  })
+
   it('persists meeting error state when note generation throws', async () => {
     ;(mockCompletionCreate as any).mockRejectedValueOnce(new Error('OpenAI unavailable'))
 

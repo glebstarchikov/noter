@@ -33,7 +33,6 @@ export interface MeetingAssistantContextValue {
   recordSystemAudio?: boolean
   hasSystemAudio?: boolean
   analyserNode?: AnalyserNode | null
-  frozenBarHeights?: number[] | null
   onToggleRecordSystemAudio?: (checked: boolean) => void
   onStartRecording?: () => void | Promise<void>
   onTogglePause?: () => void | Promise<void>

@@ -30,6 +30,17 @@ export interface GeneratedNotes {
   follow_ups: string[]
 }
 
+function shouldRetryWithoutStructuredResponseFormat(error: unknown) {
+  if (!(error instanceof Error)) return false
+
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('invalid input') ||
+    message.includes('response_format') ||
+    message.includes('json_object')
+  )
+}
+
 /**
  * Generates structured meeting notes from a transcript using AI.
  * Shared between the direct `/api/generate-notes` route and the background worker.
@@ -57,16 +68,29 @@ export async function generateNotesFromTranscript(
     audioDuration: audioDuration ?? null,
     speakerCount,
   })
+  const messages = [
+    { role: 'system' as const, content: buildNotesGenerationPrompt(template) },
+    { role: 'user' as const, content: `${contextHeader}\n\nTranscript:\n${formattedTranscript}` },
+  ]
+  const requestCompletion = (useStructuredResponseFormat: boolean) =>
+    getOpenAI().chat.completions.create({
+      model: METADATA_MODEL,
+      messages,
+      temperature: 0.3,
+      ...(useStructuredResponseFormat ? { response_format: { type: 'json_object' as const } } : {}),
+    })
 
-  const completion = await getOpenAI().chat.completions.create({
-    model: METADATA_MODEL,
-    messages: [
-      { role: 'system', content: buildNotesGenerationPrompt(template) },
-      { role: 'user', content: `${contextHeader}\n\nTranscript:\n${formattedTranscript}` },
-    ],
-    temperature: 0.3,
-    response_format: { type: 'json_object' },
-  })
+  const completion = await (async () => {
+    try {
+      return await requestCompletion(true)
+    } catch (error: unknown) {
+      if (!shouldRetryWithoutStructuredResponseFormat(error)) {
+        throw error
+      }
+
+      return requestCompletion(false)
+    }
+  })()
 
   const content = completion.choices[0]?.message?.content
   if (!content) {
