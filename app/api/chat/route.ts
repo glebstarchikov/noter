@@ -24,7 +24,7 @@ export const maxDuration = 60
 
 const chatRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
-  messages: z.array(z.unknown()).default([]),
+  messages: z.array(z.unknown()).max(100).default([]),
   model: z.enum(['gpt-5-mini', 'gpt-5.4']).optional(),
   searchEnabled: z.boolean().optional().default(false),
 })

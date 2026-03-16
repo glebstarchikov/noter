@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return errorResponse('Meeting audio is not uploaded yet', 'AUDIO_NOT_READY', 400)
     }
 
-    if (meeting.status === 'done') {
+    if (meeting.status === 'done' || meeting.status === 'generating') {
       return NextResponse.json({
         success: true,
         queued: false,

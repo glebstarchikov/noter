@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { isDocumentSaveConflict, saveMeetingDocument } from '@/lib/document-sync'
 import type { TiptapDocument } from '@/lib/tiptap-converter'
 
-type SaveState = 'idle' | 'saving' | 'saved'
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 export function useEditorAutosave(
   editor: Editor | null,
@@ -26,6 +26,7 @@ export function useEditorAutosave(
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fadeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const retryCountRef = useRef(0)
   const baseHashRef = useRef(baseHash)
   const onSaveSuccessRef = useRef(onSaveSuccess)
   const onConflictRef = useRef(onConflict)
@@ -63,24 +64,48 @@ export function useEditorAutosave(
           return
         }
 
+        retryCountRef.current = 0
         setSaveState('saved')
         onSaveSuccessRef.current?.({ documentHash: result.documentHash })
         fadeRef.current = setTimeout(() => setSaveState('idle'), 3000)
       } catch {
-        setSaveState('idle')
+        // Retry once after 3s before showing error
+        if (retryCountRef.current < 1) {
+          retryCountRef.current += 1
+          timerRef.current = setTimeout(save, 3000)
+          return
+        }
+        setSaveState('error')
       }
     }
 
     const onUpdate = () => {
       if (timerRef.current) clearTimeout(timerRef.current)
       if (fadeRef.current) clearTimeout(fadeRef.current)
+      retryCountRef.current = 0
       timerRef.current = setTimeout(save, 2000)
     }
 
     editor.on('update', onUpdate)
     return () => {
       editor.off('update', onUpdate)
-      if (timerRef.current) clearTimeout(timerRef.current)
+
+      // Flush pending save on unmount via sendBeacon
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+        const pendingBaseHash = baseHashRef.current
+        if (pendingBaseHash) {
+          const body = JSON.stringify({
+            document_content: editor.getJSON(),
+            baseHash: pendingBaseHash,
+          })
+          navigator.sendBeacon?.(
+            `/api/meetings/${meetingId}/document`,
+            new Blob([body], { type: 'application/json' }),
+          )
+        }
+      }
+
       if (fadeRef.current) clearTimeout(fadeRef.current)
     }
   }, [editor, meetingId])

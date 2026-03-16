@@ -32,6 +32,11 @@ export async function PATCH(
       )
     }
 
+    const contentSize = JSON.stringify(body.document_content).length
+    if (contentSize > 2_000_000) {
+      return errorResponse('Document too large (max 2 MB)', 'DOCUMENT_TOO_LARGE', 413)
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)

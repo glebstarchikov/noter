@@ -47,6 +47,9 @@ export function RecordingStatusBar({
             <span className="text-sm font-semibold text-foreground">
               {isPaused ? 'Paused' : 'Recording now'}
             </span>
+            <span className="sr-only">
+              {isPaused ? 'Recording paused' : 'Recording in progress'}
+            </span>
             <div
               aria-label={`Elapsed time ${durationLabel}`}
               className="surface-utility shrink-0 rounded-full px-3 py-1 font-mono text-xs tabular-nums text-foreground"

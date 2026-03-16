@@ -95,12 +95,22 @@ export function ProcessingView({ meetingId, step, error }: Props) {
     setCurrentError(error)
   }, [step, error])
 
+  const [pollTimedOut, setPollTimedOut] = useState(false)
+
   useEffect(() => {
     if (!meetingId) return
     if (currentStep === 'done' || currentStep === 'error') return
 
     let cancelled = false
+    const startedAt = Date.now()
+    const POLL_TIMEOUT_MS = 10 * 60 * 1000
+
     const poll = async () => {
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        setPollTimedOut(true)
+        return
+      }
+
       try {
         const response = await fetch(`/api/meetings/${meetingId}`, { cache: 'no-store' })
         if (!response.ok) return
@@ -232,6 +242,12 @@ export function ProcessingView({ meetingId, step, error }: Props) {
             </div>
           ))}
         </div>
+
+        {pollTimedOut && (
+          <div className="rounded-2xl border border-amber-300/60 bg-amber-50/80 px-5 py-4 text-sm text-amber-950">
+            Processing is taking longer than expected. You can close this page safely — your note will finish in the background.
+          </div>
+        )}
 
         {(currentStep === 'recording' ||
           currentStep === 'uploading' ||

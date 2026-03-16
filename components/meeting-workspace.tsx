@@ -17,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-shell'
+import { RecordingErrorBoundary } from '@/components/recording-error-boundary'
 import { RecordingStatusBar } from '@/components/recording-status-bar'
 import { StatusPanel } from '@/components/status-panel'
 import { Button } from '@/components/ui/button'
@@ -271,7 +272,14 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       })
       recorder.start(1000)
 
-      timerRef.current = setInterval(() => setDuration((value) => value + 1), 1000)
+      timerRef.current = setInterval(() => {
+        setDuration((value) => {
+          if (value + 1 === 7200) {
+            toast.warning('You have been recording for 2 hours. Consider stopping soon to avoid issues.')
+          }
+          return value + 1
+        })
+      }, 1000)
       setPhase('recording')
     } catch (error: unknown) {
       stopActiveStreams()
@@ -522,6 +530,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           }
         />
 
+        <RecordingErrorBoundary onReset={resetRecordingSurface}>
         {showRecordingControls && phase === 'setup' && (
           <StatusPanel
             title="Ready to record"
@@ -557,6 +566,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
         )}
 
         {showRecordingControls && phase === 'recording' && (
+          <div aria-live="polite">
           <RecordingStatusBar
             isPaused={isPaused}
             isConnected={isConnected}
@@ -565,6 +575,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
             onTogglePause={togglePause}
             onStop={handleStop}
           />
+          </div>
         )}
 
         {showRecordingControls && phase === 'stopping' && (
@@ -574,6 +585,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
             description="Uploading audio and preparing your transcript."
           />
         )}
+        </RecordingErrorBoundary>
 
         {(phase === 'done' || !showRecordingControls) && (
           <StatusPanel

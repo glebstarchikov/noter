@@ -9,7 +9,7 @@ import type { DiarizedSegment } from '@/lib/types'
 
 export const maxDuration = 300
 
-const LOCK_TIMEOUT_MS = 10 * 60 * 1000
+const LOCK_TIMEOUT_MS = 20 * 60 * 1000
 const BASE_RETRY_DELAY_MS = 30 * 1000
 const MAX_RETRY_DELAY_MS = 15 * 60 * 1000
 

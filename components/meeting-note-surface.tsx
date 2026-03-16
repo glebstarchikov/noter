@@ -575,6 +575,15 @@ export function MeetingNoteSurface({
                   >
                     Replace with my draft
                   </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDocumentConflict(null)}
+                    className="h-8 rounded-full text-amber-900/70 shadow-none"
+                  >
+                    Keep editing
+                  </Button>
                 </div>
               </div>
             </Alert>

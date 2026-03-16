@@ -158,6 +158,7 @@ async function generateProposalDocument({
         model: openai(ENHANCEMENT_MODEL),
         schema: draftProposalSchema,
         temperature: 0.2,
+        abortSignal: AbortSignal.timeout(55_000),
         providerOptions: {
           openai: {
             strictJsonSchema: true,

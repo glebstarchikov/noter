@@ -133,12 +133,18 @@ export function MeetingEditor({
       {/* Save indicator */}
       {saveState !== 'idle' && (
         <div
+          role="status"
+          aria-busy={saveState === 'saving'}
           className={cn(
             'absolute right-0 top-0 text-xs transition-opacity',
-            saveState === 'saving' ? 'text-muted-foreground' : 'text-muted-foreground/70'
+            saveState === 'saving' && 'text-muted-foreground',
+            saveState === 'saved' && 'text-muted-foreground/70',
+            saveState === 'error' && 'text-destructive',
           )}
         >
-          {saveState === 'saving' ? 'Saving changes…' : 'Saved'}
+          {saveState === 'saving' && 'Saving changes\u2026'}
+          {saveState === 'saved' && 'Saved'}
+          {saveState === 'error' && 'Save failed \u2014 changes will retry on next edit'}
         </div>
       )}
 
