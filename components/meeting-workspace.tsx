@@ -133,6 +133,18 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     }
   }, [closeAudioSession, stopActiveStreams])
 
+  // Warn before closing tab during active recording or upload
+  useEffect(() => {
+    if (phase !== 'recording' && phase !== 'stopping') return
+
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [phase])
+
   // Toast when notes finish generating after recording
   const prevStatusRef = useRef(meeting.status)
   useEffect(() => {
@@ -315,10 +327,16 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       userId = user.id
 
       const storagePath = `${user.id}/${meeting.id}.webm`
-      const { error: uploadError } = await supabase.storage
-        .from('meeting-audio')
-        .upload(storagePath, audioBlob, { contentType: 'audio/webm', upsert: true })
-      if (uploadError) throw new Error(uploadError.message)
+      const maxRetries = 3
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const { error: uploadError } = await supabase.storage
+          .from('meeting-audio')
+          .upload(storagePath, audioBlob, { contentType: 'audio/webm', upsert: true })
+        if (!uploadError) break
+        if (attempt === maxRetries - 1) throw new Error(uploadError.message)
+        // Exponential backoff: 1s, 2s
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+      }
 
       const { error: updateError } = await supabase
         .from('meetings')
