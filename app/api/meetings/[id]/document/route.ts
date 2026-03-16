@@ -72,7 +72,10 @@ export async function PATCH(
       .eq('id', id)
       .eq('user_id', user.id)
 
-    if (updateError) throw new Error(updateError.message)
+    if (updateError) {
+      console.error('Document save failed:', updateError.message)
+      throw new Error('Failed to save document')
+    }
 
     return NextResponse.json({ ok: true, documentHash: nextHash })
   } catch (error: unknown) {

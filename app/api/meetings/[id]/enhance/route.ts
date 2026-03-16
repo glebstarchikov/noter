@@ -283,7 +283,7 @@ export async function POST(
 
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('*')
+      .select('id, transcript, template_id, document_content, enhancement_state, summary, detailed_notes, action_items, key_decisions, topics, follow_ups')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()

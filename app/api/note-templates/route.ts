@@ -17,7 +17,10 @@ export async function GET() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
 
-    if (error) throw new Error(error.message)
+    if (error) {
+      console.error('Template fetch failed:', error.message)
+      throw new Error('Failed to fetch templates')
+    }
     return NextResponse.json({ templates: data ?? [] })
   } catch (error: unknown) {
     return errorResponse(
@@ -41,6 +44,15 @@ export async function POST(request: Request) {
     if (typeof body.prompt !== 'string' || !body.prompt.trim()) {
       return errorResponse('prompt is required', 'INVALID_BODY', 400)
     }
+    if (body.name.trim().length > 100) {
+      return errorResponse('name must be 100 characters or fewer', 'INVALID_BODY', 400)
+    }
+    if (typeof body.description === 'string' && body.description.trim().length > 500) {
+      return errorResponse('description must be 500 characters or fewer', 'INVALID_BODY', 400)
+    }
+    if (body.prompt.trim().length > 2000) {
+      return errorResponse('prompt must be 2000 characters or fewer', 'INVALID_BODY', 400)
+    }
 
     const { data, error } = await supabase
       .from('note_templates')
@@ -53,7 +65,10 @@ export async function POST(request: Request) {
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
+    if (error) {
+      console.error('Template create failed:', error.message)
+      throw new Error('Failed to create template')
+    }
     return NextResponse.json({ template: data }, { status: 201 })
   } catch (error: unknown) {
     return errorResponse(

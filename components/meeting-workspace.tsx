@@ -557,49 +557,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           />
         )}
 
-        {showRecordingControls && phase === 'done' && (
-          <StatusPanel
-            tone={meeting.status === 'error' ? 'destructive' : 'default'}
-            icon={
-              meeting.status === 'generating' ? (
-                <Loader2 className="animate-spin text-accent" />
-              ) : meeting.status === 'error' ? (
-                <AlertCircle className="text-destructive" />
-              ) : (
-                <CheckCircle2 className="text-accent" />
-              )
-            }
-            title={
-              meeting.status === 'generating'
-                ? 'Building your notes'
-                : meeting.status === 'error'
-                  ? 'Automatic note generation hit a problem'
-                  : 'Recording complete'
-            }
-            description={
-              meeting.status === 'generating' ? (
-                <span className="mt-2 flex flex-col gap-2">
-                  <span className="flex items-center gap-3">
-                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
-                    <span className="text-sm font-medium text-accent">Audio saved</span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
-                    <span className="text-sm font-medium text-accent">Transcript analyzed</span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <Loader2 className="size-4 shrink-0 animate-spin text-foreground" />
-                    <span className="text-sm font-semibold text-foreground">Writing your notes\u2026</span>
-                  </span>
-                </span>
-              ) : meeting.status === 'error'
-                ? meeting.error_message || 'Please try again.'
-                : 'Your note stays editable. Open the transcript only when you need more detail.'
-            }
-          />
-        )}
-
-        {!showRecordingControls && (
+        {(phase === 'done' || !showRecordingControls) && (
           <StatusPanel
             tone={meeting.status === 'error' ? 'destructive' : 'default'}
             icon={

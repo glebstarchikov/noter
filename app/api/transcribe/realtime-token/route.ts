@@ -5,11 +5,15 @@ import { errorResponse } from '@/lib/api-helpers'
 export const maxDuration = 10
 
 /**
- * Returns a Deepgram API key to authenticated users for browser-based
- * WebSocket transcription. Only accessible to signed-in users.
+ * Returns a Deepgram key to authenticated users for browser-based
+ * WebSocket transcription.
  *
- * For production hardening, set DEEPGRAM_PROJECT_ID to enable short-lived
- * temporary keys via the Deepgram Management API.
+ * Security model:
+ * - When DEEPGRAM_PROJECT_ID is set (production), creates a short-lived
+ *   temporary key (5 min TTL, usage:write scope only) via the Deepgram
+ *   Management API. The main API key never reaches the browser.
+ * - When DEEPGRAM_PROJECT_ID is NOT set (local dev), falls back to
+ *   returning the raw API key with a console warning.
  */
 export async function POST() {
   try {
@@ -20,6 +24,43 @@ export async function POST() {
     const apiKey = process.env.DEEPGRAM_API_KEY
     if (!apiKey) return errorResponse('Deepgram not configured', 'NOT_CONFIGURED', 503)
 
+    const projectId = process.env.DEEPGRAM_PROJECT_ID
+
+    if (projectId) {
+      // Production path: create a short-lived temporary key so the main
+      // API key is never exposed to the browser.
+      const res = await fetch(
+        `https://api.deepgram.com/v1/projects/${projectId}/keys`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Token ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comment: 'browser-session-temp',
+            scopes: ['usage:write'],
+            time_to_live_in_seconds: 300,
+            tags: ['browser'],
+          }),
+        },
+      )
+
+      if (!res.ok) {
+        const detail = await res.text().catch(() => 'unknown error')
+        console.error('Deepgram temp key creation failed:', res.status, detail)
+        return errorResponse('Failed to create temporary key', 'TOKEN_CREATE_FAILED', 502)
+      }
+
+      const data = await res.json()
+      return NextResponse.json({ key: data.key })
+    }
+
+    // Development fallback: return the raw key but warn about it.
+    console.warn(
+      '[realtime-token] DEEPGRAM_PROJECT_ID is not set — returning raw API key. ' +
+      'Set DEEPGRAM_PROJECT_ID in production to enable short-lived temporary keys.',
+    )
     return NextResponse.json({ key: apiKey })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create token'

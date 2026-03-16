@@ -78,7 +78,8 @@ export async function DELETE(
       .eq('user_id', user.id)
 
     if (deleteError) {
-      throw new Error(deleteError.message)
+      console.error('Meeting delete failed:', deleteError.message)
+      throw new Error('Failed to delete meeting')
     }
 
     // Best-effort storage cleanup — orphaned files are preferable to un-deletable meetings

@@ -21,7 +21,7 @@ export const maxDuration = 60
 
 const generateNotesRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
-  transcript: z.string().optional(),
+  transcript: z.string().max(500_000).optional(),
 })
 
 export async function POST(request: NextRequest) {

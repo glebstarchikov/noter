@@ -40,10 +40,12 @@ export async function uploadAndProcessMeeting({
 
   if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
 
-  await supabase
+  const { error: audioUrlError } = await supabase
     .from('meetings')
     .update({ audio_url: storagePath })
     .eq('id', meetingId)
+
+  if (audioUrlError) throw new Error('Failed to save audio URL: ' + audioUrlError.message)
 
   const processRes = await fetch(`/api/meetings/${meetingId}/process`, {
     method: 'POST',

@@ -18,6 +18,16 @@ export async function PATCH(
     const body = await request.json().catch(() => null)
     if (!body) return errorResponse('Invalid body', 'INVALID_BODY', 400)
 
+    if (typeof body.name === 'string' && body.name.trim().length > 100) {
+      return errorResponse('name must be 100 characters or fewer', 'INVALID_BODY', 400)
+    }
+    if (typeof body.description === 'string' && body.description.trim().length > 500) {
+      return errorResponse('description must be 500 characters or fewer', 'INVALID_BODY', 400)
+    }
+    if (typeof body.prompt === 'string' && body.prompt.trim().length > 2000) {
+      return errorResponse('prompt must be 2000 characters or fewer', 'INVALID_BODY', 400)
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (typeof body.name === 'string' && body.name.trim()) updates.name = body.name.trim()
     if (typeof body.description === 'string') updates.description = body.description.trim()
