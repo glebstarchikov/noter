@@ -37,8 +37,8 @@ export function StatusPanel({
   return (
     <Alert className={cn(statusPanelVariants({ tone }), className)} {...props}>
       {icon}
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="flex flex-col gap-1">
+      <div className="col-start-2 flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <AlertTitle className="line-clamp-none">{title}</AlertTitle>
           <AlertDescription>{description}</AlertDescription>
         </div>

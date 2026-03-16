@@ -13,15 +13,12 @@ import {
   Mic,
   Monitor,
   MoreHorizontal,
-  Pause,
   Pin,
-  Play,
-  Square,
   Trash2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-shell'
+import { RecordingStatusBar } from '@/components/recording-status-bar'
 import { StatusPanel } from '@/components/status-panel'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -218,8 +215,8 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       audioContextRef.current = audioContext
 
       const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
-      analyser.smoothingTimeConstant = 0.45
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.6
 
       const silentMonitor = audioContext.createGain()
       silentMonitor.gain.value = 0
@@ -509,11 +506,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
 
         {showRecordingControls && phase === 'setup' && (
           <StatusPanel
-            icon={
-              <span className="relative flex size-2 shrink-0">
-                <span className="relative inline-flex size-2 rounded-full bg-muted-foreground/40" />
-              </span>
-            }
             title="Ready to record"
             description="Press Start to begin. The live transcript will appear as you speak."
             actions={
@@ -547,68 +539,13 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
         )}
 
         {showRecordingControls && phase === 'recording' && (
-          <StatusPanel
-            icon={
-              <span className="relative flex size-2 shrink-0">
-                <span
-                  className={cn(
-                    'absolute inline-flex h-full w-full rounded-full opacity-75',
-                    !isPaused ? 'animate-ping bg-accent' : 'bg-muted-foreground'
-                  )}
-                />
-                <span
-                  className={cn(
-                    'relative inline-flex size-2 rounded-full',
-                    !isPaused ? 'bg-accent' : 'bg-muted-foreground/40'
-                  )}
-                />
-              </span>
-            }
-            title={
-              <span className="flex flex-wrap items-center gap-3">
-                <span>{isPaused ? 'Paused' : 'Recording now'}</span>
-                {hasSystemAudio && (
-                  <Badge variant="secondary" className="rounded-full">
-                    <Monitor className="size-3" />
-                    System audio
-                  </Badge>
-                )}
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {formatTime(duration)}
-                </span>
-              </span>
-            }
-            description={
-              isConnected
-                ? 'Live transcript appears below. Stop when you\u2019re done.'
-                : 'Connecting your microphone and live transcript\u2026'
-            }
-            actions={
-              <div className="flex items-center gap-2">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      className="rounded-full"
-                      onClick={togglePause}
-                    >
-                      {isPaused ? <Play className="size-4" /> : <Pause className="size-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{isPaused ? 'Resume' : 'Pause'}</TooltipContent>
-                </Tooltip>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="rounded-full gap-2"
-                  onClick={handleStop}
-                >
-                  <Square className="size-3.5" />
-                  Stop recording
-                </Button>
-              </div>
-            }
+          <RecordingStatusBar
+            isPaused={isPaused}
+            isConnected={isConnected}
+            hasSystemAudio={hasSystemAudio}
+            durationLabel={formatTime(duration)}
+            onTogglePause={togglePause}
+            onStop={handleStop}
           />
         )}
 

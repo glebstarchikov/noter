@@ -76,6 +76,12 @@ import {
   useAssistantShellContextSafe,
   type AssistantShellMode,
 } from "@/components/assistant-shell-context";
+import {
+  ASSISTANT_COLLAPSED_HEIGHT,
+  ASSISTANT_EXPANDED_MAX_WIDTH_REM,
+  getAssistantExpandedHeightCss,
+  resolveAssistantExpandedHeightPx,
+} from "@/lib/assistant-shell-layout";
 import type { ChatSurfaceScope } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -83,9 +89,9 @@ import { cn } from "@/lib/utils";
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const COLLAPSED_HEIGHT = 64;
 const SPRING_EASE = "cubic-bezier(0.16,1,0.3,1)";
 const MORPH_DURATION = 300;
+const CONTENT_FADE_DURATION = 120;
 
 interface ChatBarProps {
   authenticated: boolean;
@@ -194,21 +200,22 @@ function TranscriptContent({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 px-4 pt-3 pb-1">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border/35 px-4 py-3">
+        <span className="text-sm font-medium text-foreground">
           Transcript
         </span>
         {isLive && (
-          <span className="flex items-center gap-1.5">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--recording-soft)] opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-[var(--recording)]" />
-            </span>
-            <span className="text-[11px] font-medium text-[var(--recording)]">
-              Live
-            </span>
-          </span>
+          <Badge
+            variant="outline"
+            className="rounded-full px-2.5 text-[11px] font-medium text-[var(--recording)]"
+            style={{
+              borderColor: "color-mix(in oklch, var(--recording-soft) 72%, var(--border))",
+              background:
+                "color-mix(in oklch, var(--recording-soft) 38%, transparent)",
+            }}
+          >
+            Live
+          </Badge>
         )}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -227,10 +234,9 @@ function TranscriptContent({
         </Tooltip>
       </div>
 
-      {/* Scrollable transcript */}
       <div ref={transcriptScrollRef} className="min-h-0 flex-1">
         <ScrollArea className="h-full">
-          <div className="flex min-h-full flex-col gap-2 px-4 pb-4 pt-2">
+          <div className="flex min-h-full flex-col gap-2 px-4 pb-4 pt-3">
             {transcriptSegments.length > 0 ? (
               <>
                 {transcriptSegments.map((segment, i) => (
@@ -311,6 +317,7 @@ export function ChatBar({
 }: ChatBarProps) {
   const shellContext = useAssistantShellContextSafe();
   const isMobile = useIsMobile();
+  const expandedHeight = getAssistantExpandedHeightCss(isMobile);
 
   /* ---- Mode-driven expansion (falls back to local state outside provider) ---- */
 
@@ -318,11 +325,12 @@ export function ChatBar({
   const mode = shellContext?.mode ?? localMode;
   const setMode = shellContext?.setMode ?? setLocalMode;
   const isExpanded = mode === "chat" || mode === "transcript";
-  const isTranscriptMode = mode === "transcript";
 
   /* ---- Height animation state ---- */
 
   const [targetHeight, setTargetHeight] = useState<number | null>(null);
+  const [renderedMode, setRenderedMode] =
+    useState<AssistantShellMode>("collapsed");
   const [revealed, setRevealed] = useState(false);
   const collapsingRef = useRef(false);
 
@@ -335,7 +343,9 @@ export function ChatBar({
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [files, setFiles] = useState<FileList | undefined>(undefined);
   const [hasHydratedMessages, setHasHydratedMessages] = useState(false);
-  const [spacerHeight, setSpacerHeight] = useState(COLLAPSED_HEIGHT + 24);
+  const [spacerHeight, setSpacerHeight] = useState(
+    ASSISTANT_COLLAPSED_HEIGHT + 24,
+  );
 
   /* ---- Refs ---- */
 
@@ -351,6 +361,10 @@ export function ChatBar({
     null,
   );
   const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const modeSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const expandedRef = useRef(false);
 
   /* ---- Scope sync ---- */
 
@@ -438,6 +452,9 @@ export function ChatBar({
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
       }
+      if (modeSwitchTimeoutRef.current) {
+        clearTimeout(modeSwitchTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -505,33 +522,51 @@ export function ChatBar({
     };
   }, [spacerHeight]);
 
-  /* ---- Resolve max height to px ---- */
+  /* ---- Expanded content mode ---- */
 
-  const resolveMaxHeight = useCallback(() => {
-    const vh = window.innerHeight;
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const vhLimit = isMobile ? vh * 0.6 : vh * 0.7;
-    const remLimit = isMobile ? 28 * rem : 32 * rem;
-    return Math.min(vhLimit, remLimit);
-  }, [isMobile]);
+  useEffect(() => {
+    if (!isExpanded) {
+      setRenderedMode("collapsed");
+      return;
+    }
+
+    if (renderedMode === "collapsed") {
+      setRenderedMode(mode);
+      return;
+    }
+
+    if (renderedMode === mode) return;
+
+    setRevealed(false);
+
+    if (modeSwitchTimeoutRef.current) {
+      clearTimeout(modeSwitchTimeoutRef.current);
+    }
+
+    modeSwitchTimeoutRef.current = setTimeout(() => {
+      setRenderedMode(mode);
+      requestAnimationFrame(() => {
+        setRevealed(true);
+      });
+    }, CONTENT_FADE_DURATION);
+  }, [isExpanded, mode, renderedMode]);
 
   /* ---- Smooth expand animation ---- */
 
   useLayoutEffect(() => {
-    if (!isExpanded || collapsingRef.current) return;
-    const el = shellRef.current;
-    if (!el) return;
+    const wasExpanded = expandedRef.current;
+    expandedRef.current = isExpanded;
 
-    // Start from collapsed height (before paint, no flash)
-    setTargetHeight(COLLAPSED_HEIGHT);
+    if (!isExpanded || wasExpanded || collapsingRef.current) return;
+
+    setTargetHeight(ASSISTANT_COLLAPSED_HEIGHT);
     setRevealed(false);
+    setRenderedMode(mode);
 
-    // Double-rAF: commit collapsed height, then animate to target
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const maxH = resolveMaxHeight();
-        const measured = Math.min(el.scrollHeight, maxH);
-        setTargetHeight(measured);
+        const nextHeight = resolveAssistantExpandedHeightPx(isMobile);
+        setTargetHeight(nextHeight);
 
         if (revealTimeoutRef.current) {
           clearTimeout(revealTimeoutRef.current);
@@ -547,7 +582,7 @@ export function ChatBar({
         );
       });
     });
-  }, [isExpanded, isTranscriptMode, resolveMaxHeight]);
+  }, [isExpanded, isMobile, mode]);
 
   /* ---- Collapse with animation ---- */
 
@@ -561,6 +596,7 @@ export function ChatBar({
     if (currentHeight === 0) {
       setRevealed(false);
       setTargetHeight(null);
+      setRenderedMode("collapsed");
       setMode("collapsed");
       requestAnimationFrame(() => dockButtonRef.current?.focus());
       return;
@@ -570,8 +606,18 @@ export function ChatBar({
     setRevealed(false);
     setTargetHeight(currentHeight); // snapshot current
 
+    if (revealTimeoutRef.current) {
+      clearTimeout(revealTimeoutRef.current);
+    }
+    if (heightResetTimeoutRef.current) {
+      clearTimeout(heightResetTimeoutRef.current);
+    }
+    if (modeSwitchTimeoutRef.current) {
+      clearTimeout(modeSwitchTimeoutRef.current);
+    }
+
     requestAnimationFrame(() => {
-      setTargetHeight(COLLAPSED_HEIGHT); // animate to collapsed
+      setTargetHeight(ASSISTANT_COLLAPSED_HEIGHT);
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
       }
@@ -580,6 +626,7 @@ export function ChatBar({
         setMode("collapsed");
         collapsingRef.current = false;
         setTargetHeight(null);
+        setRenderedMode("collapsed");
         requestAnimationFrame(() => {
           dockButtonRef.current?.focus();
         });
@@ -663,6 +710,8 @@ export function ChatBar({
   );
   const transcriptText = meetingCtx?.transcriptText ?? "";
   const isLive = meetingCtx?.live ?? false;
+  const visibleMode = renderedMode === "collapsed" ? mode : renderedMode;
+  const isTranscriptMode = visibleMode === "transcript";
 
   /* ---- Chat handlers ---- */
 
@@ -743,13 +792,9 @@ export function ChatBar({
       targetHeight != null
         ? `${targetHeight}px`
         : isExpanded
-          ? undefined
-          : `${COLLAPSED_HEIGHT}px`,
-    maxHeight: isExpanded
-      ? isMobile
-        ? "min(60vh, 28rem)"
-        : "min(70vh, 32rem)"
-      : undefined,
+          ? expandedHeight
+          : `${ASSISTANT_COLLAPSED_HEIGHT}px`,
+    maxHeight: isExpanded ? expandedHeight : undefined,
     transition: `height ${MORPH_DURATION}ms ${SPRING_EASE}`,
   };
 
@@ -770,23 +815,26 @@ export function ChatBar({
         <div
           ref={shellStackRef}
           className="flex w-full max-w-[48rem] items-end gap-2"
+          style={{ maxWidth: `${ASSISTANT_EXPANDED_MAX_WIDTH_REM}rem` }}
         >
           {transcriptBubble}
           <div
             ref={shellRef}
             data-slot="chatbar-shell"
             data-state={isExpanded ? "expanded" : "collapsed"}
+            data-mode={visibleMode}
             data-generating={isLoading ? "true" : "false"}
             className={cn(
-              "liquid-glass-shell pointer-events-auto flex flex-1 flex-col overflow-hidden rounded-[30px]",
-              "transition-[box-shadow,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              "liquid-glass-shell pointer-events-auto flex flex-1 origin-bottom flex-col overflow-hidden rounded-[30px]",
+              "transition-[box-shadow,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              isExpanded ? "translate-y-0 scale-100" : "translate-y-1 scale-[0.992]",
             )}
             style={heightStyle}
           >
             {isExpanded ? (
               <div
                 className={cn(
-                  "flex min-h-0 flex-1 flex-col transition-opacity duration-200",
+                  "flex min-h-0 flex-1 flex-col transition-opacity duration-150",
                   revealed ? "opacity-100" : "opacity-0",
                 )}
               >

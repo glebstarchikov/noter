@@ -400,6 +400,60 @@
             0 18px 38px -30px oklch(0.18 0.01 80 / 0.22);
     }
 
+    .assistant-shell-trigger {
+        background: linear-gradient(
+            180deg,
+            oklch(1 0 0 / 0.34),
+            oklch(0.98 0.003 85 / 0.2)
+        );
+        border: 1px solid color-mix(in oklch, var(--border) 72%, white);
+        box-shadow:
+            inset 0 1px 0 oklch(1 0 0 / 0.6),
+            0 12px 24px -24px oklch(0.18 0.01 80 / 0.18);
+        backdrop-filter: blur(20px) saturate(1.05);
+    }
+
+    .assistant-shell-trigger[data-live="true"] {
+        border-color: color-mix(
+            in oklch,
+            var(--recording) 38%,
+            var(--border)
+        );
+        box-shadow:
+            inset 0 1px 0 oklch(1 0 0 / 0.62),
+            0 0 0 1px color-mix(
+                in oklch,
+                var(--recording) 12%,
+                transparent
+            ),
+            0 16px 32px -26px color-mix(
+                in oklch,
+                var(--recording) 18%,
+                transparent
+            );
+    }
+
+    .assistant-shell-trigger[data-open="true"] {
+        background: linear-gradient(
+            180deg,
+            color-mix(
+                in oklch,
+                var(--assistant-glass-strong) 82%,
+                var(--background)
+            ),
+            color-mix(
+                in oklch,
+                var(--assistant-glass) 72%,
+                var(--background)
+            )
+        );
+        border-color: color-mix(in oklch, var(--ring) 30%, var(--border));
+        box-shadow:
+            inset 0 1px 0 oklch(1 0 0 / 0.72),
+            0 0 0 1px color-mix(in oklch, var(--ring) 10%, transparent),
+            0 18px 34px -28px color-mix(in oklch, var(--ring) 18%, transparent);
+    }
+
     .liquid-glass-orb {
         background:
             radial-gradient(

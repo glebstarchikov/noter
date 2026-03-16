@@ -2,32 +2,61 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-function reduceToBars(data: Uint8Array, barCount: number): number[] {
+const FRAME_INTERVAL_MS = 1000 / 30
+const NOISE_FLOOR = 0.045
+const BASELINE_HEIGHT = 0.035
+const ATTACK_SMOOTHING = 0.38
+const RELEASE_SMOOTHING = 0.14
+
+function getBucketRange(index: number, barCount: number, sampleCount: number) {
+  const start = Math.floor(Math.pow(index / barCount, 1.7) * sampleCount)
+  const end = Math.floor(Math.pow((index + 1) / barCount, 1.7) * sampleCount)
+
+  return {
+    start,
+    end: Math.max(start + 1, end),
+  }
+}
+
+export function reduceFrequencyToBars(
+  data: Uint8Array,
+  barCount: number,
+): number[] {
   const sampleCount = data.length
-  const samplesPerBar = Math.max(1, Math.floor(sampleCount / barCount))
   const bars: number[] = []
 
-  for (let i = 0; i < barCount; i++) {
+  for (let i = 0; i < barCount; i += 1) {
+    const { start, end } = getBucketRange(i, barCount, sampleCount)
     let peak = 0
-    let sumSquares = 0
+    let sum = 0
+    let samples = 0
 
-    for (let j = 0; j < samplesPerBar; j++) {
-      const sampleIndex = Math.min(sampleCount - 1, i * samplesPerBar + j)
-      const centeredSample = (data[sampleIndex] - 128) / 128
-      const magnitude = Math.abs(centeredSample)
-
-      peak = Math.max(peak, magnitude)
-      sumSquares += centeredSample * centeredSample
+    for (let j = start; j < end; j += 1) {
+      const normalized = data[Math.min(sampleCount - 1, j)] / 255
+      peak = Math.max(peak, normalized)
+      sum += normalized
+      samples += 1
     }
 
-    const rms = Math.sqrt(sumSquares / samplesPerBar)
-    bars.push(Math.min(1, peak * 0.65 + rms * 2.4))
+    const average = samples > 0 ? sum / samples : 0
+    bars.push(Math.min(1, average * 0.6 + peak * 0.4))
   }
 
   return bars
 }
 
-export { reduceToBars }
+export function smoothBarHeights(
+  previousBars: number[],
+  rawBars: number[],
+): number[] {
+  return rawBars.map((bar, index) => {
+    const target = bar < NOISE_FLOOR ? BASELINE_HEIGHT : Math.max(BASELINE_HEIGHT, bar)
+    const previous = previousBars[index] ?? BASELINE_HEIGHT
+    const smoothing = target > previous ? ATTACK_SMOOTHING : RELEASE_SMOOTHING
+
+    return previous + (target - previous) * smoothing
+  })
+}
 
 export function useAudioVisualizer(
   analyserNode: AnalyserNode | null | undefined,
@@ -38,40 +67,36 @@ export function useAudioVisualizer(
   )
   const rafRef = useRef<number>(0)
   const dataRef = useRef<Uint8Array | null>(null)
-  const frameRef = useRef(0)
-  const smoothedBarsRef = useRef<number[]>(Array.from({ length: barCount }, () => 0))
+  const smoothedBarsRef = useRef<number[]>(
+    Array.from({ length: barCount }, () => BASELINE_HEIGHT),
+  )
+  const lastFrameTimeRef = useRef(0)
 
   useEffect(() => {
     if (!analyserNode) {
       setBarHeights(Array.from({ length: barCount }, () => 0))
-      frameRef.current = 0
-      smoothedBarsRef.current = Array.from({ length: barCount }, () => 0)
+      smoothedBarsRef.current = Array.from({ length: barCount }, () => BASELINE_HEIGHT)
+      lastFrameTimeRef.current = 0
       return
     }
 
-    dataRef.current = new Uint8Array(analyserNode.fftSize)
-    smoothedBarsRef.current = Array.from({ length: barCount }, () => 0)
+    dataRef.current = new Uint8Array(analyserNode.frequencyBinCount)
+    smoothedBarsRef.current = Array.from({ length: barCount }, () => BASELINE_HEIGHT)
+    lastFrameTimeRef.current = 0
 
-    function tick() {
+    function tick(now: number) {
       if (!analyserNode || !dataRef.current) return
 
-      analyserNode.getByteTimeDomainData(dataRef.current)
-      const rawBars = reduceToBars(dataRef.current, barCount)
-      const t = frameRef.current++
+      if (now - lastFrameTimeRef.current >= FRAME_INTERVAL_MS) {
+        analyserNode.getByteFrequencyData(dataRef.current)
+        const rawBars = reduceFrequencyToBars(dataRef.current, barCount)
+        const nextBars = smoothBarHeights(smoothedBarsRef.current, rawBars)
 
-      const maxVal = Math.max(...rawBars)
-      const nextBars = rawBars.map((bar, index) => {
-        const target = maxVal < 0.025
-          ? 0.08 + 0.045 * (0.5 + 0.5 * Math.sin(t * 0.08 + index * 0.9))
-          : Math.max(0.06, bar)
-        const previous = smoothedBarsRef.current[index] ?? 0
-        const smoothing = target > previous ? 0.36 : 0.18
+        smoothedBarsRef.current = nextBars
+        setBarHeights(nextBars)
+        lastFrameTimeRef.current = now
+      }
 
-        return previous + (target - previous) * smoothing
-      })
-
-      smoothedBarsRef.current = nextBars
-      setBarHeights(nextBars)
       rafRef.current = requestAnimationFrame(tick)
     }
 

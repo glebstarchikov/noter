@@ -87,8 +87,8 @@ export default function NewMeetingPage() {
         description="Capture a live conversation or bring in an existing recording. noter will shape the notes for you."
       />
 
-      <div className="surface-utility flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
+      <div className="surface-document flex flex-col gap-4 rounded-[28px] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-medium text-foreground">Note format</p>
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground">{selectedTemplate.name}</span>
@@ -96,10 +96,13 @@ export default function NewMeetingPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="rounded-full border-border/70 bg-card px-4 shadow-none">
+              <Button
+                variant="outline"
+                className="rounded-full border-border/70 bg-background px-4 shadow-none"
+              >
                 {selectedTemplate.name}
                 <ChevronDown className="size-4" />
               </Button>

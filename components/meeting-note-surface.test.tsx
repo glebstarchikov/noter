@@ -36,19 +36,16 @@ mock.module('@/components/meeting-editor', () => ({
       onContentChangeRef.current = onContentChange
     }, [onContentChange])
 
-    // Simulate real Tiptap: fire onContentChange once on mount, not on every prop change.
-    // The real editor only fires onContentChange via the 'update' event (user edits or
-    // setContent with emitUpdate:true), not when the documentContent prop changes.
     useEffect(() => {
       onContentChangeRef.current?.(documentContent)
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Provide a mock editor instance via onEditorReady so streaming can proceed
     useEffect(() => {
       if (!onEditorReady) return
       const mockEditor = {
         commands: {
+          focus: () => true,
           setContent: () => true,
         },
       }
@@ -105,18 +102,67 @@ describe('MeetingNoteSurface', () => {
     cleanup()
   })
 
-  it('shows Improve with AI button for both empty and populated editors', () => {
-    const emptyMeeting = makeMeeting({ document_content: null })
+  it('shows state-based AI actions for empty and populated notes', () => {
+    const emptyMeeting = makeMeeting({
+      document_content: null,
+      summary: null,
+      detailed_notes: null,
+    })
     const populatedMeeting = makeMeeting({
       id: 'meeting-2',
       document_content: makeDocument('Typed note from the user'),
     })
 
     const { rerender } = render(<MeetingNoteSurface meeting={emptyMeeting} />)
-    expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
+
+    expect(screen.getByRole('button', { name: /generate notes with ai/i })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /improve with ai/i })).toBeNull()
 
     rerender(<MeetingNoteSurface meeting={populatedMeeting} />)
+
     expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /generate notes with ai/i })).toBeNull()
+  })
+
+  it('shows an inline in-progress state while automatic note creation is running', () => {
+    render(<MeetingNoteSurface meeting={makeMeeting({
+      document_content: null,
+      summary: null,
+      detailed_notes: null,
+      status: 'generating',
+    })} />)
+
+    expect(screen.getByText(/creating your first draft/i)).not.toBeNull()
+    expect(screen.getByText(/audio saved/i)).not.toBeNull()
+    expect(screen.getByRole('button', { name: /start typing manually/i })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /generate notes with ai/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /improve with ai/i })).toBeNull()
+  })
+
+  it('replaces the in-progress state when generated content arrives', async () => {
+    const generatingMeeting = makeMeeting({
+      document_content: null,
+      summary: null,
+      detailed_notes: null,
+      status: 'generating',
+    })
+    const completedMeeting = makeMeeting({
+      document_content: makeDocument('Generated draft'),
+      summary: null,
+      detailed_notes: null,
+      status: 'done',
+    })
+
+    const { rerender } = render(<MeetingNoteSurface meeting={generatingMeeting} />)
+
+    expect(screen.getByText(/creating your first draft/i)).not.toBeNull()
+
+    rerender(<MeetingNoteSurface meeting={completedMeeting} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Generated draft')).not.toBeNull()
+    })
+    expect(screen.getByText(/new draft ready/i)).not.toBeNull()
   })
 
   it('streams AI content into the editor and shows undo chip when done', async () => {
@@ -157,7 +203,9 @@ describe('MeetingNoteSurface', () => {
                   lastError: null,
                 },
                 document_content: makeDocument('Typed note from the user with clear next steps.'),
-                documentHash: hashDocumentContent(makeDocument('Typed note from the user with clear next steps.')),
+                documentHash: hashDocumentContent(
+                  makeDocument('Typed note from the user with clear next steps.')
+                ),
               }),
               { status: 200 }
             )
@@ -251,17 +299,20 @@ describe('MeetingNoteSurface', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
 
-    render(<MeetingNoteSurface meeting={makeMeeting({ document_content: null, summary: null, detailed_notes: null })} />)
+    render(<MeetingNoteSurface meeting={makeMeeting({
+      document_content: null,
+      summary: null,
+      detailed_notes: null,
+    })} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
+    fireEvent.click(screen.getByRole('button', { name: /generate notes with ai/i }))
 
-    // After streaming + saving, the undo chip remains but the improve CTA disappears.
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /undo/i })).not.toBeNull()
+      expect(screen.queryByRole('button', { name: /generate notes with ai/i })).toBeNull()
       expect(screen.queryByRole('button', { name: /improve with ai/i })).toBeNull()
     })
 
-    // Simulate a user edit — improve button re-enables, undo chip disappears
     fireEvent.click(screen.getByRole('button', { name: /simulate edit/i }))
 
     await waitFor(() => {
@@ -306,7 +357,7 @@ describe('MeetingNoteSurface', () => {
     fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/No changes suggested/i)).not.toBeNull()
+      expect(screen.getByText(/no changes suggested/i)).not.toBeNull()
     })
   })
 })
