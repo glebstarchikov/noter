@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, UIMessage } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
@@ -100,7 +101,7 @@ ${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` 
       originalMessages: messages as UIMessage[],
     })
   } catch (error: unknown) {
-    console.error('Global chat API error:', error)
+    Sentry.captureException(error)
     const message =
       error instanceof Error ? error.message : 'Chat failed'
     return errorResponse(message, 'CHAT_FAILED', 500)

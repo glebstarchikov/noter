@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Editor } from '@tiptap/react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -10,7 +9,6 @@ import {
   Sparkles,
   Undo2,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { MeetingEditor } from '@/components/meeting-editor'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -26,24 +24,17 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { hashDocumentContent } from '@/lib/document-hash'
-import {
-  isDocumentSaveConflict,
-  saveMeetingDocument,
-  type DocumentSaveConflict,
-} from '@/lib/document-sync'
 import { isNeutralEnhancementMessage } from '@/lib/enhancement-errors'
-import { readApiError } from '@/lib/meeting-pipeline'
 import {
   hasTiptapContent,
   legacyMeetingToTiptap,
   normalizeTiptapDocument,
   type TiptapDocument,
 } from '@/lib/tiptap-converter'
-import type { EnhancementOutcome, EnhancementState, Meeting, MeetingStatus } from '@/lib/types'
+import type { Meeting, MeetingStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useNoteEnhancement } from '@/hooks/use-note-enhancement'
 
-type DraftMode = 'generate' | 'enhance'
-type DraftUiState = 'idle' | 'generating' | 'streaming' | 'saving'
 type NoteSurfaceView =
   | 'empty-generating'
   | 'empty-ready'
@@ -53,22 +44,12 @@ type NoteSurfaceView =
 
 type DraftProgressState = 'done' | 'active' | 'pending'
 
-const STREAMING_BLOCK_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 50
+const GENERATED_REVEAL_DURATION_MS = 2200
 const AUTO_DRAFT_PROGRESS_STEPS: { label: string; state: DraftProgressState }[] = [
   { label: 'Audio saved', state: 'done' },
   { label: 'Transcript ready', state: 'done' },
   { label: 'Drafting notes', state: 'active' },
 ]
-const GENERATED_REVEAL_DURATION_MS = 2200
-
-function normalizeReviewState(state: EnhancementState | null | undefined): EnhancementState {
-  return {
-    lastReviewedSourceHash: state?.lastReviewedSourceHash ?? null,
-    lastOutcome: state?.lastOutcome ?? null,
-    lastReviewedAt: state?.lastReviewedAt ?? null,
-    lastError: state?.lastError ?? null,
-  }
-}
 
 function getNoteSurfaceView({
   status,
@@ -121,30 +102,88 @@ export function MeetingNoteSurface({
   const [editorRevision, setEditorRevision] = useState(0)
   const [currentDocument, setCurrentDocument] = useState<TiptapDocument>(initialDocument)
   const [acknowledgedHash, setAcknowledgedHash] = useState(initialDocumentHash)
-  const [draftState, setDraftState] = useState<DraftUiState>('idle')
-  const [undoDocument, setUndoDocument] = useState<TiptapDocument | null>(null)
-  const [documentConflict, setDocumentConflict] = useState<DocumentSaveConflict | null>(null)
-  const [reviewState, setReviewState] = useState<EnhancementState>(
-    normalizeReviewState(meeting.enhancement_state)
-  )
-  const [wasEverEnhanced, setWasEverEnhanced] = useState(false)
-  const [regenPromptDismissed, setRegenPromptDismissed] = useState(false)
   const [showManualEditor, setShowManualEditor] = useState(hasTiptapContent(initialDocument))
   const [showGeneratedReveal, setShowGeneratedReveal] = useState(false)
-  const serverReviewState = useMemo(
-    () => normalizeReviewState(meeting.enhancement_state),
-    [meeting.enhancement_state]
-  )
+
   const meetingIdRef = useRef(meeting.id)
-  const draftStateRef = useRef(draftState)
-  const editorRef = useRef<Editor | null>(null)
-  const streamingCancelledRef = useRef(false)
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    draftStateRef.current = draftState
-  }, [draftState])
+  const transcriptText = transcript ?? meeting.transcript ?? ''
+  const hasDocumentContent = hasTiptapContent(currentDocument)
+  const canReview =
+    Boolean(transcriptText.trim()) && (isRecordingComplete ?? meeting.status !== 'recording')
+  const actionMode = hasDocumentContent ? 'enhance' : 'generate'
+  const currentHash = hashDocumentContent(currentDocument)
 
+  const handleDocumentAccepted = useCallback(
+    (payload: {
+      document: TiptapDocument
+      documentHash: string
+      baseDocument: TiptapDocument
+      wasFirstGeneration: boolean
+    }) => {
+      setEditorSeed(payload.document)
+      setCurrentDocument(payload.document)
+      setAcknowledgedHash(payload.documentHash)
+      setShowManualEditor(true)
+
+      if (payload.wasFirstGeneration) {
+        setShowGeneratedReveal(true)
+      }
+    },
+    []
+  )
+
+  const handleAcknowledgedHashChange = useCallback((hash: string) => {
+    setAcknowledgedHash(hash)
+  }, [])
+
+  const handleLoadLatestVersionCallback = useCallback(
+    (payload: { document: TiptapDocument; documentHash: string }) => {
+      setCurrentDocument(payload.document)
+      setEditorSeed(payload.document)
+      setAcknowledgedHash(payload.documentHash)
+      setEditorRevision((value) => value + 1)
+      setShowManualEditor(hasTiptapContent(payload.document))
+    },
+    []
+  )
+
+  const handleShowEditor = useCallback(() => {
+    setShowManualEditor(true)
+  }, [])
+
+  const {
+    draftState,
+    reviewState,
+    undoDocument,
+    documentConflict,
+    wasEverEnhanced,
+    regenPromptDismissed,
+    shouldShowAction,
+    setRegenPromptDismissed,
+    setDocumentConflict,
+    clearUndoDocument,
+    handleDraftRequest,
+    handleUndo,
+    handleLoadLatestVersion,
+    handleKeepLocalDraft,
+    setEditorRef,
+  } = useNoteEnhancement(meeting, {
+    currentDocument,
+    acknowledgedHash,
+    currentHash,
+    actionMode,
+    canReview,
+    meetingStatus: meeting.status,
+    hasDocumentContent,
+    onDocumentAccepted: handleDocumentAccepted,
+    onAcknowledgedHashChange: handleAcknowledgedHashChange,
+    onLoadLatestVersion: handleLoadLatestVersionCallback,
+    onShowEditor: handleShowEditor,
+  })
+
+  // Reset all editor state when the meeting changes
   useEffect(() => {
     if (meetingIdRef.current === meeting.id) return
 
@@ -154,27 +193,16 @@ export function MeetingNoteSurface({
     setCurrentDocument(nextDocument)
     setAcknowledgedHash(hashDocumentContent(nextDocument))
     setEditorRevision((value) => value + 1)
-    setDraftState('idle')
-    setUndoDocument(null)
-    setDocumentConflict(null)
-    setReviewState(serverReviewState)
-    setWasEverEnhanced(false)
-    setRegenPromptDismissed(false)
     setShowManualEditor(hasTiptapContent(nextDocument))
     setShowGeneratedReveal(false)
-    streamingCancelledRef.current = true
 
     if (revealTimerRef.current) {
       clearTimeout(revealTimerRef.current)
       revealTimerRef.current = null
     }
-  }, [meeting.document_content, meeting.id, serverReviewState])
+  }, [meeting.document_content, meeting.id])
 
-  useEffect(() => {
-    if (draftStateRef.current !== 'idle' || undoDocument) return
-    setReviewState(serverReviewState)
-  }, [serverReviewState, undoDocument])
-
+  // Detect when document_content arrives for a meeting that had none
   useEffect(() => {
     if (meetingIdRef.current !== meeting.id) return
     const nextDoc = normalizeTiptapDocument(meeting.document_content)
@@ -188,6 +216,7 @@ export function MeetingNoteSurface({
     }
   }, [meeting.document_content, meeting.id, editorSeed])
 
+  // Auto-clear the "new draft ready" reveal badge
   useEffect(() => {
     if (!showGeneratedReveal) return
 
@@ -204,11 +233,45 @@ export function MeetingNoteSurface({
     }
   }, [showGeneratedReveal])
 
-  const transcriptText = transcript ?? meeting.transcript ?? ''
-  const currentHash = hashDocumentContent(currentDocument)
-  const hasDocumentContent = hasTiptapContent(currentDocument)
-  const canReview =
-    Boolean(transcriptText.trim()) && (isRecordingComplete ?? meeting.status !== 'recording')
+  const handleEditorReady = useCallback(
+    (editor: Parameters<typeof setEditorRef>[0]) => {
+      setEditorRef(editor)
+    },
+    [setEditorRef]
+  )
+
+  const handleEditorContentChange = useCallback(
+    (document: unknown) => {
+      const normalizedDocument = normalizeTiptapDocument(document)
+      const nextHash = hashDocumentContent(normalizedDocument)
+
+      setCurrentDocument((existingDocument) =>
+        hashDocumentContent(existingDocument) === nextHash ? existingDocument : normalizedDocument
+      )
+      clearUndoDocument()
+    },
+    [clearUndoDocument]
+  )
+
+  const handleAutosaveConflict = useCallback(
+    (payload: { currentDocument: TiptapDocument; currentHash: string; message: string }) => {
+      setDocumentConflict({
+        ok: false,
+        code: 'STALE_DOCUMENT',
+        ...payload,
+      })
+    },
+    [setDocumentConflict]
+  )
+
+  const handleAutosaveSuccess = useCallback(
+    (payload: { documentHash: string }) => {
+      setAcknowledgedHash(payload.documentHash)
+      setDocumentConflict(null)
+    },
+    [setDocumentConflict]
+  )
+
   const isNeutralDraftFeedback = isNeutralEnhancementMessage(reviewState.lastError)
   const noteSurfaceView = getNoteSurfaceView({
     status: meeting.status,
@@ -216,32 +279,6 @@ export function MeetingNoteSurface({
     hasConflict: Boolean(documentConflict),
   })
 
-  const actionMode: DraftMode = hasDocumentContent ? 'enhance' : 'generate'
-  const loadingLabel =
-    draftState === 'saving'
-      ? 'Saving changes…'
-      : draftState === 'streaming'
-        ? actionMode === 'generate'
-          ? 'Writing draft…'
-          : 'Applying draft…'
-        : actionMode === 'generate'
-          ? 'Creating draft…'
-          : 'Improving…'
-  const draftActionLabel =
-    noteSurfaceView === 'error'
-      ? 'Try again'
-      : hasDocumentContent
-        ? 'Improve with AI'
-        : showManualEditor
-          ? 'Create first draft'
-          : 'Generate notes with AI'
-
-  const shouldShowAction =
-    canReview &&
-    noteSurfaceView !== 'empty-generating' &&
-    draftState === 'idle' &&
-    !documentConflict &&
-    currentHash !== reviewState.lastReviewedSourceHash
   const showRegenPrompt =
     hasDocumentContent &&
     wasEverEnhanced &&
@@ -267,249 +304,24 @@ export function MeetingNoteSurface({
       noteSurfaceView === 'empty-ready' ||
       noteSurfaceView === 'error')
 
-  const handleEditorReady = useCallback((editor: Editor | null) => {
-    editorRef.current = editor
-  }, [])
-
-  const handleEditorContentChange = useCallback((document: unknown) => {
-    const normalizedDocument = normalizeTiptapDocument(document)
-    const nextHash = hashDocumentContent(normalizedDocument)
-
-    setCurrentDocument((existingDocument) =>
-      hashDocumentContent(existingDocument) === nextHash ? existingDocument : normalizedDocument
-    )
-    setUndoDocument(null)
-  }, [])
-
-  const handleAutosaveConflict = useCallback((payload: {
-    currentDocument: TiptapDocument
-    currentHash: string
-    message: string
-  }) => {
-    setDocumentConflict({
-      ok: false,
-      code: 'STALE_DOCUMENT',
-      ...payload,
-    })
-  }, [])
-
-  const handleAutosaveSuccess = useCallback((payload: { documentHash: string }) => {
-    setAcknowledgedHash(payload.documentHash)
-    setDocumentConflict(null)
-  }, [])
-
-  const persistCurrentDocument = useCallback(
-    async (document: TiptapDocument, baseHash = acknowledgedHash) => {
-      const result = await saveMeetingDocument({
-        meetingId: meeting.id,
-        document,
-        baseHash,
-      })
-
-      if (isDocumentSaveConflict(result)) {
-        setDocumentConflict(result)
-        const conflictError = new Error(result.message)
-        ;(conflictError as Error & { code?: string }).code = result.code
-        throw conflictError
-      }
-
-      setAcknowledgedHash(result.documentHash)
-      setDocumentConflict(null)
-      return result
-    },
-    [acknowledgedHash, meeting.id]
-  )
-
-  const handleLoadLatestVersion = useCallback(() => {
-    if (!documentConflict) return
-
-    setCurrentDocument(documentConflict.currentDocument)
-    setEditorSeed(documentConflict.currentDocument)
-    setAcknowledgedHash(documentConflict.currentHash)
-    setEditorRevision((value) => value + 1)
-    setUndoDocument(null)
-    setDraftState('idle')
-    setDocumentConflict(null)
-    setShowManualEditor(hasTiptapContent(documentConflict.currentDocument))
-    streamingCancelledRef.current = true
-  }, [documentConflict])
-
-  const handleKeepLocalDraft = useCallback(async () => {
-    if (!documentConflict) return
-
-    try {
-      await persistCurrentDocument(currentDocument, documentConflict.currentHash)
-      toast.success('Your local draft replaced the newer server version.')
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to replace the server version'
-      toast.error(message)
-    }
-  }, [currentDocument, documentConflict, persistCurrentDocument])
-
-  const handleUndo = useCallback(() => {
-    const editor = editorRef.current
-    if (!editor || !undoDocument) return
-
-    editor.commands.setContent(undoDocument, { emitUpdate: true })
-    setEditorSeed(undoDocument)
-    setUndoDocument(null)
-  }, [undoDocument])
-
-  const waitForEditor = useCallback(async () => {
-    if (editorRef.current) return editorRef.current
-
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 25))
-      if (editorRef.current) return editorRef.current
-    }
-
-    return null
-  }, [])
-
-  const streamProposedDocument = async ({
-    sourceHash,
-    baseDocument,
-    proposedDocument,
-  }: {
-    sourceHash: string
-    baseDocument: TiptapDocument
-    proposedDocument: TiptapDocument
-  }) => {
-    const editor = await waitForEditor()
-    if (!editor) {
-      setDraftState('idle')
-      toast.error('The editor is not ready yet. Please try again.')
-      return
-    }
-
-    streamingCancelledRef.current = false
-    setDraftState('streaming')
-
-    const blocks = proposedDocument.content ?? []
-
-    if (blocks.length > 0) {
-      editor.commands.setContent({ type: 'doc', content: [blocks[0]] }, { emitUpdate: false })
-    }
-
-    for (let i = 1; i < blocks.length; i += 1) {
-      await new Promise<void>((resolve) => setTimeout(resolve, STREAMING_BLOCK_DELAY_MS))
-      if (streamingCancelledRef.current) return
-      editor.commands.setContent(
-        { type: 'doc', content: blocks.slice(0, i + 1) },
-        { emitUpdate: false }
-      )
-    }
-
-    setDraftState('saving')
-
-    try {
-      const response = await fetch(`/api/meetings/${meetingIdRef.current}/enhance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'complete',
-          outcome: 'accepted' satisfies EnhancementOutcome,
-          sourceHash,
-          documentContent: proposedDocument,
-        }),
-      })
-
-      if (!response.ok) {
-        const { message } = await readApiError(response, 'Failed to save AI changes')
-        throw new Error(message)
-      }
-
-      const payload = (await response.json()) as {
-        enhancement_state: EnhancementState
-        document_content: TiptapDocument
-        documentHash: string
-      }
-
-      setReviewState(normalizeReviewState(payload.enhancement_state))
-      setAcknowledgedHash(payload.documentHash)
-      setEditorSeed(payload.document_content)
-      setCurrentDocument(payload.document_content)
-      setDocumentConflict(null)
-      setUndoDocument(baseDocument)
-      setWasEverEnhanced(true)
-      setRegenPromptDismissed(false)
-      setDraftState('idle')
-      setShowManualEditor(true)
-
-      if (!hasTiptapContent(baseDocument) && hasTiptapContent(payload.document_content)) {
-        setShowGeneratedReveal(true)
-      }
-    } catch (error) {
-      editor.commands.setContent(baseDocument, { emitUpdate: false })
-      setEditorSeed(baseDocument)
-      setCurrentDocument(baseDocument)
-      setDraftState('idle')
-      const message = error instanceof Error ? error.message : 'Failed to save AI changes'
-      toast.error(message)
-    }
-  }
-
-  const handleDraftRequest = async () => {
-    if (!shouldShowAction && draftState === 'idle') return
-
-    if (!hasDocumentContent) {
-      setShowManualEditor(true)
-    }
-
-    setRegenPromptDismissed(false)
-    setDraftState('generating')
-
-    try {
-      await persistCurrentDocument(currentDocument)
-
-      const response = await fetch(`/api/meetings/${meeting.id}/enhance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'generate',
-          mode: actionMode,
-          documentContent: currentDocument,
-        }),
-      })
-
-      if (!response.ok) {
-        const { message, code } = await readApiError(response, 'Failed to draft notes')
-        const draftError = new Error(message)
-        ;(draftError as Error & { code?: string }).code = code
-        throw draftError
-      }
-
-      const payload = (await response.json()) as {
-        sourceHash: string
-        summary?: string
-        mode: DraftMode
-        proposedDocument: TiptapDocument
-      }
-
-      setReviewState((current) => ({ ...current, lastError: null }))
-      setDocumentConflict(null)
-      void streamProposedDocument({
-        sourceHash: payload.sourceHash,
-        baseDocument: currentDocument,
-        proposedDocument: payload.proposedDocument,
-      })
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to draft notes'
-      const code =
-        error instanceof Error && 'code' in error ? (error as { code?: string }).code : undefined
-      if (code !== 'STALE_DOCUMENT') {
-        if (!isNeutralEnhancementMessage(message)) {
-          toast.error(message)
-        }
-        setReviewState((current) => ({
-          ...current,
-          lastError: message,
-        }))
-      }
-      setDraftState('idle')
-    }
-  }
+  const loadingLabel =
+    draftState === 'saving'
+      ? 'Saving changes…'
+      : draftState === 'streaming'
+        ? actionMode === 'generate'
+          ? 'Writing draft…'
+          : 'Applying draft…'
+        : actionMode === 'generate'
+          ? 'Creating draft…'
+          : 'Improving…'
+  const draftActionLabel =
+    noteSurfaceView === 'error'
+      ? 'Try again'
+      : hasDocumentContent
+        ? 'Improve with AI'
+        : showManualEditor
+          ? 'Create first draft'
+          : 'Generate notes with AI'
 
   const headerStateCopy = (() => {
     switch (noteSurfaceView) {
@@ -721,7 +533,7 @@ export function MeetingNoteSurface({
                   {noteSurfaceView === 'empty-generating'
                     ? 'Creating your first draft…'
                     : noteSurfaceView === 'error'
-                      ? 'We couldn’t create a first draft'
+                      ? "We couldn't create a first draft"
                       : 'No notes yet'}
                 </EmptyTitle>
                 <EmptyDescription>

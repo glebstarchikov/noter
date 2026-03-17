@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
@@ -48,7 +49,7 @@ export async function POST() {
 
       if (!res.ok) {
         const detail = await res.text().catch(() => 'unknown error')
-        console.error('Deepgram temp key creation failed:', res.status, detail)
+        Sentry.captureException(new Error(`Deepgram temp key creation failed: ${res.status} ${detail}`))
         return errorResponse('Failed to create temporary key', 'TOKEN_CREATE_FAILED', 502)
       }
 

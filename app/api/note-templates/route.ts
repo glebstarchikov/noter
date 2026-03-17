@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
@@ -18,7 +19,7 @@ export async function GET() {
       .order('created_at', { ascending: true })
 
     if (error) {
-      console.error('Template fetch failed:', error.message)
+      Sentry.captureException(error)
       throw new Error('Failed to fetch templates')
     }
     return NextResponse.json({ templates: data ?? [] })
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      console.error('Template create failed:', error.message)
+      Sentry.captureException(error)
       throw new Error('Failed to create template')
     }
     return NextResponse.json({ template: data }, { status: 201 })

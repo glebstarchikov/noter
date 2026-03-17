@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { errorResponse } from '@/lib/api-helpers'
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
       originalMessages: messages as UIMessage[],
     })
   } catch (error: unknown) {
-    console.error('Support chat API error:', error)
+    Sentry.captureException(error)
     const message = error instanceof Error ? error.message : 'Chat failed'
     return errorResponse(message, 'CHAT_FAILED', 500)
   }

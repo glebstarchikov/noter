@@ -41,17 +41,22 @@ const ratelimit =
     })
     : null
 
+const tiptapDocumentSchema = z.unknown().refine(
+  (v) => v == null || isTiptapDocument(v),
+  { message: 'documentContent must be a valid Tiptap document or omitted' }
+)
+
 const requestSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('generate'),
     mode: z.enum(['generate', 'enhance']),
-    documentContent: z.unknown(),
+    documentContent: tiptapDocumentSchema,
   }),
   z.object({
     action: z.literal('complete'),
     outcome: z.enum(['accepted', 'dismissed']),
     sourceHash: z.string().trim().min(1),
-    documentContent: z.unknown().optional(),
+    documentContent: tiptapDocumentSchema.optional(),
   }),
 ])
 

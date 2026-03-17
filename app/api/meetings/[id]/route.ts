@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
@@ -78,7 +79,7 @@ export async function DELETE(
       .eq('user_id', user.id)
 
     if (deleteError) {
-      console.error('Meeting delete failed:', deleteError.message)
+      Sentry.captureException(new Error(deleteError.message))
       throw new Error('Failed to delete meeting')
     }
 
@@ -89,7 +90,7 @@ export async function DELETE(
         .remove([meeting.audio_url])
 
       if (storageError) {
-        console.warn(`Failed to delete audio file ${meeting.audio_url}: ${storageError.message}`)
+        Sentry.captureException(new Error(`Failed to delete audio file ${meeting.audio_url}: ${storageError.message}`))
       }
     }
 

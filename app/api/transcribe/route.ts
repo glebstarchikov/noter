@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
           .eq('id', meetingId)
           .eq('user_id', userId)
       } catch (dbError) {
-        console.error('Failed to update meeting error status:', dbError)
+        Sentry.captureException(dbError)
       }
     }
 

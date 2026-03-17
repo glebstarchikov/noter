@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -41,110 +41,51 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
-import { readApiError } from '@/lib/meeting-pipeline'
 import { toast } from 'sonner'
 import { deleteMeeting, toggleMeetingPin, copyMeetingNotes } from '@/lib/meeting-actions'
-import { useDeepgramTranscription } from '@/hooks/use-deepgram-transcription'
+import { useRecording } from '@/hooks/use-recording'
 import { MeetingNoteSurface } from '@/components/meeting-note-surface'
 import {
   buildAssistantTranscriptSegments,
   MeetingAssistantBridge,
-  type RecordingPhase,
 } from '@/components/assistant-shell-context'
-import type { DiarizedSegment, Meeting } from '@/lib/types'
+import type { Meeting } from '@/lib/types'
 import { formatTime, formatDate, formatDuration } from '@/lib/date-formatter'
 
 export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
   const router = useRouter()
-  const [phase, setPhase] = useState<RecordingPhase>(
-    meeting.status === 'recording' ? 'setup' : 'done'
-  )
-  const [recordSystemAudio, setRecordSystemAudio] = useState(false)
-  const [hasSystemAudio, setHasSystemAudio] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [duration, setDuration] = useState(meeting.audio_duration ?? 0)
-  const [savedSegments, setSavedSegments] = useState<DiarizedSegment[]>(meeting.diarized_transcript ?? [])
-  const [savedTranscript, setSavedTranscript] = useState(meeting.transcript ?? '')
+
+  const {
+    phase,
+    recordSystemAudio,
+    hasSystemAudio,
+    isPaused,
+    duration,
+    savedSegments,
+    savedTranscript,
+    analyserNode,
+    isConnected,
+    liveSegments,
+    setRecordSystemAudio,
+    handleStartRecording,
+    togglePause,
+    handleStop,
+    resetRecordingSurface,
+  } = useRecording({
+    meetingId: meeting.id,
+    meetingStatus: meeting.status,
+    initialDiarizedTranscript: meeting.diarized_transcript,
+    initialTranscript: meeting.transcript,
+    initialAudioDuration: meeting.audio_duration,
+  })
+
   const [isPinned, setIsPinned] = useState(meeting.is_pinned)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [analyserReady, setAnalyserReady] = useState(false)
-
-  const streamRef = useRef<MediaStream | null>(null)
-  const sourceStreamsRef = useRef<MediaStream[]>([])
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-
-  const { startTranscription, stopTranscription, isConnected, liveSegments } =
-    useDeepgramTranscription()
-
-  const stopActiveStreams = useCallback(() => {
-    const seenTracks = new Set<MediaStreamTrack>()
-
-    for (const stream of [streamRef.current, ...sourceStreamsRef.current]) {
-      if (!stream) continue
-
-      for (const track of stream.getTracks()) {
-        if (seenTracks.has(track)) continue
-        seenTracks.add(track)
-        track.stop()
-      }
-    }
-
-    streamRef.current = null
-    sourceStreamsRef.current = []
-  }, [])
-
-  const closeAudioSession = useCallback(() => {
-    analyserRef.current = null
-    setAnalyserReady(false)
-
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      void audioContextRef.current.close()
-    }
-
-    audioContextRef.current = null
-  }, [])
 
   useEffect(() => {
     setIsPinned(meeting.is_pinned)
   }, [meeting.is_pinned])
-
-  useEffect(() => {
-    if (meeting.status !== 'recording') {
-      setPhase('done')
-    }
-
-    setSavedSegments(meeting.diarized_transcript ?? [])
-    setSavedTranscript(meeting.transcript ?? '')
-    if (meeting.audio_duration != null) {
-      setDuration(meeting.audio_duration)
-    }
-  }, [meeting.audio_duration, meeting.diarized_transcript, meeting.status, meeting.transcript])
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-      stopActiveStreams()
-      closeAudioSession()
-    }
-  }, [closeAudioSession, stopActiveStreams])
-
-  // Warn before closing tab during active recording or upload
-  useEffect(() => {
-    if (phase !== 'recording' && phase !== 'stopping') return
-
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-    }
-
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [phase])
 
   // Toast when notes finish generating after recording
   const prevStatusRef = useRef(meeting.status)
@@ -154,18 +95,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     }
     prevStatusRef.current = meeting.status
   }, [meeting.status])
-
-  const resetRecordingSurface = useCallback(() => {
-    stopActiveStreams()
-    closeAudioSession()
-
-    setPhase('setup')
-    setHasSystemAudio(false)
-    setIsPaused(false)
-    setDuration(0)
-    chunksRef.current = []
-    mediaRecorderRef.current = null
-  }, [closeAudioSession, stopActiveStreams])
 
   const togglePin = async () => {
     const prev = isPinned
@@ -193,221 +122,6 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       setShowDeleteDialog(false)
     }
   }
-
-  const handleStartRecording = useCallback(async () => {
-    try {
-      let finalStream: MediaStream
-      setHasSystemAudio(false)
-      setIsPaused(false)
-      setDuration(0)
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      let systemStream: MediaStream | null = null
-
-      if (recordSystemAudio) {
-        try {
-          systemStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true,
-          })
-          const systemAudioTracks = systemStream.getAudioTracks()
-          if (systemAudioTracks.length === 0) {
-            systemStream.getTracks().forEach((track) => track.stop())
-            micStream.getTracks().forEach((track) => track.stop())
-            throw new Error('Check "Share system/tab audio" when selecting what to share.')
-          }
-
-          systemStream.getVideoTracks()[0]?.stop()
-        } catch (error) {
-          systemStream?.getTracks().forEach((track) => track.stop())
-          micStream.getTracks().forEach((track) => track.stop())
-          throw error
-        }
-      }
-
-      const audioContext = new AudioContext()
-      audioContextRef.current = audioContext
-
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 512
-      analyser.smoothingTimeConstant = 0.6
-
-      const silentMonitor = audioContext.createGain()
-      silentMonitor.gain.value = 0
-      analyser.connect(silentMonitor)
-      silentMonitor.connect(audioContext.destination)
-
-      if (systemStream) {
-        const micSource = audioContext.createMediaStreamSource(micStream)
-        const systemSource = audioContext.createMediaStreamSource(systemStream)
-        const destination = audioContext.createMediaStreamDestination()
-
-        micSource.connect(destination)
-        systemSource.connect(destination)
-        micSource.connect(analyser)
-        systemSource.connect(analyser)
-
-        finalStream = destination.stream
-        setHasSystemAudio(true)
-      } else {
-        const micSource = audioContext.createMediaStreamSource(micStream)
-        micSource.connect(analyser)
-        finalStream = micStream
-      }
-
-      sourceStreamsRef.current = systemStream ? [micStream, systemStream] : [micStream]
-      analyserRef.current = analyser
-      setAnalyserReady(true)
-      streamRef.current = finalStream
-      await startTranscription(finalStream)
-
-      const recorder = new MediaRecorder(finalStream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm',
-      })
-      mediaRecorderRef.current = recorder
-      chunksRef.current = []
-      recorder.addEventListener('dataavailable', (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data)
-      })
-      recorder.start(1000)
-
-      timerRef.current = setInterval(() => {
-        setDuration((value) => {
-          if (value + 1 === 7200) {
-            toast.warning('You have been recording for 2 hours. Consider stopping soon to avoid issues.')
-          }
-          return value + 1
-        })
-      }, 1000)
-      setPhase('recording')
-    } catch (error: unknown) {
-      stopActiveStreams()
-      mediaRecorderRef.current = null
-      closeAudioSession()
-
-      toast.error(error instanceof Error ? error.message : "We couldn't access your microphone. Please check your permissions.")
-    }
-  }, [closeAudioSession, recordSystemAudio, startTranscription, stopActiveStreams])
-
-  const togglePause = useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (!recorder) return
-
-    if (isPaused) {
-      recorder.resume()
-      void audioContextRef.current?.resume()
-      timerRef.current = setInterval(() => setDuration((value) => value + 1), 1000)
-    } else {
-      recorder.pause()
-      void audioContextRef.current?.suspend()
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-
-    setIsPaused((value) => !value)
-  }, [isPaused])
-
-  const handleStop = useCallback(async () => {
-    setPhase('stopping')
-    if (timerRef.current) clearInterval(timerRef.current)
-    const supabase = createClient()
-    let userId: string | null = null
-    let generationStarted = false
-
-    try {
-      const recorder = mediaRecorderRef.current
-      if (recorder && recorder.state !== 'inactive') {
-        await new Promise<void>((resolve) => {
-          recorder.addEventListener('stop', () => resolve(), { once: true })
-          recorder.stop()
-        })
-      }
-
-      const segments = await stopTranscription()
-      const flatTranscript = segments.map((segment) => `${segment.speaker}: ${segment.text}`).join('\n')
-      const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' })
-
-      setSavedSegments(segments)
-      setSavedTranscript(flatTranscript)
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      userId = user.id
-
-      const storagePath = `${user.id}/${meeting.id}.webm`
-      const maxRetries = 3
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        const { error: uploadError } = await supabase.storage
-          .from('meeting-audio')
-          .upload(storagePath, audioBlob, { contentType: 'audio/webm', upsert: true })
-        if (!uploadError) break
-        if (attempt === maxRetries - 1) throw new Error(uploadError.message)
-        // Exponential backoff: 1s, 2s
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
-      }
-
-      const { error: updateError } = await supabase
-        .from('meetings')
-        .update({
-          status: 'generating',
-          audio_url: storagePath,
-          audio_duration: duration,
-          ...(flatTranscript ? { transcript: flatTranscript } : {}),
-          ...(segments.length > 0 ? { diarized_transcript: segments } : {}),
-        })
-        .eq('id', meeting.id)
-        .eq('user_id', user.id)
-
-      if (updateError) throw new Error(updateError.message)
-
-      generationStarted = true
-      setPhase('done')
-
-      const notesRes = await fetch('/api/generate-notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId: meeting.id }),
-      })
-
-      if (!notesRes.ok) {
-        const { message } = await readApiError(notesRes, 'Notes generation failed')
-        throw new Error(message)
-      }
-
-      router.refresh()
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save recording'
-
-      if (generationStarted && userId) {
-        try {
-          await supabase
-            .from('meetings')
-            .update({
-              status: 'error',
-              error_message: message,
-            })
-            .eq('id', meeting.id)
-            .eq('user_id', userId)
-        } catch {
-          // Best effort only.
-        }
-
-        toast.error(message)
-        router.refresh()
-        return
-      }
-
-      toast.error(message)
-      resetRecordingSurface()
-    } finally {
-      if (timerRef.current) clearInterval(timerRef.current)
-      stopActiveStreams()
-      mediaRecorderRef.current = null
-      chunksRef.current = []
-      closeAudioSession()
-      setIsPaused(false)
-    }
-  }, [closeAudioSession, duration, meeting.id, resetRecordingSurface, router, stopActiveStreams, stopTranscription])
 
   const showRecordingControls = meeting.status === 'recording'
   const live = showRecordingControls && (phase === 'recording' || phase === 'stopping')
@@ -441,15 +155,15 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
       durationSeconds: duration,
       recordSystemAudio,
       hasSystemAudio,
-      analyserNode: analyserRef.current,
+      analyserNode,
       onToggleRecordSystemAudio: setRecordSystemAudio,
       onStartRecording: handleStartRecording,
       onTogglePause: togglePause,
       onStop: handleStop,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- analyserReady triggers recalc when analyser ref changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analyserNode triggers recalc when analyser ref changes
     [
-      analyserReady,
+      analyserNode,
       assistantTranscriptSegments,
       duration,
       handleStartRecording,
