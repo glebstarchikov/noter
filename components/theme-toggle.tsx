@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Sun, Moon, Monitor } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -29,18 +31,22 @@ export function ThemeToggle({ className }: { className?: string }) {
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    className={cn(
-                        'inline-flex items-center justify-center rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        className
-                    )}
-                    aria-label="Toggle theme"
-                >
-                    <ActiveIcon className="size-4" />
-                </button>
-            </DropdownMenuTrigger>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            className={cn('text-muted-foreground shadow-none', className)}
+                            aria-label="Theme"
+                        >
+                            <ActiveIcon className="size-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Theme</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end">
                 {themes.map(({ value, label, icon: Icon }) => (
                     <DropdownMenuItem

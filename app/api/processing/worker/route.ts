@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { errorResponse } from '@/lib/api-helpers'
-import { getOpenAI } from '@/lib/openai'
-import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
-import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
-import { generatedNotesSchema } from '@/lib/schemas'
+import { transcribeAudioFromStorage } from '@/lib/transcription'
+import { generateNotesFromTranscript } from '@/lib/notes-generation'
+import { generatedNotesToTiptap } from '@/lib/tiptap-converter'
+import type { DiarizedSegment } from '@/lib/types'
 
 export const maxDuration = 300
 
-const MAX_TRANSCRIPT_CHARS = 400_000
-const LOCK_TIMEOUT_MS = 10 * 60 * 1000
+const LOCK_TIMEOUT_MS = 20 * 60 * 1000
 const BASE_RETRY_DELAY_MS = 30 * 1000
 const MAX_RETRY_DELAY_MS = 15 * 60 * 1000
 
@@ -191,7 +190,7 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
 
   const { data: meeting } = await admin
     .from('meetings')
-    .select('id, user_id, audio_url')
+    .select('id, user_id, audio_url, transcript, diarized_transcript, template_id, audio_duration')
     .eq('id', job.meeting_id)
     .eq('user_id', job.user_id)
     .single()
@@ -201,106 +200,57 @@ async function processMeetingJob(job: ProcessingJob, workerId: string) {
   }
 
   const storagePath = typeof meeting.audio_url === 'string' ? meeting.audio_url : null
-  if (!storagePath) {
-    throw new Error('Meeting audio path is missing')
+
+  let transcript: string
+
+  // Skip Whisper if we already have a Deepgram diarized transcript
+  if (meeting.diarized_transcript && meeting.transcript) {
+    logEvent('whisper_skipped', { workerId, meetingId: job.meeting_id, reason: 'deepgram_transcript_present' })
+    transcript = meeting.transcript as string
+
+    await admin
+      .from('meetings')
+      .update({ status: 'generating', error_message: null, updated_at: nowIso })
+      .eq('id', job.meeting_id)
+      .eq('user_id', job.user_id)
+  } else {
+    if (!storagePath) throw new Error('Meeting audio path is missing')
+
+    await admin
+      .from('meetings')
+      .update({ status: 'transcribing', error_message: null, updated_at: nowIso })
+      .eq('id', job.meeting_id)
+      .eq('user_id', job.user_id)
+
+    transcript = await transcribeAudioFromStorage(admin, storagePath)
+
+    await admin
+      .from('meetings')
+      .update({
+        transcript,
+        status: 'generating',
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', job.meeting_id)
+      .eq('user_id', job.user_id)
   }
 
-  await admin
-    .from('meetings')
-    .update({
-      status: 'transcribing',
-      error_message: null,
-      updated_at: nowIso,
-    })
-    .eq('id', job.meeting_id)
-    .eq('user_id', job.user_id)
-
-  const { data: audioData, error: downloadError } = await admin.storage
-    .from('meeting-audio')
-    .download(storagePath)
-
-  if (downloadError || !audioData) {
-    throw new Error('Failed to download audio from storage')
-  }
-
-  const extension = storagePath.split('.').pop() || 'webm'
-  const mimeType = extension === 'webm' ? 'audio/webm'
-    : extension === 'mp3' ? 'audio/mpeg'
-      : extension === 'wav' ? 'audio/wav'
-        : extension === 'm4a' ? 'audio/mp4'
-          : extension === 'ogg' ? 'audio/ogg'
-            : 'audio/webm'
-
-  const audioFile = new File([audioData], `audio.${extension}`, { type: mimeType })
-
-  const transcript = await getOpenAI().audio.transcriptions.create({
-    file: audioFile,
-    model: 'whisper-1',
-    response_format: 'text',
+  const normalizedNotes = await generateNotesFromTranscript(admin, {
+    transcript,
+    templateId: meeting.template_id,
+    userId: meeting.user_id,
+    diarizedTranscript: meeting.diarized_transcript as DiarizedSegment[] | null,
+    audioDuration: meeting.audio_duration as number | null,
   })
 
-  await admin
-    .from('meetings')
-    .update({
-      transcript,
-      status: 'generating',
-      error_message: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', job.meeting_id)
-    .eq('user_id', job.user_id)
-
-  const truncatedTranscript = transcript.length > MAX_TRANSCRIPT_CHARS
-    ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'
-    : transcript
-
-  const completion = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: NOTES_GENERATION_PROMPT },
-      { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
-    ],
-    temperature: 0.3,
-    response_format: { type: 'json_object' },
-  })
-
-  const content = completion.choices[0]?.message?.content
-  if (!content) {
-    throw new Error('No response from AI')
-  }
-
-  let parsedContent: unknown
-  try {
-    parsedContent = JSON.parse(content)
-  } catch {
-    throw new Error('AI returned invalid JSON. Please try again.')
-  }
-
-  const parsedNotes = generatedNotesSchema.safeParse(parsedContent)
-  if (!parsedNotes.success) {
-    throw new Error('AI returned invalid JSON. Please try again.')
-  }
-
-  const normalizedNotes = {
-    title: parsedNotes.data.title?.trim() || 'Untitled Meeting',
-    summary: parsedNotes.data.summary?.trim() || '',
-    detailed_notes: parsedNotes.data.detailed_notes?.trim() || '',
-    action_items: normalizeActionItems(parsedNotes.data.action_items),
-    key_decisions: normalizeStringArray(parsedNotes.data.key_decisions),
-    topics: normalizeStringArray(parsedNotes.data.topics),
-    follow_ups: normalizeStringArray(parsedNotes.data.follow_ups),
-  }
+  const tiptapDocument = generatedNotesToTiptap(normalizedNotes)
 
   await admin
     .from('meetings')
     .update({
-      title: normalizedNotes.title,
-      summary: normalizedNotes.summary,
-      detailed_notes: normalizedNotes.detailed_notes,
-      action_items: normalizedNotes.action_items,
-      key_decisions: normalizedNotes.key_decisions,
-      topics: normalizedNotes.topics,
-      follow_ups: normalizedNotes.follow_ups,
+      ...normalizedNotes,
+      document_content: tiptapDocument,
       status: 'done',
       error_message: null,
       updated_at: new Date().toISOString(),

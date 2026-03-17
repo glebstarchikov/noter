@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MeetingsList } from '@/components/meetings-list'
+import { PageHeader, PageShell } from '@/components/page-shell'
 import type { Meeting } from '@/lib/types'
 
 export default async function DashboardPage() {
@@ -18,31 +19,22 @@ export default async function DashboardPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-6 p-6 md:p-10">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-foreground">
-            All Notes
-          </h1>
-          <p className="text-sm text-destructive">
-            Failed to load meetings. Please try refreshing the page.
-          </p>
-        </div>
-      </div>
+      <PageShell>
+        <PageHeader
+          title="Notes"
+          description="Failed to load meetings. Please try refreshing the page."
+        />
+      </PageShell>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 md:p-10">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">
-          All Notes
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Your recorded and uploaded notes.
-        </p>
-      </div>
-
+    <PageShell>
+      <PageHeader
+        title="Notes"
+        description="Review recent meetings, jump back into a note, or start a new capture."
+      />
       <MeetingsList meetings={(meetings as Meeting[]) || []} />
-    </div>
+    </PageShell>
   )
 }

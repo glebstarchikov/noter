@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { AuthPageLayout } from '@/components/auth-page-layout'
+import { Button } from '@/components/ui/button'
 
 const ERROR_MESSAGES: Record<string, string> = {
   access_denied: 'Access was denied. Please try again or contact support.',
@@ -27,30 +29,18 @@ export default async function AuthErrorPage({
     : 'An unspecified error occurred during authentication.')
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center bg-background p-6">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <Link href="/" className="text-2xl font-semibold tracking-tight text-foreground">
-            noter
-          </Link>
-
-          <div className="flex flex-col gap-2">
-            <h1 className="text-xl font-medium text-foreground">
-              Something went wrong
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {friendlyMessage}
-            </p>
-          </div>
-
-          <Link
-            href="/auth/login"
-            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-          >
-            Back to sign in
-          </Link>
-        </div>
+    <AuthPageLayout
+      title="Something went wrong"
+      description={friendlyMessage}
+    >
+      <div className="flex flex-col gap-4">
+        <Button asChild className="w-full rounded-xl">
+          <Link href="/auth/login">Back to sign in</Link>
+        </Button>
+        <Button asChild variant="ghost" className="w-full rounded-xl text-muted-foreground">
+          <Link href="/">Return to home</Link>
+        </Button>
       </div>
-    </div>
+    </AuthPageLayout>
   )
 }

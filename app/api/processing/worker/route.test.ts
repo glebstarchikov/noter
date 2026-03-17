@@ -97,7 +97,7 @@ function makeSingleSuccessAdminMock() {
   const completeEqId = mock(() => ({ eq: completeEqLockedBy }))
 
   const processingJobsUpdate = mock(() => {})
-  processingJobsUpdate
+  ;(processingJobsUpdate as any)
     .mockReturnValueOnce({ eq: lockEqId })
     .mockReturnValueOnce({ eq: completeEqId })
 
@@ -146,8 +146,8 @@ describe('GET /api/processing/worker', () => {
     jest.clearAllMocks()
     process.env.CRON_SECRET = 'cron-secret'
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
-    mockTranscriptionCreate.mockResolvedValue('This is a transcript')
-    mockCompletionCreate.mockResolvedValue({
+    ;(mockTranscriptionCreate as any).mockResolvedValue('This is a transcript')
+    ;(mockCompletionCreate as any).mockResolvedValue({
       choices: [
         {
           message: {

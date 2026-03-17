@@ -1,371 +1,464 @@
-'use client'
+"use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { usePathname } from 'next/navigation'
-import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
-import type { UIMessage } from 'ai'
-import ReactMarkdown from 'react-markdown'
 import {
-    Send,
-    Sparkles,
-    Loader2,
-    Trash2,
-    ChevronDown,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { DEFAULT_CHAT_MODEL, type ChatModelId } from "@/lib/ai-models";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useShellAnimation } from "@/hooks/use-shell-animation";
 import {
-    getChatMessages,
-    saveChatMessages,
-    clearChatMessages,
-    getGlobalChatMessages,
-    saveGlobalChatMessages,
-    clearGlobalChatMessages,
-} from '@/lib/chat-storage'
+  clearStoredMessages,
+  getComposerPrompt,
+  getStoredMessages,
+  saveStoredMessages,
+} from "@/lib/chat-ui-helpers";
+import {
+  useAssistantShellContextSafe,
+  type AssistantShellMode,
+} from "@/components/assistant-shell-context";
+import { ASSISTANT_EXPANDED_MAX_WIDTH_REM } from "@/lib/assistant-shell-layout";
+import type { ChatSurfaceScope } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { ChatMessageList } from "@/components/chat/chat-message-list";
+import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatTranscriptContent } from "@/components/chat/chat-transcript-content";
 
-function getMessageText(msg: UIMessage): string {
-    if (!msg.parts || !Array.isArray(msg.parts)) return ''
-    return msg.parts
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text)
-        .join('')
-}
-
-const GLOBAL_SUGGESTIONS = [
-    'Pending action items',
-    'Key decisions this week',
-    'Recurring topics',
-    'Overview of recent meetings',
-]
-
-const MEETING_SUGGESTIONS = [
-    'Main takeaways',
-    'Deadlines mentioned',
-    'Action items by owner',
-    'Key decisions',
-]
+/* ------------------------------------------------------------------ */
+/*  Constants                                                          */
+/* ------------------------------------------------------------------ */
 
 interface ChatBarProps {
-    meetingTitle?: string
+  authenticated: boolean;
+  allowGlobalToggle?: boolean;
+  defaultScope: ChatSurfaceScope;
+  meetingId?: string | null;
+  reserveInFlow?: boolean;
+  transcriptBubble?: React.ReactNode;
 }
 
-export function ChatBar({ meetingTitle }: ChatBarProps) {
-    const pathname = usePathname()
-    const [isExpanded, setIsExpanded] = useState(false)
-    const [input, setInput] = useState('')
-    const scrollRef = useRef<HTMLDivElement>(null)
-    const inputRef = useRef<HTMLInputElement>(null)
-    const panelRef = useRef<HTMLDivElement>(null)
+const STARTER_PROMPTS: Record<ChatSurfaceScope, string[]> = {
+  support: [
+    "How do I get started with noter?",
+    "How do I upload a meeting?",
+    "How do I use the dashboard?",
+  ],
+  meeting: [
+    "Summarize this note",
+    "List action items from this note",
+    "Extract key decisions from this note",
+  ],
+  global: [
+    "Summarize notes from this week",
+    "List all action items across notes",
+    "Find recurring themes across notes",
+  ],
+};
 
-    // Derive context from the current route
-    const meetingId = useMemo(() => {
-        const match = pathname.match(/^\/dashboard\/([^/]+)$/)
-        return match ? match[1] : null
-    }, [pathname])
+/* ------------------------------------------------------------------ */
+/*  ChatBar                                                            */
+/* ------------------------------------------------------------------ */
 
-    const isGlobal = !meetingId
-    const chatId = meetingId ?? '__global__'
+export function ChatBar({
+  authenticated,
+  allowGlobalToggle = false,
+  defaultScope,
+  meetingId,
+  reserveInFlow = true,
+  transcriptBubble,
+}: ChatBarProps) {
+  const shellContext = useAssistantShellContextSafe();
+  const isMobile = useIsMobile();
 
-    const transport = useMemo(
-        () =>
-            new DefaultChatTransport({
-                api: isGlobal ? '/api/chat/global' : '/api/chat',
-                ...(meetingId ? { body: { meetingId } } : {}),
-            }),
-        [isGlobal, meetingId]
-    )
+  /* ---- Mode-driven expansion (falls back to local state outside provider) ---- */
 
-    const storedMessages = useMemo(
-        () => (isGlobal ? getGlobalChatMessages() : getChatMessages(chatId)),
-        [isGlobal, chatId]
-    )
+  const [localMode, setLocalMode] = useState<AssistantShellMode>("collapsed");
+  const mode = shellContext?.mode ?? localMode;
+  const setMode = shellContext?.setMode ?? setLocalMode;
+  const isExpanded = mode === "chat" || mode === "transcript";
 
-    const { messages, sendMessage, setMessages, status, error } = useChat({
-        id: chatId,
-        transport,
-        messages: storedMessages,
-    })
+  /* ---- Shell animation ---- */
 
-    // Persist messages (debounced)
-    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    useEffect(() => {
-        if (messages.length === 0) return
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-        saveTimeoutRef.current = setTimeout(() => {
-            if (isGlobal) saveGlobalChatMessages(messages)
-            else saveChatMessages(chatId, messages)
-        }, 500)
-        return () => {
-            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-        }
-    }, [messages, isGlobal, chatId])
+  const {
+    shellRef,
+    shellStackRef,
+    dockButtonRef,
+    spacerHeight,
+    renderedMode,
+    revealed,
+    heightStyle,
+    collapse,
+  } = useShellAnimation({ mode, setMode, isExpanded, isMobile });
 
-    const handleClearChat = useCallback(() => {
-        if (isGlobal) clearGlobalChatMessages()
-        else clearChatMessages(chatId)
-        setMessages([])
-    }, [isGlobal, chatId, setMessages])
+  /* ---- Chat state ---- */
 
-    const isLoading = status === 'streaming' || status === 'submitted'
-    const isStreaming = status === 'streaming'
+  const [activeScope, setActiveScope] =
+    useState<ChatSurfaceScope>(defaultScope);
+  const [input, setInput] = useState("");
+  const [model, setModel] = useState<ChatModelId>(DEFAULT_CHAT_MODEL);
+  const [searchEnabled, setSearchEnabled] = useState(false);
+  const [files, setFiles] = useState<FileList | undefined>(undefined);
+  const [hasHydratedMessages, setHasHydratedMessages] = useState(false);
 
-    // Auto-scroll
-    useEffect(() => {
-        if (scrollRef.current && isExpanded) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        }
-    }, [messages, isExpanded])
+  /* ---- Refs ---- */
 
-    // Keyboard: ⌘J toggle, Escape collapse
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
-                e.preventDefault()
-                setIsExpanded((prev) => !prev)
-                setTimeout(() => inputRef.current?.focus(), 100)
-            }
-            if (e.key === 'Escape' && isExpanded) setIsExpanded(false)
-        }
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [isExpanded])
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Click outside to collapse
-    useEffect(() => {
-        if (!isExpanded) return
-        const handleClickOutside = (e: MouseEvent) => {
-            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-                setIsExpanded(false)
-            }
-        }
-        // Delay to avoid collapsing on the same click that expanded
-        const timer = setTimeout(() => {
-            document.addEventListener('mousedown', handleClickOutside)
-        }, 100)
-        return () => {
-            clearTimeout(timer)
-            document.removeEventListener('mousedown', handleClickOutside)
-        }
-    }, [isExpanded])
+  /* ---- Scope sync ---- */
 
-    const handleSubmit = (text: string) => {
-        if (!text.trim() || isLoading) return
-        if (!isExpanded) setIsExpanded(true)
-        sendMessage({ text: text.trim() })
-        setInput('')
+  useEffect(() => {
+    setActiveScope(defaultScope);
+  }, [defaultScope, meetingId]);
+
+  /* ---- Chat transport ---- */
+
+  const transport = useMemo(() => {
+    if (activeScope === "support") {
+      return new DefaultChatTransport({ api: "/api/chat/support" });
     }
 
-    const handleInputFocus = () => {
-        setIsExpanded(true)
+    if (activeScope === "global") {
+      return new DefaultChatTransport({ api: "/api/chat/global" });
     }
 
-    const suggestions = isGlobal ? GLOBAL_SUGGESTIONS : MEETING_SUGGESTIONS
+    return new DefaultChatTransport({
+      api: "/api/chat",
+      body: meetingId ? { meetingId } : undefined,
+    });
+  }, [activeScope, meetingId]);
 
-    const contextLabel = isGlobal
-        ? 'Ask across all meetings...'
-        : meetingTitle
-            ? `Ask about ${meetingTitle.length > 30 ? meetingTitle.slice(0, 30) + '…' : meetingTitle}...`
-            : 'Ask about this meeting...'
+  const chatId = useMemo(() => {
+    if (activeScope === "support") return "__support__";
+    if (activeScope === "global") return "__global__";
+    return meetingId ?? "__global__";
+  }, [activeScope, meetingId]);
 
-    return (
+  const { messages, sendMessage, setMessages, status, error } = useChat({
+    id: chatId,
+    transport,
+  });
+
+  /* ---- Composer helpers ---- */
+
+  const resetComposer = useCallback(() => {
+    setInput("");
+    setFiles(undefined);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  useEffect(() => {
+    resetComposer();
+  }, [activeScope, resetComposer]);
+
+  /* ---- Message persistence ---- */
+
+  useEffect(() => {
+    setHasHydratedMessages(false);
+    const storedMessages = getStoredMessages(activeScope, meetingId);
+    setMessages(storedMessages ?? []);
+    setHasHydratedMessages(true);
+  }, [activeScope, meetingId, setMessages]);
+
+  useEffect(() => {
+    if (!hasHydratedMessages || messages.length === 0) return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveStoredMessages(activeScope, messages, meetingId);
+    }, 300);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [activeScope, hasHydratedMessages, meetingId, messages]);
+
+  /* ---- Focus input when chat opens ---- */
+
+  useEffect(() => {
+    if (mode !== "chat") return;
+
+    const frame = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode]);
+
+  /* ---- Auto-scroll chat messages ---- */
+
+  useEffect(() => {
+    if (mode !== "chat") return;
+
+    const frame = window.requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({ block: "end" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode, messages, status]);
+
+  /* ---- Keyboard shortcuts ---- */
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        if (isExpanded) {
+          collapse();
+        } else {
+          setMode("chat");
+        }
+      }
+
+      if (event.key === "Escape" && isExpanded) {
+        event.preventDefault();
+        collapse();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [collapse, isExpanded, setMode]);
+
+  /* ---- Click outside ---- */
+
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (shellRef.current?.contains(target)) return;
+      if (target.closest("[data-slot=dropdown-menu-content]")) return;
+      if (target.closest("[data-radix-popper-content-wrapper]")) return;
+      if (target.closest("[data-slot=popover-content]")) return;
+      if (target.closest("[data-slot=transcript-bubble]")) return;
+      collapse();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [collapse, isExpanded, shellRef]);
+
+  /* ---- Derived chat state ---- */
+
+  const isLoading = status === "submitted" || status === "streaming";
+  const selectedFiles = useMemo(
+    () => (files ? Array.from(files) : []),
+    [files],
+  );
+  const submitDisabled =
+    isLoading || (!input.trim() && selectedFiles.length === 0);
+  const prompt = getComposerPrompt(activeScope);
+  const starterPrompts = STARTER_PROMPTS[activeScope];
+
+  /* ---- Transcript data from meeting context ---- */
+
+  const meetingCtx = shellContext?.meetingContext;
+  const transcriptSegments = useMemo(
+    () => meetingCtx?.transcriptSegments ?? [],
+    [meetingCtx?.transcriptSegments],
+  );
+  const transcriptText = meetingCtx?.transcriptText ?? "";
+  const isLive = meetingCtx?.live ?? false;
+  const visibleMode = renderedMode === "collapsed" ? mode : renderedMode;
+  const isTranscriptMode = visibleMode === "transcript";
+
+  /* ---- Chat handlers ---- */
+
+  const handleClearChat = useCallback(() => {
+    clearStoredMessages(activeScope, meetingId);
+    setMessages([]);
+  }, [activeScope, meetingId, setMessages]);
+
+  const handleSubmit = useCallback(
+    (text: string) => {
+      const trimmedText = text.trim();
+      const hasAttachments =
+        authenticated && activeScope !== "support" && Boolean(files?.length);
+      if (isLoading || (!trimmedText && !hasAttachments)) return;
+
+      const payload = hasAttachments
+        ? trimmedText
+          ? { text: trimmedText, files }
+          : { files: files as FileList }
+        : { text: trimmedText };
+
+      void sendMessage(payload, {
+        body:
+          activeScope === "support"
+            ? undefined
+            : { model, searchEnabled },
+      });
+
+      resetComposer();
+    },
+    [
+      activeScope,
+      authenticated,
+      files,
+      isLoading,
+      model,
+      resetComposer,
+      searchEnabled,
+      sendMessage,
+    ],
+  );
+
+  const handleStarterPrompt = useCallback(
+    (starterPrompt: string) => {
+      handleSubmit(starterPrompt);
+    },
+    [handleSubmit],
+  );
+
+  const removeSelectedFile = useCallback(
+    (index: number) => {
+      const remainingFiles = selectedFiles.filter(
+        (_, fileIndex) => fileIndex !== index,
+      );
+      if (remainingFiles.length === 0) {
+        setFiles(undefined);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
+      const nextFiles = new DataTransfer();
+      remainingFiles.forEach((remainingFile) =>
+        nextFiles.items.add(remainingFile),
+      );
+      setFiles(nextFiles.files);
+    },
+    [selectedFiles],
+  );
+
+  /* ---- Render ---- */
+
+  return (
+    <>
+      {reserveInFlow ? (
+        <div aria-hidden="true" style={{ height: spacerHeight }} />
+      ) : null}
+
+      <section
+        role="region"
+        aria-label="Chat with noter"
+        className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-2 md:px-4"
+        style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
         <div
-            ref={panelRef}
-            className={cn(
-                // Base: floating, centered, glass
-                'absolute bottom-4 left-1/2 z-50 flex -translate-x-1/2 flex-col',
-                'backdrop-blur-xl backdrop-saturate-150',
-                'border rounded-3xl overflow-hidden',
-                'transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
-                // Glass: symmetric tint for both themes
-                'bg-black/[0.03] border-black/[0.08] shadow-[0_4px_24px_-4px_oklch(0_0_0/0.08)]',
-                'dark:bg-white/[0.06] dark:border-white/[0.1] dark:shadow-[0_4px_24px_-4px_oklch(0_0_0/0.4)]',
-                // Size transition — rounded-3xl stays constant (24px radius = pill at 48px height)
-                isExpanded
-                    ? 'w-[calc(100%-2rem)] max-w-[700px] max-h-[60vh]'
-                    : 'w-[calc(100%-2rem)] max-w-[600px] max-h-[48px]',
-                // Ambient glow
-                isStreaming && 'chat-glow-pulse',
-                !isStreaming && !isExpanded && 'hover:shadow-[0_4px_28px_-4px_oklch(0.65_0.08_25/0.15)] dark:hover:shadow-[0_4px_28px_-4px_oklch(0.65_0.08_25/0.2)]',
-            )}
+          ref={shellStackRef}
+          className="flex w-full max-w-[48rem] items-end gap-2"
+          style={{ maxWidth: `${ASSISTANT_EXPANDED_MAX_WIDTH_REM}rem` }}
         >
-            {/* Expanded content */}
-            {isExpanded && (
-                <>
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-5 py-2.5 border-b border-black/[0.06] dark:border-white/[0.08]">
-                        <div className="flex items-center gap-2">
-                            <Sparkles className="size-3.5 text-accent" />
-                            <span className="text-xs font-medium text-foreground">noter AI</span>
-                            <span className="rounded-full bg-black/[0.06] dark:bg-white/[0.08] px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                {isGlobal ? 'Global' : 'Meeting'}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-0.5">
-                            {messages.length > 0 && (
-                                <button
-                                    type="button"
-                                    onClick={handleClearChat}
-                                    className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                                    aria-label="Clear chat"
-                                >
-                                    <Trash2 className="size-3.5" />
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => setIsExpanded(false)}
-                                className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"
-                                aria-label="Collapse"
-                            >
-                                <ChevronDown className="size-3.5" />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Messages */}
-                    <div
-                        ref={scrollRef}
-                        className="flex-1 overflow-y-auto px-5 py-3"
-                        role="log"
-                        aria-live="polite"
-                    >
-                        {messages.length === 0 ? (
-                            <div className="flex flex-col items-center gap-3 py-6">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/10">
-                                    <Sparkles className="size-4 text-accent" />
-                                </div>
-                                <p className="text-xs font-medium text-foreground">
-                                    {isGlobal ? 'Ask anything across all your meetings' : 'Ask anything about this meeting'}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground text-center max-w-xs">
-                                    {isGlobal
-                                        ? 'I have context from summaries, action items, and decisions.'
-                                        : 'I have access to the transcript, notes, and attached documents.'}
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-3">
-                                {messages.map((message) => {
-                                    const text = getMessageText(message)
-                                    if (!text) return null
-                                    return (
-                                        <div
-                                            key={message.id}
-                                            className={cn(
-                                                'flex flex-col gap-0.5',
-                                                message.role === 'user' ? 'items-end' : 'items-start'
-                                            )}
-                                        >
-                                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                                {message.role === 'user' ? 'you' : 'noter AI'}
-                                            </span>
-                                            <div
-                                                className={cn(
-                                                    'max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed overflow-hidden',
-                                                    message.role === 'user'
-                                                        ? 'bg-accent text-accent-foreground'
-                                                        : 'bg-black/[0.05] dark:bg-white/[0.06] text-foreground'
-                                                )}
-                                            >
-                                                {message.role === 'user' ? (
-                                                    <div className="whitespace-pre-wrap">{text}</div>
-                                                ) : (
-                                                    <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:mb-2 [&>ol]:list-decimal [&>ol]:pl-4 [&>h3]:font-bold [&>h3]:mb-1 [&>h2]:font-bold [&>h2]:mb-1 font-sans">
-                                                        <ReactMarkdown>{text}</ReactMarkdown>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                                {isLoading && (
-                                    <div className="flex flex-col gap-0.5 items-start">
-                                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                            noter AI
-                                        </span>
-                                        <div className="flex items-center gap-2 rounded-2xl bg-black/[0.05] dark:bg-white/[0.06] px-3.5 py-2 text-xs text-muted-foreground">
-                                            <Loader2 className="size-3 animate-spin" />
-                                            <span>{status === 'streaming' ? 'Responding...' : 'Thinking...'}</span>
-                                        </div>
-                                    </div>
-                                )}
-                                {error && (
-                                    <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2 text-xs text-destructive" role="alert">
-                                        {error.message?.includes('429') || error.message?.includes('Too Many')
-                                            ? "You're sending messages too quickly. Please wait a moment."
-                                            : error.message?.includes('No meetings')
-                                                ? 'No meetings found yet. Create some meetings first.'
-                                                : 'Something went wrong. Please try again.'}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Suggestion chips — horizontal scroll */}
-                    {messages.length === 0 && (
-                        <div className="flex gap-1.5 overflow-x-auto px-5 pb-2 scrollbar-none">
-                            {suggestions.map((s) => (
-                                <button
-                                    type="button"
-                                    key={s}
-                                    onClick={() => handleSubmit(s)}
-                                    disabled={isLoading}
-                                    className="shrink-0 rounded-full border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.04] dark:bg-white/[0.05] px-3 py-1 text-[11px] text-muted-foreground whitespace-nowrap transition-colors hover:bg-black/[0.08] dark:hover:bg-white/[0.1] hover:text-foreground"
-                                >
-                                    {s}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </>
+          {transcriptBubble}
+          <div
+            ref={shellRef}
+            data-slot="chatbar-shell"
+            data-state={isExpanded ? "expanded" : "collapsed"}
+            data-mode={visibleMode}
+            data-generating={isLoading ? "true" : "false"}
+            className={cn(
+              "liquid-glass-shell pointer-events-auto flex flex-1 origin-bottom flex-col overflow-hidden rounded-[30px]",
+              "transition-[box-shadow,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              isExpanded ? "translate-y-0 scale-100" : "translate-y-1 scale-[0.992]",
             )}
-
-            {/* Input bar — always visible */}
-            <div className={cn(
-                'flex items-center gap-3 h-12',
-                isExpanded ? 'px-5 border-t border-black/[0.06] dark:border-white/[0.08]' : 'px-5'
-            )}>
-                {!isExpanded && (
-                    <Sparkles className="size-4 shrink-0 text-accent" />
+            style={heightStyle}
+          >
+            {isExpanded ? (
+              <div
+                className={cn(
+                  "flex min-h-0 flex-1 flex-col transition-opacity duration-150",
+                  revealed ? "opacity-100" : "opacity-0",
                 )}
-                <form
-                    onSubmit={(e) => {
-                        e.preventDefault()
-                        handleSubmit(input)
-                    }}
-                    className="flex flex-1 items-center gap-2"
-                >
-                    <input
-                        ref={inputRef}
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onFocus={handleInputFocus}
-                        placeholder={contextLabel}
-                        disabled={isLoading}
-                        aria-label={contextLabel}
-                        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
+              >
+                {isTranscriptMode ? (
+                  <ChatTranscriptContent
+                    isLive={isLive}
+                    transcriptSegments={transcriptSegments}
+                    transcriptText={transcriptText}
+                    onClose={collapse}
+                  />
+                ) : (
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <ChatMessageList
+                      messages={messages}
+                      status={status}
+                      starterPrompts={starterPrompts}
+                      onStarterPrompt={handleStarterPrompt}
+                      onCollapse={collapse}
+                      endRef={endRef}
                     />
-                    <div className="flex items-center gap-1.5">
-                        {!isExpanded && messages.length > 0 && (
-                            <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent tabular-nums">
-                                {messages.length}
-                            </span>
-                        )}
-                        <kbd className="hidden rounded-md border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-muted-foreground md:inline-block">
-                            ⌘J
-                        </kbd>
-                        <button
-                            type="submit"
-                            disabled={!input.trim() || isLoading}
-                            className="shrink-0 text-accent disabled:opacity-30 transition-opacity hover:opacity-70"
-                        >
-                            <Send className="size-4" />
-                            <span className="sr-only">Send</span>
-                        </button>
-                    </div>
-                </form>
-            </div>
+
+                    <ChatComposer
+                      input={input}
+                      onInputChange={setInput}
+                      onSubmit={handleSubmit}
+                      onFocus={() => setMode("chat")}
+                      isLoading={isLoading}
+                      error={error}
+                      activeScope={activeScope}
+                      allowGlobalToggle={allowGlobalToggle}
+                      onScopeChange={setActiveScope}
+                      model={model}
+                      onModelChange={setModel}
+                      searchEnabled={searchEnabled}
+                      onSearchToggle={() =>
+                        setSearchEnabled((current) => !current)
+                      }
+                      selectedFiles={selectedFiles}
+                      onRemoveFile={removeSelectedFile}
+                      onFilesSelected={setFiles}
+                      fileInputRef={fileInputRef}
+                      inputRef={inputRef}
+                      messagesCount={messages.length}
+                      onClearChat={handleClearChat}
+                      submitDisabled={submitDisabled}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                ref={dockButtonRef}
+                type="button"
+                onClick={() => setMode("chat")}
+                className="liquid-glass-dock flex h-full w-full items-center justify-between gap-4 rounded-[30px] px-4 text-left transition-transform"
+                aria-expanded="false"
+                aria-label="Open chat"
+              >
+                <span className="truncate text-sm text-muted-foreground">
+                  {prompt}
+                </span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  ⌘J
+                </span>
+              </button>
+            )}
+          </div>
         </div>
-    )
+      </section>
+    </>
+  );
 }

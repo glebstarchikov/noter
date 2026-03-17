@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
+import { PageShell } from '@/components/page-shell'
 import { ProcessingView } from '@/components/processing-view'
+import { shouldUseProcessingView } from '@/lib/meeting-workspace'
 import type { Meeting } from '@/lib/types'
 
 export default async function MeetingPage({
@@ -24,36 +26,17 @@ export default async function MeetingPage({
 
   if (!meeting) notFound()
 
-  // If the meeting is still being processed, show the processing view
-  if (meeting.status === 'transcribing' || meeting.status === 'generating' || meeting.status === 'recording' || meeting.status === 'uploading') {
+  if (shouldUseProcessingView(meeting as Meeting)) {
     return (
-      <div className="flex flex-col gap-6 p-6 md:p-10">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-foreground">
-            Processing meeting
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Your audio is being analyzed by AI.
-          </p>
-        </div>
+      <PageShell size="detail">
         <ProcessingView
           meetingId={id}
           step={meeting.status}
+          error={meeting.status === 'error'
+            ? meeting.error_message || 'An unexpected error occurred during processing.'
+            : undefined}
         />
-      </div>
-    )
-  }
-
-  // If the meeting errored, show the error state with retry/delete options
-  if (meeting.status === 'error') {
-    return (
-      <div className="flex flex-col gap-6 p-6 md:p-10">
-        <ProcessingView
-          meetingId={id}
-          step="error"
-          error={meeting.error_message || 'An unexpected error occurred during processing.'}
-        />
-      </div>
+      </PageShell>
     )
   }
 

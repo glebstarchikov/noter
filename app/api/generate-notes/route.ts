@@ -1,16 +1,13 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
-import { getOpenAI } from '@/lib/openai'
-import { NOTES_GENERATION_PROMPT } from '@/lib/prompts'
-import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
-import { generatedNotesSchema } from '@/lib/schemas'
+import { generateNotesFromTranscript } from '@/lib/notes-generation'
+import { generatedNotesToTiptap } from '@/lib/tiptap-converter'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
-
-// ~4 chars per token is a rough estimate; gpt-4o-mini supports 128k context
-const MAX_TRANSCRIPT_CHARS = 400_000
+import type { DiarizedSegment } from '@/lib/types'
 
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -25,7 +22,7 @@ export const maxDuration = 60
 
 const generateNotesRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
-  transcript: z.string().optional(),
+  transcript: z.string().max(500_000).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -59,7 +56,7 @@ export async function POST(request: NextRequest) {
     // Verify user owns the meeting
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('id, transcript')
+      .select('id, user_id, transcript, template_id, diarized_transcript, audio_duration')
       .eq('id', meetingId)
       .eq('user_id', user.id)
       .single()
@@ -75,11 +72,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Missing transcript', 'MISSING_TRANSCRIPT', 400)
     }
 
-    // Truncate very long transcripts to stay within model context limits
-    const truncatedTranscript = transcriptToProcess.length > MAX_TRANSCRIPT_CHARS
-      ? transcriptToProcess.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'
-      : transcriptToProcess
-
     // Update status
     await supabase
       .from('meetings')
@@ -87,56 +79,24 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId)
       .eq('user_id', user.id)
 
-    // Generate notes with GPT
-    const completion = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: NOTES_GENERATION_PROMPT },
-        { role: 'user', content: `Here is the meeting transcript:\n\n${truncatedTranscript}` },
-      ],
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
+    const normalizedNotes = await generateNotesFromTranscript(supabase, {
+      transcript: transcriptToProcess,
+      templateId: meeting.template_id,
+      userId: user.id,
+      diarizedTranscript: meeting.diarized_transcript as DiarizedSegment[] | null,
+      audioDuration: meeting.audio_duration as number | null,
     })
 
-    const content = completion.choices[0]?.message?.content
-    if (!content) {
-      throw new Error('No response from AI')
-    }
+    // Save notes to database (including Tiptap document for the editor)
+    const tiptapDocument = generatedNotesToTiptap(normalizedNotes)
 
-    let parsedContent: unknown
-    try {
-      parsedContent = JSON.parse(content)
-    } catch {
-      throw new Error('AI returned invalid JSON. Please try again.')
-    }
-
-    const parsedNotes = generatedNotesSchema.safeParse(parsedContent)
-    if (!parsedNotes.success) {
-      throw new Error('AI returned invalid JSON. Please try again.')
-    }
-
-    const normalizedNotes = {
-      title: parsedNotes.data.title?.trim() || 'Untitled Meeting',
-      summary: parsedNotes.data.summary?.trim() || '',
-      detailed_notes: parsedNotes.data.detailed_notes?.trim() || '',
-      action_items: normalizeActionItems(parsedNotes.data.action_items),
-      key_decisions: normalizeStringArray(parsedNotes.data.key_decisions),
-      topics: normalizeStringArray(parsedNotes.data.topics),
-      follow_ups: normalizeStringArray(parsedNotes.data.follow_ups),
-    }
-
-    // Save notes to database
     await supabase
       .from('meetings')
       .update({
-        title: normalizedNotes.title,
-        summary: normalizedNotes.summary,
-        detailed_notes: normalizedNotes.detailed_notes,
-        action_items: normalizedNotes.action_items,
-        key_decisions: normalizedNotes.key_decisions,
-        topics: normalizedNotes.topics,
-        follow_ups: normalizedNotes.follow_ups,
+        ...normalizedNotes,
+        document_content: tiptapDocument,
         status: 'done',
+        error_message: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', meetingId)
@@ -159,7 +119,7 @@ export async function POST(request: NextRequest) {
           .eq('id', meetingId)
           .eq('user_id', userId)
       } catch (dbError) {
-        console.error('Failed to update meeting error status:', dbError)
+        Sentry.captureException(dbError)
       }
     }
 

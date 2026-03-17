@@ -69,7 +69,7 @@ function mockSupabase(user: { id: string } | null, meetingData: unknown = null) 
 describe('POST /api/transcribe', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockTranscriptionCreate.mockResolvedValue('mock transcript')
+    ;(mockTranscriptionCreate as any).mockResolvedValue('mock transcript')
   })
 
   it('returns 401 if user is not authenticated', async () => {

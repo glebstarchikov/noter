@@ -7,12 +7,7 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { MeetingStatus } from '@/lib/types'
-import {
-  readApiError,
-  waitForMeetingCompletion,
-  runLegacyPipeline,
-  type ProcessingState,
-} from '@/lib/meeting-pipeline'
+import { uploadAndProcessMeeting } from '@/lib/meeting-upload'
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
@@ -23,9 +18,10 @@ interface Props {
     step: MeetingStatus
     error?: string
   }) => void
+  templateId?: string
 }
 
-export function AudioUploader({ onProcessing }: Props) {
+export function AudioUploader({ onProcessing, templateId }: Props) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -35,10 +31,10 @@ export function AudioUploader({ onProcessing }: Props) {
 
   const validateFile = (f: File): string | null => {
     if (!ACCEPTED_TYPES.includes(f.type) && !f.name.match(/\.(mp3|wav|m4a|webm|ogg)$/i)) {
-      return 'Unsupported format. Please use mp3, wav, m4a, or webm.'
+      return 'Unsupported audio format. We accept common audio files like MP3 or WAV.'
     }
     if (f.size > MAX_SIZE) {
-      return 'File too large. Maximum size is 25MB.'
+      return 'This file is too large. The maximum size is 25 MB.'
     }
     return null
   }
@@ -71,60 +67,29 @@ export function AudioUploader({ onProcessing }: Props) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Create meeting record
       const { data: meeting, error: insertError } = await supabase
         .from('meetings')
         .insert({
           user_id: user.id,
           title: file.name.replace(/\.[^/.]+$/, ''),
           status: 'uploading',
+          ...(templateId ? { template_id: templateId } : {}),
         })
         .select('id')
         .single()
 
       if (insertError || !meeting) throw new Error('Failed to create meeting')
-
       currentMeetingId = meeting.id
-      onProcessing({ meetingId: meeting.id, step: 'uploading' })
 
-      // Upload audio directly to Supabase Storage (avoids serverless payload limits)
       const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
-      const storagePath = `${user.id}/${meeting.id}.${extension}`
-      const { error: uploadError } = await supabase.storage
-        .from('meeting-audio')
-        .upload(storagePath, file, {
-          contentType: file.type || 'audio/webm',
-        })
-
-      if (uploadError) throw new Error('Failed to upload audio: ' + uploadError.message)
-
-      // Save storage path to DB
-      await supabase
-        .from('meetings')
-        .update({ audio_url: storagePath })
-        .eq('id', meeting.id)
-
-      const processRes = await fetch(`/api/meetings/${meeting.id}/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+      await uploadAndProcessMeeting({
+        meetingId: meeting.id,
+        userId: user.id,
+        blob: file,
+        extension,
+        contentType: file.type || 'audio/webm',
+        onProcessing,
       })
-
-      if (!processRes.ok) {
-        const processError = await readApiError(processRes, 'Failed to queue processing')
-        if (processError.code === 'QUEUE_UNAVAILABLE') {
-          await runLegacyPipeline(meeting.id, storagePath, onProcessing)
-          onProcessing({ meetingId: meeting.id, step: 'done' })
-          router.push(`/dashboard/${meeting.id}`)
-          return
-        }
-
-        throw new Error(processError.message)
-      }
-
-      onProcessing({ meetingId: meeting.id, step: 'transcribing' })
-      await waitForMeetingCompletion(meeting.id, onProcessing)
-      onProcessing({ meetingId: meeting.id, step: 'done' })
       router.push(`/dashboard/${meeting.id}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
@@ -156,13 +121,13 @@ export function AudioUploader({ onProcessing }: Props) {
             fileInputRef.current?.click()
           }
         }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-16 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isDragging
+        className={`surface-utility flex cursor-pointer flex-col items-center justify-center gap-4 rounded-[24px] border-2 border-dashed px-6 py-16 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isDragging
           ? 'border-accent bg-accent/5'
-          : 'border-border bg-card hover:border-muted-foreground'
+          : 'border-border hover:border-muted-foreground/60'
           } ${isSubmitting ? 'pointer-events-none opacity-60' : ''}`}
         aria-label="Upload audio file"
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary">
+        <div className="surface-document flex size-12 items-center justify-center rounded-full">
           <Upload className="size-5 text-muted-foreground" />
         </div>
         <div className="flex flex-col items-center gap-1">
@@ -170,7 +135,7 @@ export function AudioUploader({ onProcessing }: Props) {
             Drop your audio file here
           </p>
           <p className="text-xs text-muted-foreground">
-            mp3, wav, m4a, webm - up to 25MB
+            MP3, WAV, M4A, WebM — up to 25 MB
           </p>
         </div>
         <input
@@ -188,7 +153,7 @@ export function AudioUploader({ onProcessing }: Props) {
 
       {/* Selected file */}
       {file && (
-        <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+        <div className="surface-document flex items-center justify-between rounded-[22px] px-4 py-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium text-foreground">{file.name}</span>
             <span className="text-xs text-muted-foreground">
@@ -213,7 +178,7 @@ export function AudioUploader({ onProcessing }: Props) {
         <Button
           onClick={handleSubmit}
           disabled={isSubmitting}
-          className="rounded-lg bg-foreground text-background hover:bg-foreground/90"
+          className="rounded-xl"
         >
           {isSubmitting ? (
             <>

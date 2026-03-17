@@ -1,0 +1,79 @@
+import { beforeAll, beforeEach, describe, expect, it, jest, mock } from 'bun:test'
+
+const mockBuildChatModelMessages = mock(() => Promise.resolve([]))
+const mockGateway = mock((model: string) => model)
+
+mock.module('ai', () => ({
+  streamText: mock(() => {}),
+  gateway: mockGateway,
+}))
+
+mock.module('@/lib/chat-message-utils', () => ({
+  buildChatModelMessages: mockBuildChatModelMessages,
+}))
+
+let POST: typeof import('./route').POST
+let streamText: typeof import('ai').streamText
+
+beforeAll(async () => {
+  const routeModule = await import('./route')
+  const aiModule = await import('ai')
+
+  POST = routeModule.POST
+  streamText = aiModule.streamText
+})
+
+function makeRequest(body: unknown) {
+  return new Request('http://localhost/api/chat/support', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+describe('POST /api/chat/support', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ;(streamText as unknown as { mockReturnValue: (value: unknown) => void }).mockReturnValue({
+      toUIMessageStreamResponse: () => new Response('ok', { status: 200 }),
+    })
+  })
+
+  it('returns 400 for malformed payloads', async () => {
+    const response = await POST(new Request('http://localhost/api/chat/support', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not-json',
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: 'Invalid request body',
+      code: 'INVALID_REQUEST',
+    })
+  })
+
+  it('allows unauthenticated support requests and routes through AI Gateway', async () => {
+    const response = await POST(makeRequest({
+      messages: [{ id: 'msg-1', role: 'user', parts: [{ type: 'text', text: 'How do I get started?' }] }],
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mockBuildChatModelMessages).toHaveBeenCalled()
+    expect(mockGateway).toHaveBeenCalledWith('openai/gpt-5-mini')
+  })
+
+  it('grounds the assistant in noter-only support instructions', async () => {
+    const response = await POST(makeRequest({ messages: [] }))
+
+    expect(response.status).toBe(200)
+
+    const call = (streamText as unknown as {
+      mock: { calls: Array<[Record<string, unknown>]> }
+    }).mock.calls[0][0]
+
+    expect(call.system).toContain('Answer only questions about noter')
+    expect(call.system).toContain('Users can sign in, create a meeting by recording live audio or uploading audio files')
+    expect(call.system).toContain('Do not invent pricing, legal, security, or roadmap details')
+  })
+})

@@ -1,20 +1,19 @@
 'use client'
 
 import { MeetingDetail } from '@/components/meeting-detail'
+import { MeetingWorkspace } from '@/components/meeting-workspace'
+import { PageShell } from '@/components/page-shell'
+import { isRecordingOriginMeeting } from '@/lib/meeting-workspace'
 import type { Meeting } from '@/lib/types'
 
-export function MeetingDetailWrapper({
-    meeting,
-}: {
-    meeting: Meeting
-}) {
-    return (
-        <div className="flex h-full">
-            <div className="flex-1 overflow-y-auto">
-                <div className="flex flex-col gap-6 p-6 md:p-10">
-                    <MeetingDetail meeting={meeting} />
-                </div>
-            </div>
-        </div>
-    )
+export function MeetingDetailWrapper({ meeting }: { meeting: Meeting }) {
+  return (
+    <PageShell size="detail">
+      {isRecordingOriginMeeting(meeting) ? (
+        <MeetingWorkspace meeting={meeting} />
+      ) : (
+        <MeetingDetail meeting={meeting} />
+      )}
+    </PageShell>
+  )
 }

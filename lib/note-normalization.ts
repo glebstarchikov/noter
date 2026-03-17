@@ -15,9 +15,11 @@ export function normalizeActionItems(values: z.infer<typeof generatedNotesSchema
     const task = item.task.trim()
     if (!task) continue
     const owner = item.owner?.trim() ?? null
+    const due_date = item.due_date?.trim() ?? null
     items.push({
       task,
       owner: owner && owner.length > 0 ? owner : null,
+      due_date: due_date && due_date.length > 0 ? due_date : null,
       done: item.done ?? false,
     })
   }

@@ -14,6 +14,38 @@ export interface Meeting {
   status: MeetingStatus
   error_message: string | null
   is_pinned: boolean
+  document_content: Record<string, unknown> | null
+  template_id: string | null
+  diarized_transcript: DiarizedSegment[] | null
+  enhancement_status: EnhancementStatus
+  enhancement_state: EnhancementState | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DiarizedSegment {
+  speaker: string
+  start: number
+  end: number
+  text: string
+}
+
+export interface NoteTemplate {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  isBuiltin: boolean
+  isDefault?: boolean
+}
+
+export interface CustomNoteTemplate {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  prompt: string
+  is_default: boolean
   created_at: string
   updated_at: string
 }
@@ -21,6 +53,7 @@ export interface Meeting {
 export interface ActionItem {
   task: string
   owner: string | null
+  due_date?: string | null
   done: boolean
 }
 
@@ -31,6 +64,24 @@ export type MeetingStatus =
   | 'generating'
   | 'done'
   | 'error'
+
+export type EnhancementStatus =
+  | 'idle'
+  | 'error'
+
+export type ChatSurfaceScope =
+  | 'support'
+  | 'global'
+  | 'meeting'
+
+export type EnhancementOutcome = 'accepted' | 'dismissed'
+
+export interface EnhancementState {
+  lastReviewedSourceHash: string | null
+  lastOutcome: EnhancementOutcome | null
+  lastReviewedAt: string | null
+  lastError: string | null
+}
 
 export interface MeetingSource {
   id: string

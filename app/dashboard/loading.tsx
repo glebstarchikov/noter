@@ -1,22 +1,34 @@
-export default function DashboardLoading() {
-    return (
-        <div className="flex flex-col gap-6 p-6 md:p-10">
-            <div className="flex flex-col gap-1">
-                <div className="h-7 w-32 animate-pulse rounded-md bg-secondary" />
-                <div className="h-4 w-64 animate-pulse rounded-md bg-secondary" />
-            </div>
+import { PageHeader, PageShell } from '@/components/page-shell'
+import { Skeleton } from '@/components/ui/skeleton'
 
-            <div className="flex flex-col divide-y divide-border rounded-xl border border-border">
-                {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center justify-between px-5 py-4">
-                        <div className="flex flex-col gap-2">
-                            <div className="h-4 w-48 animate-pulse rounded-md bg-secondary" />
-                            <div className="h-3 w-32 animate-pulse rounded-md bg-secondary" />
-                        </div>
-                        <div className="h-3 w-16 animate-pulse rounded-md bg-secondary" />
-                    </div>
-                ))}
-            </div>
+export default function DashboardLoading() {
+  return (
+    <PageShell>
+      <PageHeader
+        title={<Skeleton className="h-9 w-24" />}
+        description={<Skeleton className="h-5 w-96 max-w-full mt-2" />}
+      />
+
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Skeleton className="h-11 flex-1 rounded-2xl" />
+          <Skeleton className="h-11 w-32 rounded-2xl" />
         </div>
-    )
+
+        <div className="surface-document divide-y divide-border/60">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-4">
+              <div className="flex min-w-0 flex-1 flex-col justify-center">
+                <Skeleton className="h-[15px] w-48 mb-2" />
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-3.5 w-16" />
+                  <Skeleton className="h-3.5 w-16" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </PageShell>
+  )
 }

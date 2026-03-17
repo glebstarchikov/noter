@@ -1,8 +1,15 @@
-import type { UIMessage } from 'ai'
+import { isFileUIPart, type UIMessage } from 'ai'
+import {
+  getMessageAttachmentMetadata,
+  setMessageAttachmentMetadata,
+  toChatAttachmentMetadata,
+} from '@/lib/chat-attachments'
 
 const STORAGE_KEY_PREFIX = 'noter-chat-'
 const INDEX_KEY = 'noter-chat-index'
 const MAX_STORED_CHATS = 50
+const GLOBAL_CHAT_KEY = `${STORAGE_KEY_PREFIX}__global__`
+const SUPPORT_CHAT_KEY = `${STORAGE_KEY_PREFIX}__support__`
 
 function isLocalStorageAvailable(): boolean {
   try {
@@ -47,6 +54,58 @@ function evictOldest(index: string[]): string[] {
   return index
 }
 
+function sanitizeMessages(messages: UIMessage[]): UIMessage[] {
+  return messages.map((message) => {
+    const parts = Array.isArray(message.parts) ? message.parts : []
+    const liveAttachments = parts
+      .filter(isFileUIPart)
+      .map(toChatAttachmentMetadata)
+    const existingAttachments = getMessageAttachmentMetadata(message)
+    const attachments = [...existingAttachments, ...liveAttachments]
+    const sanitizedMessage = setMessageAttachmentMetadata(message, attachments)
+
+    return {
+      ...sanitizedMessage,
+      parts: parts.filter((part) => !isFileUIPart(part)),
+    }
+  })
+}
+
+function readMessagesForKey(storageKey: string): UIMessage[] | undefined {
+  if (!isLocalStorageAvailable()) return undefined
+
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as UIMessage[]) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writeMessagesForKey(storageKey: string, messages: UIMessage[]): void {
+  if (!isLocalStorageAvailable()) return
+
+  const sanitizedMessages = sanitizeMessages(messages)
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(sanitizedMessages))
+  } catch {
+    // Quota exceeded — silent fail
+  }
+}
+
+function removeMessagesForKey(storageKey: string): void {
+  if (!isLocalStorageAvailable()) return
+
+  try {
+    localStorage.removeItem(storageKey)
+  } catch {
+    // silent
+  }
+}
+
 export function getChatMessages(meetingId: string): UIMessage[] | undefined {
   if (!isLocalStorageAvailable()) return undefined
 
@@ -68,8 +127,10 @@ export function getChatMessages(meetingId: string): UIMessage[] | undefined {
 export function saveChatMessages(meetingId: string, messages: UIMessage[]): void {
   if (!isLocalStorageAvailable()) return
 
+  const sanitizedMessages = sanitizeMessages(messages)
+
   try {
-    localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(messages))
+    localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(sanitizedMessages))
 
     // Update index (move this meetingId to the end = most recent)
     let index = getIndex().filter((id) => id !== meetingId)
@@ -82,7 +143,7 @@ export function saveChatMessages(meetingId: string, messages: UIMessage[]): void
       let index = getIndex()
       index = evictOldest(index)
       setIndex(index)
-      localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(messages))
+      localStorage.setItem(STORAGE_KEY_PREFIX + meetingId, JSON.stringify(sanitizedMessages))
     } catch {
       // Still failing — give up silently
     }
@@ -103,42 +164,34 @@ export function clearChatMessages(meetingId: string): void {
 
 // --- Global chat storage (separate from meeting chats) ---
 
-const GLOBAL_CHAT_KEY = 'noter-chat-__global__'
-
 export function getGlobalChatMessages(): UIMessage[] | undefined {
-  if (!isLocalStorageAvailable()) return undefined
+  const messages = readMessagesForKey(GLOBAL_CHAT_KEY)
+  if (messages) return messages
 
-  try {
-    const raw = localStorage.getItem(GLOBAL_CHAT_KEY)
-    if (!raw) return undefined
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) {
-      clearGlobalChatMessages()
-      return undefined
-    }
-    return parsed as UIMessage[]
-  } catch {
-    clearGlobalChatMessages()
-    return undefined
-  }
+  removeMessagesForKey(GLOBAL_CHAT_KEY)
+  return undefined
 }
 
 export function saveGlobalChatMessages(messages: UIMessage[]): void {
-  if (!isLocalStorageAvailable()) return
-
-  try {
-    localStorage.setItem(GLOBAL_CHAT_KEY, JSON.stringify(messages))
-  } catch {
-    // Quota exceeded — silent fail
-  }
+  writeMessagesForKey(GLOBAL_CHAT_KEY, messages)
 }
 
 export function clearGlobalChatMessages(): void {
-  if (!isLocalStorageAvailable()) return
+  removeMessagesForKey(GLOBAL_CHAT_KEY)
+}
 
-  try {
-    localStorage.removeItem(GLOBAL_CHAT_KEY)
-  } catch {
-    // silent
-  }
+export function getSupportChatMessages(): UIMessage[] | undefined {
+  const messages = readMessagesForKey(SUPPORT_CHAT_KEY)
+  if (messages) return messages
+
+  removeMessagesForKey(SUPPORT_CHAT_KEY)
+  return undefined
+}
+
+export function saveSupportChatMessages(messages: UIMessage[]): void {
+  writeMessagesForKey(SUPPORT_CHAT_KEY, messages)
+}
+
+export function clearSupportChatMessages(): void {
+  removeMessagesForKey(SUPPORT_CHAT_KEY)
 }

@@ -1,12 +1,22 @@
-import { describe, it, expect, beforeEach, mock, jest } from 'bun:test'
+import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:test'
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
 }))
 
-const { POST } = await import('./route')
-const { createClient } = await import('@/lib/supabase/server')
-const { NextRequest } = await import('next/server')
+let POST: typeof import('./route').POST
+let createClient: typeof import('@/lib/supabase/server').createClient
+let NextRequest: typeof import('next/server').NextRequest
+
+beforeAll(async () => {
+  const routeModule = await import('./route')
+  const supabaseModule = await import('@/lib/supabase/server')
+  const nextServerModule = await import('next/server')
+
+  POST = routeModule.POST
+  createClient = supabaseModule.createClient
+  NextRequest = nextServerModule.NextRequest
+})
 
 function makeRequest(body: unknown = {}) {
   return new NextRequest('http://localhost/api/meetings/meeting-1/process', {

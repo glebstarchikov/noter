@@ -6,6 +6,19 @@ __v0_jsx-dev-runtime.ts
 # Common ignores
 node_modules/
 .next/
+.env
 .env*.local
 .DS_Store
 *.tsbuildinfo
+*.log
+
+# Vercel
+.vercel
+
+# Test coverage
+coverage/
+
+# Claude Code local config
+.claude/skills/
+.claude/worktrees/
+.claude/settings.local.json

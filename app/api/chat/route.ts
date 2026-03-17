@@ -1,15 +1,16 @@
-import { createOpenAI } from '@ai-sdk/openai'
-import {
-  convertToModelMessages,
-  streamText,
-  UIMessage,
-} from 'ai'
+import * as Sentry from '@sentry/nextjs'
+import { gateway, streamText, UIMessage } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
 import { isStringArray, isActionItemArray } from '@/lib/type-guards'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
+import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
+import { buildChatModelMessages, getLastUserText } from '@/lib/chat-message-utils'
+import { tiptapToPlainText } from '@/lib/tiptap-converter'
+import { searchWeb } from '@/lib/tavily'
+import { MAX_CHAT_TRANSCRIPT_CHARS } from '@/lib/truncation-limits'
 
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -24,7 +25,9 @@ export const maxDuration = 60
 
 const chatRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
-  messages: z.array(z.unknown()).default([]),
+  messages: z.array(z.unknown()).max(100).default([]),
+  model: z.enum(['gpt-5-mini', 'gpt-5.4']).optional(),
+  searchEnabled: z.boolean().optional().default(false),
 })
 
 export async function POST(req: Request) {
@@ -49,13 +52,14 @@ export async function POST(req: Request) {
     if (!parsedBody.success) {
       return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
     }
-    const { meetingId, messages } = parsedBody.data
 
-    // Fetch meeting data (with ownership check)
+    const { meetingId, messages, searchEnabled } = parsedBody.data
+    const model = resolveChatModelId(parsedBody.data.model)
+
     const { data: meeting } = await supabase
       .from('meetings')
       .select(
-        'title, transcript, summary, detailed_notes, action_items, key_decisions, topics, follow_ups, user_id'
+        'title, transcript, summary, detailed_notes, action_items, key_decisions, topics, follow_ups, document_content'
       )
       .eq('id', meetingId)
       .eq('user_id', user.id)
@@ -65,19 +69,17 @@ export async function POST(req: Request) {
       return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
 
-    // Fetch attached sources
-    const { data: sources } = await supabase
-      .from('meeting_sources')
-      .select('name, file_type, content')
-      .eq('meeting_id', meetingId)
-      .eq('user_id', user.id)
-
-    // Build context from meeting materials
     const meetingTitle =
       typeof meeting.title === 'string' && meeting.title.trim().length > 0
         ? meeting.title
         : 'Untitled Meeting'
-    let context = `# Meeting: ${meetingTitle}\n\n`
+
+    let context = `# Note: ${meetingTitle}\n\n`
+
+    const documentText = tiptapToPlainText(meeting.document_content)
+    if (documentText.trim()) {
+      context += `## Current Note\n${documentText}\n\n`
+    }
 
     if (typeof meeting.summary === 'string' && meeting.summary.length > 0) {
       context += `## Summary\n${meeting.summary}\n\n`
@@ -89,7 +91,7 @@ export async function POST(req: Request) {
 
     const actionItems = isActionItemArray(meeting.action_items) ? meeting.action_items : []
     if (actionItems.length > 0) {
-      context += `## Action Items\n`
+      context += '## Action Items\n'
       for (const item of actionItems) {
         context += `- [${item.done ? 'x' : ' '}] ${item.task}${item.owner ? ` (Owner: ${item.owner})` : ''}\n`
       }
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
 
     const keyDecisions = isStringArray(meeting.key_decisions) ? meeting.key_decisions : []
     if (keyDecisions.length > 0) {
-      context += `## Key Decisions\n`
+      context += '## Key Decisions\n'
       for (const decision of keyDecisions) {
         context += `- ${decision}\n`
       }
@@ -107,7 +109,7 @@ export async function POST(req: Request) {
 
     const topics = isStringArray(meeting.topics) ? meeting.topics : []
     if (topics.length > 0) {
-      context += `## Topics Discussed\n`
+      context += '## Topics Discussed\n'
       for (const topic of topics) {
         context += `- ${topic}\n`
       }
@@ -116,7 +118,7 @@ export async function POST(req: Request) {
 
     const followUps = isStringArray(meeting.follow_ups) ? meeting.follow_ups : []
     if (followUps.length > 0) {
-      context += `## Follow-ups\n`
+      context += '## Follow-ups\n'
       for (const followUp of followUps) {
         context += `- ${followUp}\n`
       }
@@ -124,55 +126,38 @@ export async function POST(req: Request) {
     }
 
     if (typeof meeting.transcript === 'string' && meeting.transcript.length > 0) {
-      // Truncate transcript if it's very long to stay within context limits
-      const transcript = meeting.transcript.length > 300_000
-        ? meeting.transcript.slice(0, 300_000) + '\n\n[Transcript truncated due to length]'
+      const transcript = meeting.transcript.length > MAX_CHAT_TRANSCRIPT_CHARS
+        ? `${meeting.transcript.slice(0, MAX_CHAT_TRANSCRIPT_CHARS)}\n\n[Transcript truncated due to length]`
         : meeting.transcript
-      context += `## Full Transcript\n${transcript}\n\n`
+      context += `## Transcript\n${transcript}\n\n`
     }
 
-    if (sources && sources.length > 0) {
-      context += `## External Sources\n`
-      for (const source of sources) {
-        if (typeof source.content !== 'string' || source.content.length === 0) {
-          continue
-        }
+    const webSearchContext = searchEnabled
+      ? await searchWeb(getLastUserText(messages as UIMessage[]))
+      : ''
 
-        // Truncate individual source content if very large
-        const content = source.content.length > 50_000
-          ? source.content.slice(0, 50_000) + '\n\n[Document truncated due to length]'
-          : source.content
-        const sourceName = typeof source.name === 'string' ? source.name : 'Untitled source'
-        const sourceType = typeof source.file_type === 'string' ? source.file_type : 'txt'
-        context += `### ${sourceName} (${sourceType})\n${content}\n\n`
-      }
-    }
-
-    const systemPrompt = `You are noter AI, a helpful meeting assistant. You have access to the full context of a meeting including its transcript, structured notes, and any external documents the user has attached.
+    const systemPrompt = `You are noter AI, a thoughtful meeting assistant.
 
 Your job is to:
-- Answer questions about what happened in the meeting
-- Elaborate on specific points discussed
-- Verify whether topics or actions were mentioned
-- Cross-reference information from external sources with meeting content
-- Provide clear, concise, and accurate answers
+- Answer questions about this note using the note, transcript, and structured meeting metadata
+- Use any attached files included in the user messages
+- When web search context is provided, use it carefully and call out when information comes from the web instead of the note
+- Stay concise, specific, and honest
 
 Rules:
-- Only answer based on the provided context. If something wasn't discussed or isn't in the materials, say so honestly.
-- When referencing information, mention which source it came from (transcript, notes, or a specific document name).
-- Be conversational but professional. Keep answers focused and to the point.
-- Format responses with markdown for readability.
+- Prefer the note and transcript over external information.
+- If something is not in the provided note materials, say so clearly.
+- When using web search context, mention that it came from web search.
+- Format responses with markdown when it helps readability.
 
-Here is the full meeting context:
+Here is the meeting context:
 
-${context}`
-
-    const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY })
+${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` : ''}`
 
     const result = streamText({
-      model: openai('gpt-4o-mini'),
+      model: gateway(resolveChatModel(model)),
       system: systemPrompt,
-      messages: await convertToModelMessages(messages as UIMessage[]),
+      messages: await buildChatModelMessages(messages as UIMessage[]),
       abortSignal: req.signal,
     })
 
@@ -180,7 +165,7 @@ ${context}`
       originalMessages: messages as UIMessage[],
     })
   } catch (error: unknown) {
-    console.error('Chat API error:', error)
+    Sentry.captureException(error)
     const message =
       error instanceof Error ? error.message : 'Chat failed'
     return errorResponse(message, 'CHAT_FAILED', 500)

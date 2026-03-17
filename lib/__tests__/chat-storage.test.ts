@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'bun:test'
-import { getChatMessages, saveChatMessages, clearChatMessages } from '../chat-storage'
+import {
+  getChatMessages,
+  saveChatMessages,
+  clearChatMessages,
+  getGlobalChatMessages,
+  saveGlobalChatMessages,
+  clearGlobalChatMessages,
+} from '../chat-storage'
 import type { UIMessage } from 'ai'
 
 function makeMessage(id: string, role: 'user' | 'assistant', text: string): UIMessage {
@@ -8,6 +15,22 @@ function makeMessage(id: string, role: 'user' | 'assistant', text: string): UIMe
     role,
     parts: [{ type: 'text', text }],
     createdAt: new Date(),
+  } as UIMessage
+}
+
+function makeAttachmentMessage(id: string): UIMessage {
+  return {
+    id,
+    role: 'user',
+    parts: [
+      { type: 'text', text: 'See attachment' },
+      {
+        type: 'file',
+        filename: 'notes.pdf',
+        mediaType: 'application/pdf',
+        url: 'data:application/pdf;base64,ZmFrZQ==',
+      },
+    ],
   } as UIMessage
 }
 
@@ -88,6 +111,25 @@ describe('chat-storage', () => {
       expect(index).not.toContain('meeting-0')
       expect(index).toContain('meeting-50')
     })
+
+    it('strips file data URLs before persisting messages', () => {
+      saveChatMessages('meeting-1', [makeAttachmentMessage('1')])
+
+      const raw = localStorage.getItem('noter-chat-meeting-1')
+      expect(raw).not.toBeNull()
+
+      const parsed = JSON.parse(raw!)
+      expect(parsed[0].parts).toEqual([{ type: 'text', text: 'See attachment' }])
+      expect(parsed[0].metadata).toEqual({
+        attachments: [
+          {
+            filename: 'notes.pdf',
+            mediaType: 'application/pdf',
+            kind: 'document',
+          },
+        ],
+      })
+    })
   })
 
   describe('clearChatMessages', () => {
@@ -126,6 +168,32 @@ describe('chat-storage', () => {
       ).not.toThrow()
 
       Storage.prototype.setItem = orig
+    })
+  })
+
+  describe('global chat storage', () => {
+    it('saves sanitized global chat messages', () => {
+      saveGlobalChatMessages([makeAttachmentMessage('1')])
+
+      const result = getGlobalChatMessages()
+      expect(result?.[0].parts).toEqual([{ type: 'text', text: 'See attachment' }])
+      expect(result?.[0].metadata).toEqual({
+        attachments: [
+          {
+            filename: 'notes.pdf',
+            mediaType: 'application/pdf',
+            kind: 'document',
+          },
+        ],
+      })
+    })
+
+    it('clears global chat messages', () => {
+      saveGlobalChatMessages([makeMessage('1', 'user', 'hi')])
+
+      clearGlobalChatMessages()
+
+      expect(getGlobalChatMessages()).toBeUndefined()
     })
   })
 })

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api-helpers'
@@ -71,16 +72,6 @@ export async function DELETE(
       return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
 
-    if (meeting.audio_url) {
-      const { error: storageError } = await supabase.storage
-        .from('meeting-audio')
-        .remove([meeting.audio_url])
-
-      if (storageError) {
-        throw new Error(storageError.message)
-      }
-    }
-
     const { error: deleteError } = await supabase
       .from('meetings')
       .delete()
@@ -88,7 +79,19 @@ export async function DELETE(
       .eq('user_id', user.id)
 
     if (deleteError) {
-      throw new Error(deleteError.message)
+      Sentry.captureException(new Error(deleteError.message))
+      throw new Error('Failed to delete meeting')
+    }
+
+    // Best-effort storage cleanup — orphaned files are preferable to un-deletable meetings
+    if (meeting.audio_url) {
+      const { error: storageError } = await supabase.storage
+        .from('meeting-audio')
+        .remove([meeting.audio_url])
+
+      if (storageError) {
+        Sentry.captureException(new Error(`Failed to delete audio file ${meeting.audio_url}: ${storageError.message}`))
+      }
     }
 
     return NextResponse.json({ success: true })

@@ -1,31 +1,21 @@
 import Link from 'next/link'
+import { AuthPageLayout } from '@/components/auth-page-layout'
+import { Button } from '@/components/ui/button'
 
 export default function SignUpSuccessPage() {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center bg-background p-6">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <Link href="/" className="text-2xl font-semibold tracking-tight text-foreground">
-            noter
-          </Link>
-
-          <div className="flex flex-col gap-2">
-            <h1 className="text-xl font-medium text-foreground">
-              Check your email
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {"We've sent you a confirmation link. Please check your email to verify your account before signing in."}
-            </p>
-          </div>
-
-          <Link
-            href="/auth/login"
-            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-          >
-            Back to sign in
-          </Link>
-        </div>
+    <AuthPageLayout
+      title="Check your email"
+      description="We've sent you a confirmation link. Verify your account, then come back to sign in."
+    >
+      <div className="flex flex-col gap-4">
+        <Button asChild className="w-full rounded-xl">
+          <Link href="/auth/login">Back to sign in</Link>
+        </Button>
+        <Button asChild variant="ghost" className="w-full rounded-xl text-muted-foreground">
+          <Link href="/">Return to home</Link>
+        </Button>
       </div>
-    </div>
+    </AuthPageLayout>
   )
 }
