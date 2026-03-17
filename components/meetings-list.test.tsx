@@ -3,10 +3,12 @@ import { cleanup, render, screen } from '@testing-library/react'
 import type { Meeting } from '@/lib/types'
 
 mock.module('next/navigation', () => ({
-  useRouter: () => ({
-    refresh: () => undefined,
-  }),
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {}, back: () => {}, forward: () => {}, prefetch: () => {} }),
   usePathname: () => '/dashboard',
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
+  notFound: () => {},
 }))
 
 const { MeetingsList } = await import('./meetings-list')

@@ -23,7 +23,12 @@ let authUser: { id: string } | null = { id: "user-1" };
 const chatState = new Map<string, UIMessage[]>();
 
 mock.module("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {}, back: () => {}, forward: () => {}, prefetch: () => {} }),
   usePathname: () => pathname,
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
+  notFound: () => {},
 }));
 
 mock.module("@/lib/supabase/client", () => ({
