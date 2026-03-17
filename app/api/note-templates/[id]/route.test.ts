@@ -20,7 +20,7 @@ beforeAll(async () => {
 function mockSupabase(
   user: { id: string } | null,
   options: {
-    updateResult?: { data?: unknown; error?: { message: string } | null }
+    updateResult?: { data?: unknown; error?: { message: string; code?: string } | null }
     deleteResult?: { error?: { message: string } | null }
   } = {}
 ) {
@@ -97,7 +97,12 @@ describe('PATCH /api/note-templates/[id]', () => {
   })
 
   it('returns 404 when template not found', async () => {
-    mockSupabase({ id: 'user-1' }, { updateResult: { data: null, error: null } })
+    mockSupabase({ id: 'user-1' }, {
+      updateResult: {
+        data: null,
+        error: { message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' },
+      },
+    })
 
     const response = await PATCH(makeRequest({ name: 'Updated' }), makeParams('nonexistent'))
     expect(response.status).toBe(404)

@@ -90,19 +90,21 @@ export function useEditorAutosave(
     return () => {
       editor.off('update', onUpdate)
 
-      // Flush pending save on unmount via sendBeacon
+      // Flush pending save on unmount via fetch with keepalive
+      // (sendBeacon always sends POST, but the endpoint only handles PATCH)
       if (timerRef.current) {
         clearTimeout(timerRef.current)
         const pendingBaseHash = baseHashRef.current
         if (pendingBaseHash) {
-          const body = JSON.stringify({
-            document_content: editor.getJSON(),
-            baseHash: pendingBaseHash,
-          })
-          navigator.sendBeacon?.(
-            `/api/meetings/${meetingId}/document`,
-            new Blob([body], { type: 'application/json' }),
-          )
+          fetch(`/api/meetings/${meetingId}/document`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              document_content: editor.getJSON(),
+              baseHash: pendingBaseHash,
+            }),
+            keepalive: true,
+          }).catch(() => {})
         }
       }
 

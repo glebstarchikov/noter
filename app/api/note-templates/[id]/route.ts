@@ -41,8 +41,13 @@ export async function PATCH(
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
-    if (!data) return errorResponse('Template not found', 'NOT_FOUND', 404)
+    if (error) {
+      // .single() returns PGRST116 when zero rows match — that's a 404, not 500
+      if (error.code === 'PGRST116') {
+        return errorResponse('Template not found', 'NOT_FOUND', 404)
+      }
+      throw new Error(error.message)
+    }
 
     return NextResponse.json({ template: data })
   } catch (error: unknown) {
