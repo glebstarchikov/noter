@@ -6,6 +6,16 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'mock-anon-key'
 process.env.OPENAI_API_KEY = 'mock-openai-key'
 
+// Mock next/navigation so client hooks resolve in the test environment
+mock.module('next/navigation', () => ({
+    useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {}, back: () => {}, forward: () => {}, prefetch: () => {} }),
+    usePathname: () => '/',
+    useSearchParams: () => new URLSearchParams(),
+    useParams: () => ({}),
+    redirect: () => {},
+    notFound: () => {},
+}))
+
 // Mock next/server so unit tests don't error out on import
 mock.module('next/server', () => ({
     NextResponse: {
