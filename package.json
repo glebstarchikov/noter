@@ -11,13 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "db:migrate": "echo 'Run SQL files in scripts/ against your Supabase database in order (001, 002, …). Use the Supabase SQL Editor or: for f in scripts/*.sql; do psql \"$DATABASE_URL\" -f \"$f\"; done'",
-    "prepare": "husky"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "eslint --fix"
-    ]
+    "db:migrate": "echo 'Run SQL files in scripts/ against your Supabase database in order (001, 002, …). Use the Supabase SQL Editor or: for f in scripts/*.sql; do psql \"$DATABASE_URL\" -f \"$f\"; done'"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",
