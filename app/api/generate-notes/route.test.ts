@@ -132,7 +132,7 @@ describe('POST /api/generate-notes', () => {
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({
       error: 'Invalid request body',
-      code: 'INVALID_REQUEST',
+      code: 'INVALID_INPUT',
     })
   })
 

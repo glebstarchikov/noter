@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { generateNotesFromTranscript } from '@/lib/notes/notes-generation'
 import { generatedNotesToTiptap } from '@/lib/tiptap/tiptap-converter'
 import { Ratelimit } from '@upstash/ratelimit'
@@ -45,13 +46,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const rawBody = await request.json().catch(() => null)
-    const parsedBody = generateNotesRequestSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
-    meetingId = parsedBody.data.meetingId
-    const requestTranscript = parsedBody.data.transcript
+    const validated = await validateBody(request, generateNotesRequestSchema)
+    if (validated instanceof Response) return validated
+    meetingId = validated.data.meetingId
+    const requestTranscript = validated.data.transcript
 
     // Verify user owns the meeting
     const { data: meeting } = await supabase

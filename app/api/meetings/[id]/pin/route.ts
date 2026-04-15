@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
+import { z } from 'zod'
 
 export const maxDuration = 10
+
+const pinSchema = z.object({
+    pinned: z.boolean(),
+})
 
 export async function PATCH(
     request: Request,
@@ -14,10 +20,9 @@ export async function PATCH(
             return errorResponse('Missing meetingId', 'INVALID_MEETING_ID', 400)
         }
 
-        const body = await request.json().catch(() => null)
-        if (!body || typeof body.pinned !== 'boolean') {
-            return errorResponse('Request body must include { pinned: boolean }', 'INVALID_BODY', 400)
-        }
+        const validated = await validateBody(request, pinSchema)
+        if (validated instanceof Response) return validated
+        const { data: body } = validated
 
         const supabase = await createClient()
         const {

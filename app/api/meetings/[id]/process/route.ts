@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -53,11 +54,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return errorResponse('Processing queue is not configured', 'QUEUE_UNAVAILABLE', 503)
     }
 
-    const rawBody = await request.json().catch(() => ({}))
-    const parsedBody = startProcessingSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
+    const validated = await validateBody(request, startProcessingSchema)
+    if (validated instanceof Response) return validated
+    const { data: parsedBody } = validated
 
     const { data: meeting } = await supabase
       .from('meetings')
@@ -83,7 +82,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const defaultIdempotencyKey = `meeting:${id}:user:${user.id}`
-    const idempotencyKey = parsedBody.data.idempotencyKey ?? defaultIdempotencyKey
+    const idempotencyKey = parsedBody.idempotencyKey ?? defaultIdempotencyKey
 
     const { data: existingJob } = await supabase
       .from('processing_jobs')

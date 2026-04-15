@@ -57,7 +57,7 @@ describe('PATCH /api/meetings/[id]/pin', () => {
     })
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(payload.code).toBe('INVALID_BODY')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 400 if pinned is not a boolean', async () => {
@@ -67,7 +67,7 @@ describe('PATCH /api/meetings/[id]/pin', () => {
     })
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(payload.code).toBe('INVALID_BODY')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 400 if request body is invalid JSON', async () => {
@@ -82,7 +82,7 @@ describe('PATCH /api/meetings/[id]/pin', () => {
     )
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(payload.code).toBe('INVALID_BODY')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 401 if user is not authenticated', async () => {
