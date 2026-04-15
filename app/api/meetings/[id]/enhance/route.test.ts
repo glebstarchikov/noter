@@ -203,7 +203,7 @@ describe('POST /api/meetings/[id]/enhance', () => {
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
       error: 'Invalid request body',
-      code: 'INVALID_REQUEST',
+      code: 'INVALID_INPUT',
     })
   })
 

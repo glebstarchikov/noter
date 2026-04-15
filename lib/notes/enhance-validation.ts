@@ -4,6 +4,7 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { isTiptapDocument } from '@/lib/tiptap/tiptap-converter'
 import { resolveMeetingTemplate } from '@/lib/note-template'
 import type { EnhancementState, Meeting } from '@/lib/types'
@@ -95,11 +96,8 @@ export async function validateEnhanceRequest(
 ): Promise<ValidatedEnhanceRequest | Response> {
   const supabase = await createClient()
 
-  const rawBody = await request.json().catch(() => null)
-  const parsedBody = requestSchema.safeParse(rawBody)
-  if (!parsedBody.success) {
-    return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-  }
+  const parsedBody = await validateBody(request, requestSchema)
+  if (parsedBody instanceof Response) return parsedBody
 
   const {
     data: { user },
