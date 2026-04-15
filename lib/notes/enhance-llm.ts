@@ -97,6 +97,7 @@ async function generateProposalDocument({
         model: openai(ENHANCEMENT_MODEL),
         schema: draftProposalSchema,
         temperature: 0.2,
+        // 5 s headroom under the 60 s maxDuration set in app/api/meetings/[id]/enhance/route.ts
         abortSignal: AbortSignal.timeout(55_000),
         providerOptions: {
           openai: {
