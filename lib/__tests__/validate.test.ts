@@ -43,6 +43,8 @@ describe('validateBody', () => {
     expect(result).toBeInstanceOf(Response)
     if (result instanceof Response) {
       expect(result.status).toBe(400)
+      const body = await result.json()
+      expect(body.code).toBe('INVALID_INPUT')
     }
   })
 
@@ -53,5 +55,10 @@ describe('validateBody', () => {
     })
     const result = await validateBody(request, schema)
     expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) {
+      expect(result.status).toBe(400)
+      const body = await result.json()
+      expect(body.code).toBe('INVALID_INPUT')
+    }
   })
 })

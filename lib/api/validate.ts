@@ -4,13 +4,20 @@ import { errorResponse } from '@/lib/api/api-helpers'
 /**
  * Parse and validate a request body against a Zod schema.
  *
- * On success, returns `{ data }` with the typed parsed value.
- * On failure, returns a 400 Response that can be returned directly from the route handler.
+ * On success, returns `{ data }` with the typed parsed value (`z.infer<T>`).
+ * On failure, returns a 400 Response that can be returned directly from the
+ * route handler. Both failure paths use the unified `INVALID_INPUT` error code.
  *
- * Usage:
+ * **Recommended call-site pattern** (used consistently across the codebase):
+ *
  *   const validated = await validateBody(request, schema)
  *   if (validated instanceof Response) return validated
- *   const { data } = validated
+ *   const { data: body } = validated
+ *   // body is now typed as z.infer<typeof schema>
+ *
+ * Known limitation: type inference may lose specificity on schemas wrapped
+ * with `.transform()` or `.superRefine()`. In practice this is rare — most
+ * routes use plain `z.object(...)` schemas.
  */
 export async function validateBody<T extends ZodSchema>(
   request: Request,
