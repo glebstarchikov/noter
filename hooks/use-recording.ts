@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { readApiError } from '@/lib/meeting-pipeline'
+import { readApiError } from '@/lib/meetings/meeting-pipeline'
 import { toast } from 'sonner'
 import { useDeepgramTranscription } from '@/hooks/use-deepgram-transcription'
 import type { RecordingPhase } from '@/components/assistant-shell-context'

@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getMessageText } from "@/lib/chat-ui-helpers";
+import { getMessageText } from "@/lib/chat/chat-ui-helpers";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */

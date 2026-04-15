@@ -4,7 +4,7 @@ import {
   getRenderableMessageAttachments,
   type ChatAttachmentMetadata,
   type RenderableChatAttachment,
-} from "@/lib/chat-attachments";
+} from "@/lib/chat/chat-attachments";
 
 function isStoredAttachment(
   attachment: RenderableChatAttachment,

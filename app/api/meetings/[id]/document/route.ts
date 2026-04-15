@@ -1,12 +1,12 @@
 import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { hashDocumentContent } from '@/lib/document-hash'
 import {
   isTiptapDocument,
   normalizeTiptapDocument,
-} from '@/lib/tiptap-converter'
+} from '@/lib/tiptap/tiptap-converter'
 
 export const maxDuration = 10
 

@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, mock, jest } from 'bun:test'
 import { hashDocumentContent } from '@/lib/document-hash'
-import type { TiptapDocument } from '@/lib/tiptap-converter'
+import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),

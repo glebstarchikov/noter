@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { buildGlobalChatContext } from '@/lib/global-chat-context'
+import { buildGlobalChatContext } from '@/lib/chat/global-chat-context'
 
 function makeDocument(text: string) {
   return {

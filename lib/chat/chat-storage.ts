@@ -3,7 +3,7 @@ import {
   getMessageAttachmentMetadata,
   setMessageAttachmentMetadata,
   toChatAttachmentMetadata,
-} from '@/lib/chat-attachments'
+} from '@/lib/chat/chat-attachments'
 
 const STORAGE_KEY_PREFIX = 'noter-chat-'
 const INDEX_KEY = 'noter-chat-index'

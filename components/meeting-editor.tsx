@@ -8,11 +8,11 @@ import { Bold, Italic, Heading2, Heading3, List, ListTodo, Quote } from 'lucide-
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEditorAutosave } from '@/hooks/use-editor-autosave'
-import { createMeetingEditorExtensions } from '@/lib/meeting-editor-extensions'
+import { createMeetingEditorExtensions } from '@/lib/tiptap/meeting-editor-extensions'
 import {
   createEmptyTiptapDocument,
   type TiptapDocument,
-} from '@/lib/tiptap-converter'
+} from '@/lib/tiptap/tiptap-converter'
 import type { Meeting } from '@/lib/types'
 
 interface MeetingEditorProps {

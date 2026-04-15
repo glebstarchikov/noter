@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from 'react'
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { hashDocumentContent } from '@/lib/document-hash'
-import { ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE } from '@/lib/enhancement-errors'
-import type { TiptapDocument } from '@/lib/tiptap-converter'
+import { ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE } from '@/lib/notes/enhancement-errors'
+import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 import type { Meeting } from '@/lib/types'
 
 function makeDocument(text: string): TiptapDocument {

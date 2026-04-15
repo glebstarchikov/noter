@@ -1,10 +1,10 @@
 import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, type UIMessage } from 'ai'
 import { z } from 'zod'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { DEFAULT_CHAT_MODEL, resolveChatModel } from '@/lib/ai-models'
-import { buildChatModelMessages } from '@/lib/chat-message-utils'
-import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/prompts'
+import { buildChatModelMessages } from '@/lib/chat/chat-message-utils'
+import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/notes/prompts'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 

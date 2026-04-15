@@ -1,5 +1,5 @@
 import { formatTemplateContext, type ResolvedNoteTemplate } from '@/lib/note-template'
-import { draftPromptSchemaExample } from '@/lib/draft-proposal'
+import { draftPromptSchemaExample } from '@/lib/notes/draft-proposal'
 
 const BASE_NOTES_GENERATION_PROMPT = `You are an expert meeting note-taker. Given a meeting transcript, produce structured notes in the following JSON format.
 

@@ -4,14 +4,14 @@ import {
   MAX_ENHANCEMENT_DOCUMENT_CHARS,
   MAX_ENHANCEMENT_STRUCTURED_CHARS,
   MAX_ENHANCEMENT_TRANSCRIPT_CHARS,
-} from '@/lib/enhancement-context'
+} from '@/lib/notes/enhancement-context'
 import {
   ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
   ENHANCEMENT_MODEL_FAILED_MESSAGE,
   ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
-} from '@/lib/enhancement-errors'
-import { compileDraftProposalToTiptap } from '@/lib/draft-proposal'
-import type { TiptapDocument } from '@/lib/tiptap-converter'
+} from '@/lib/notes/enhancement-errors'
+import { compileDraftProposalToTiptap } from '@/lib/notes/draft-proposal'
+import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 
 const mockGenerateObject = mock(() => {})
 const mockOpenAI = mock((modelId: string) => ({ provider: 'openai', modelId }))

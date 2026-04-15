@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { clearChatMessages } from '@/lib/chat-storage'
+import { clearChatMessages } from '@/lib/chat/chat-storage'
 import type { ActionItem, Meeting } from '@/lib/types'
 
 /**

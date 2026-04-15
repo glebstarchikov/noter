@@ -3,7 +3,7 @@ import { openai } from '@ai-sdk/openai'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { ENHANCEMENT_MODEL } from '@/lib/ai-models'
 import { hashDocumentContent } from '@/lib/document-hash'
 import {
@@ -12,22 +12,22 @@ import {
   DraftProposalValidationError,
   draftProposalSchema,
   validateDraftProposal,
-} from '@/lib/draft-proposal'
-import { shapeEnhancementContext } from '@/lib/enhancement-context'
+} from '@/lib/notes/draft-proposal'
+import { shapeEnhancementContext } from '@/lib/notes/enhancement-context'
 import {
   ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
   ENHANCEMENT_MODEL_FAILED_MESSAGE,
   ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE,
-} from '@/lib/enhancement-errors'
+} from '@/lib/notes/enhancement-errors'
 import { resolveMeetingTemplate } from '@/lib/note-template'
-import { buildDraftProposalPrompt } from '@/lib/prompts'
+import { buildDraftProposalPrompt } from '@/lib/notes/prompts'
 import {
   hasTiptapContent,
   isTiptapDocument,
   normalizeTiptapDocument,
   tiptapToPlainText,
   type TiptapDocument,
-} from '@/lib/tiptap-converter'
+} from '@/lib/tiptap/tiptap-converter'
 import type { EnhancementOutcome, EnhancementState, Meeting } from '@/lib/types'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'

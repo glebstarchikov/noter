@@ -24,13 +24,13 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { hashDocumentContent } from '@/lib/document-hash'
-import { isNeutralEnhancementMessage } from '@/lib/enhancement-errors'
+import { isNeutralEnhancementMessage } from '@/lib/notes/enhancement-errors'
 import {
   hasTiptapContent,
   legacyMeetingToTiptap,
   normalizeTiptapDocument,
   type TiptapDocument,
-} from '@/lib/tiptap-converter'
+} from '@/lib/tiptap/tiptap-converter'
 import type { Meeting, MeetingStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useNoteEnhancement } from '@/hooks/use-note-enhancement'

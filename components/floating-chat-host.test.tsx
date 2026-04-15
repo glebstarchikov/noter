@@ -15,7 +15,7 @@ import {
   saveChatMessages,
   saveGlobalChatMessages,
   saveSupportChatMessages,
-} from "@/lib/chat-storage";
+} from "@/lib/chat/chat-storage";
 
 let pathname = "/";
 let authUser: { id: string } | null = { id: "user-1" };

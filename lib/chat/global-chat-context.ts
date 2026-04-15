@@ -1,4 +1,4 @@
-import { tiptapToPlainText } from '@/lib/tiptap-converter'
+import { tiptapToPlainText } from '@/lib/tiptap/tiptap-converter'
 import { isActionItemArray, isStringArray } from '@/lib/type-guards'
 
 export const MAX_GLOBAL_CONTEXT_CHARS = 100_000

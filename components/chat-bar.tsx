@@ -17,7 +17,7 @@ import {
   getComposerPrompt,
   getStoredMessages,
   saveStoredMessages,
-} from "@/lib/chat-ui-helpers";
+} from "@/lib/chat/chat-ui-helpers";
 import {
   useAssistantShellContextSafe,
   type AssistantShellMode,

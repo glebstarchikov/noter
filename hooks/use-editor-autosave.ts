@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { isDocumentSaveConflict, saveMeetingDocument } from '@/lib/document-sync'
-import type { TiptapDocument } from '@/lib/tiptap-converter'
+import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 

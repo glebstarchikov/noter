@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { TiptapDocument, TiptapNode } from '@/lib/tiptap-converter'
+import type { TiptapDocument, TiptapNode } from '@/lib/tiptap/tiptap-converter'
 
 const MAX_SUMMARY_CHARS = 200
 const MAX_BLOCK_TEXT_CHARS = 2_000

@@ -3,7 +3,7 @@
 import { MeetingDetail } from '@/components/meeting-detail'
 import { MeetingWorkspace } from '@/components/meeting-workspace'
 import { PageShell } from '@/components/page-shell'
-import { isRecordingOriginMeeting } from '@/lib/meeting-workspace'
+import { isRecordingOriginMeeting } from '@/lib/meetings/meeting-workspace'
 import type { Meeting } from '@/lib/types'
 
 export function MeetingDetailWrapper({ meeting }: { meeting: Meeting }) {

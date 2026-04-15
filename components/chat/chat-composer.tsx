@@ -2,7 +2,7 @@
 
 import { AlertCircle, Check, ChevronDown, Loader2, MoreHorizontal, Paperclip, Search, Send } from "lucide-react";
 import type { ChatModelId } from "@/lib/ai-models";
-import { getActiveContextLabel, getComposerPrompt, getContextDescription, getErrorMessage } from "@/lib/chat-ui-helpers";
+import { getActiveContextLabel, getComposerPrompt, getContextDescription, getErrorMessage } from "@/lib/chat/chat-ui-helpers";
 import type { ChatSurfaceScope } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";

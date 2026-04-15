@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { transcribeAudioFromStorage } from '@/lib/transcription'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'

@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/empty'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { toggleMeetingPin } from '@/lib/meeting-actions'
+import { toggleMeetingPin } from '@/lib/meetings/meeting-actions'
 import type { Meeting, MeetingStatus } from '@/lib/types'
 
 type StatusMeta = {

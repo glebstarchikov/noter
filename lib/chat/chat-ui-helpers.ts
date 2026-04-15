@@ -9,7 +9,7 @@ import {
   saveChatMessages,
   saveGlobalChatMessages,
   saveSupportChatMessages,
-} from '@/lib/chat-storage'
+} from '@/lib/chat/chat-storage'
 import type { ChatSurfaceScope } from '@/lib/types'
 
 export function getStoredMessages(scope: ChatSurfaceScope, meetingId?: string | null) {

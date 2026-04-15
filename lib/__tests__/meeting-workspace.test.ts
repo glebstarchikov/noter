@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { isRecordingOriginMeeting, shouldUseProcessingView } from '@/lib/meeting-workspace'
+import { isRecordingOriginMeeting, shouldUseProcessingView } from '@/lib/meetings/meeting-workspace'
 
 describe('meeting workspace helpers', () => {
   it('identifies recording-origin meetings from active recording status', () => {

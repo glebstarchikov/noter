@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { normalizeStringArray, normalizeActionItems } from '../note-normalization'
+import { normalizeStringArray, normalizeActionItems } from '../notes/note-normalization'
 
 describe('normalizeStringArray', () => {
   it('returns empty array for undefined', () => {

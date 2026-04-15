@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { transcribeAudioFromStorage } from '@/lib/transcription'
-import { generateNotesFromTranscript } from '@/lib/notes-generation'
-import { generatedNotesToTiptap } from '@/lib/tiptap-converter'
+import { generateNotesFromTranscript } from '@/lib/notes/notes-generation'
+import { generatedNotesToTiptap } from '@/lib/tiptap/tiptap-converter'
 import type { DiarizedSegment } from '@/lib/types'
 
 export const maxDuration = 300

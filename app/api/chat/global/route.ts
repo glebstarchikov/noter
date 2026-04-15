@@ -1,14 +1,14 @@
 import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, UIMessage } from 'ai'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
 import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
-import { buildChatModelMessages, getLastUserText } from '@/lib/chat-message-utils'
+import { buildChatModelMessages, getLastUserText } from '@/lib/chat/chat-message-utils'
 import { searchWeb } from '@/lib/tavily'
-import { buildGlobalChatContext, type GlobalChatMeetingRow } from '@/lib/global-chat-context'
+import { buildGlobalChatContext, type GlobalChatMeetingRow } from '@/lib/chat/global-chat-context'
 
 const ratelimit =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN

@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { MeetingDetailWrapper } from '@/components/meeting-detail-wrapper'
 import { PageShell } from '@/components/page-shell'
 import { ProcessingView } from '@/components/processing-view'
-import { shouldUseProcessingView } from '@/lib/meeting-workspace'
+import { shouldUseProcessingView } from '@/lib/meetings/meeting-workspace'
 import type { Meeting } from '@/lib/types'
 
 export default async function MeetingPage({

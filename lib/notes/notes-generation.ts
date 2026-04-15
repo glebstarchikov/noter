@@ -1,6 +1,6 @@
 import { getOpenAI } from '@/lib/openai'
-import { normalizeStringArray, normalizeActionItems } from '@/lib/note-normalization'
-import { buildNotesGenerationPrompt } from '@/lib/prompts'
+import { normalizeStringArray, normalizeActionItems } from '@/lib/notes/note-normalization'
+import { buildNotesGenerationPrompt } from '@/lib/notes/prompts'
 import { generatedNotesSchema } from '@/lib/schemas'
 import { resolveMeetingTemplate, type ResolvedNoteTemplate } from '@/lib/note-template'
 import { formatTranscriptForNotes, countSpeakers, buildMeetingContextHeader } from '@/lib/transcript-formatter'

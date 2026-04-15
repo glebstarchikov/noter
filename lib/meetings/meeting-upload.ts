@@ -4,7 +4,7 @@ import {
   waitForMeetingCompletion,
   runLegacyPipeline,
   type ProcessingState,
-} from '@/lib/meeting-pipeline'
+} from '@/lib/meetings/meeting-pipeline'
 
 type OnProcessing = (state: ProcessingState) => void
 

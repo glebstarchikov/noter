@@ -11,7 +11,7 @@ import {
   EMPTY_TIPTAP_DOCUMENT,
   type TiptapDocument,
   type GeneratedNotesDocumentInput,
-} from '../tiptap-converter'
+} from '../tiptap/tiptap-converter'
 import type { Meeting } from '../types'
 
 describe('isTiptapDocument', () => {

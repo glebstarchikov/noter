@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { hashDocumentContent, hashUnknownContent } from '../document-hash'
-import type { TiptapDocument } from '../tiptap-converter'
+import type { TiptapDocument } from '../tiptap/tiptap-converter'
 
 describe('hashDocumentContent', () => {
   it('returns an 8-character hex string', () => {

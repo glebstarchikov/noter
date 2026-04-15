@@ -1,4 +1,4 @@
-import type { TiptapDocument } from '@/lib/tiptap-converter'
+import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 
 function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return 'null'

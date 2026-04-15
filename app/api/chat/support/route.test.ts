@@ -8,7 +8,7 @@ mock.module('ai', () => ({
   gateway: mockGateway,
 }))
 
-mock.module('@/lib/chat-message-utils', () => ({
+mock.module('@/lib/chat/chat-message-utils', () => ({
   buildChatModelMessages: mockBuildChatModelMessages,
 }))
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 import { z } from 'zod'
 import { extractTextFromFile } from '@/lib/file-text'
 import { Ratelimit } from '@upstash/ratelimit'
