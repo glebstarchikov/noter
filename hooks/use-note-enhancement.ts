@@ -6,10 +6,10 @@ import { toast } from 'sonner'
 import { isDocumentSaveConflict, saveMeetingDocument, type DocumentSaveConflict } from '@/lib/document-sync'
 import { type TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 import type { EnhancementState, Meeting, MeetingStatus } from '@/lib/types'
-import { useDraftProposal, type DraftMode } from '@/hooks/use-draft-proposal'
+import { useDraftProposal, type DraftMode, type DraftUiState } from '@/hooks/use-draft-proposal'
 
 export type UseNoteEnhancementReturn = {
-  draftState: import('@/hooks/use-draft-proposal').DraftUiState
+  draftState: DraftUiState
   reviewState: EnhancementState
   undoDocument: TiptapDocument | null
   documentConflict: DocumentSaveConflict | null
@@ -35,7 +35,6 @@ export function useNoteEnhancement(
     actionMode,
     canReview,
     meetingStatus,
-    hasDocumentContent: _hasDocumentContent,
     onDocumentAccepted,
     onAcknowledgedHashChange,
     onLoadLatestVersion: onLoadLatestVersionCallback,
@@ -47,7 +46,6 @@ export function useNoteEnhancement(
     actionMode: DraftMode
     canReview: boolean
     meetingStatus: MeetingStatus
-    hasDocumentContent: boolean
     onDocumentAccepted: (payload: {
       document: TiptapDocument
       documentHash: string
@@ -64,16 +62,11 @@ export function useNoteEnhancement(
 
   const editorRef = useRef<Editor | null>(null)
   const acknowledgedHashRef = useRef(acknowledgedHash)
-  const currentDocumentRef = useRef(currentDocument)
   const meetingIdRef = useRef(meeting.id)
 
   useEffect(() => {
     acknowledgedHashRef.current = acknowledgedHash
   }, [acknowledgedHash])
-
-  useEffect(() => {
-    currentDocumentRef.current = currentDocument
-  }, [currentDocument])
 
   // Reset conflict state when meeting changes
   useEffect(() => {
@@ -86,11 +79,15 @@ export function useNoteEnhancement(
     editorRef.current = editor
   }, [])
 
+  // 20 × 25ms = 500ms max wait for the editor ref to populate
+  const MAX_EDITOR_WAIT_ATTEMPTS = 20
+  const EDITOR_WAIT_POLL_MS = 25
+
   const waitForEditor = useCallback(async () => {
     if (editorRef.current) return editorRef.current
 
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 25))
+    for (let attempt = 0; attempt < MAX_EDITOR_WAIT_ATTEMPTS; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, EDITOR_WAIT_POLL_MS))
       if (editorRef.current) return editorRef.current
     }
 
@@ -176,14 +173,14 @@ export function useNoteEnhancement(
     if (!documentConflict) return
 
     try {
-      await persistCurrentDocument(currentDocumentRef.current, documentConflict.currentHash)
+      await persistCurrentDocument(currentDocument, documentConflict.currentHash)
       toast.success('Your local draft replaced the newer server version.')
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Failed to replace the server version'
       toast.error(message)
     }
-  }, [documentConflict, persistCurrentDocument])
+  }, [currentDocument, documentConflict, persistCurrentDocument])
 
   // --- Public handleDraftRequest: thin wrapper keeping the external interface ---
 

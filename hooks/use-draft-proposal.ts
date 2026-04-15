@@ -238,7 +238,7 @@ export function useDraftProposal(
       onAccepted: (payload: DraftAcceptedPayload) => void
       onShowEditor: () => void
     }) => {
-      if (!shouldShowAction && draftStateRef.current === 'idle') return
+      if (!shouldShowAction || draftStateRef.current !== 'idle') return
 
       if (actionMode === 'generate') {
         onShowEditor()

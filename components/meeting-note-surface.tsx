@@ -176,7 +176,6 @@ export function MeetingNoteSurface({
     actionMode,
     canReview,
     meetingStatus: meeting.status,
-    hasDocumentContent,
     onDocumentAccepted: handleDocumentAccepted,
     onAcknowledgedHashChange: handleAcknowledgedHashChange,
     onLoadLatestVersion: handleLoadLatestVersionCallback,
