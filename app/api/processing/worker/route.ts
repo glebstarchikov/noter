@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -32,7 +33,12 @@ type ProcessingJob = {
 }
 
 function logEvent(event: string, payload: Record<string, unknown>) {
-  console.log(JSON.stringify({ scope: 'processing.worker', event, ...payload }))
+  Sentry.addBreadcrumb({
+    category: 'processing.worker',
+    message: event,
+    level: 'info',
+    data: payload,
+  })
 }
 
 function isWorkerAuthorized(request: NextRequest) {

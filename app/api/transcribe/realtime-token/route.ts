@@ -58,9 +58,12 @@ export async function POST() {
     }
 
     // Development fallback: return the raw key but warn about it.
-    console.warn(
-      '[realtime-token] DEEPGRAM_PROJECT_ID is not set — returning raw API key. ' +
-      'Set DEEPGRAM_PROJECT_ID in production to enable short-lived temporary keys.',
+    Sentry.captureMessage(
+      'DEEPGRAM_PROJECT_ID is not set — returning raw API key. Set DEEPGRAM_PROJECT_ID in production to enable short-lived temporary keys.',
+      {
+        level: 'warning',
+        tags: { route: 'transcribe/realtime-token' },
+      },
     )
     return NextResponse.json({ key: apiKey })
   } catch (error: unknown) {
