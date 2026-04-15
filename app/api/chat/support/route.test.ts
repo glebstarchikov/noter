@@ -48,8 +48,8 @@ describe('POST /api/chat/support', () => {
 
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
-      error: 'Invalid request body',
-      code: 'INVALID_REQUEST',
+      error: 'Request body must be valid JSON',
+      code: 'INVALID_INPUT',
     })
   })
 

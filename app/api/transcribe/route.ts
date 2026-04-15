@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { transcribeAudioFromStorage } from '@/lib/transcription'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
@@ -43,13 +44,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const rawBody = await request.json().catch(() => null)
-    const parsedBody = transcribeRequestSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
-    meetingId = parsedBody.data.meetingId
-    const { storagePath } = parsedBody.data
+    const validated = await validateBody(request, transcribeRequestSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
+
+    meetingId = body.meetingId
+    const { storagePath } = body
 
     // Verify user owns the meeting
     const { data: meeting } = await supabase

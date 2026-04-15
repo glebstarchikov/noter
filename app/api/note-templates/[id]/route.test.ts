@@ -83,7 +83,7 @@ describe('PATCH /api/note-templates/[id]', () => {
     )
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(payload.code).toBe('INVALID_BODY')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('updates a template name successfully', async () => {

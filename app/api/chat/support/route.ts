@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { DEFAULT_CHAT_MODEL, resolveChatModel } from '@/lib/ai-models'
 import { buildChatModelMessages } from '@/lib/chat/chat-message-utils'
 import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/notes/prompts'
@@ -38,13 +39,11 @@ export async function POST(req: Request) {
       }
     }
 
-    const rawBody = await req.json().catch(() => null)
-    const parsedBody = supportChatRequestSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
+    const validated = await validateBody(req, supportChatRequestSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
 
-    const { messages } = parsedBody.data
+    const { messages } = body
 
     // Guard against oversized payloads
     const totalLength = messages.reduce<number>((sum, msg) => {

@@ -106,7 +106,7 @@ describe('POST /api/note-templates', () => {
     const response = await POST(makeRequest({ prompt: 'Do thing' }))
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(payload.code).toBe('INVALID_BODY')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 400 if name is empty string', async () => {
@@ -120,7 +120,7 @@ describe('POST /api/note-templates', () => {
     const response = await POST(makeRequest({ name: 'Test' }))
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(payload.code).toBe('INVALID_BODY')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 400 if prompt is empty string', async () => {

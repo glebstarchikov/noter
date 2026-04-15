@@ -97,7 +97,7 @@ describe('POST /api/chat', () => {
     expect(response.status).toBe(400)
     const payload = await response.json()
     expect(payload.error).toBe('Invalid request body')
-    expect(payload.code).toBe('INVALID_REQUEST')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 404 if meeting not found or not owned by user', async () => {

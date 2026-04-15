@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
+
+const updateTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().trim().max(500).optional(),
+  prompt: z.string().trim().min(1).max(2000).optional(),
+}).refine(
+  (v) => v.name !== undefined || v.description !== undefined || v.prompt !== undefined,
+  { message: 'At least one of name, description, or prompt must be provided' }
+)
 
 export const maxDuration = 10
 
@@ -15,23 +26,14 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
 
-    const body = await request.json().catch(() => null)
-    if (!body) return errorResponse('Invalid body', 'INVALID_BODY', 400)
-
-    if (typeof body.name === 'string' && body.name.trim().length > 100) {
-      return errorResponse('name must be 100 characters or fewer', 'INVALID_BODY', 400)
-    }
-    if (typeof body.description === 'string' && body.description.trim().length > 500) {
-      return errorResponse('description must be 500 characters or fewer', 'INVALID_BODY', 400)
-    }
-    if (typeof body.prompt === 'string' && body.prompt.trim().length > 2000) {
-      return errorResponse('prompt must be 2000 characters or fewer', 'INVALID_BODY', 400)
-    }
+    const validated = await validateBody(request, updateTemplateSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-    if (typeof body.name === 'string' && body.name.trim()) updates.name = body.name.trim()
-    if (typeof body.description === 'string') updates.description = body.description.trim()
-    if (typeof body.prompt === 'string' && body.prompt.trim()) updates.prompt = body.prompt.trim()
+    if (body.name !== undefined) updates.name = body.name
+    if (body.description !== undefined) updates.description = body.description
+    if (body.prompt !== undefined) updates.prompt = body.prompt
 
     const { data, error } = await supabase
       .from('note_templates')

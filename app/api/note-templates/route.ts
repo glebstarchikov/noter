@@ -1,7 +1,15 @@
 import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
+
+const createTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  prompt: z.string().trim().min(1).max(2000),
+  description: z.string().trim().max(500).optional(),
+})
 
 export const maxDuration = 10
 
@@ -38,30 +46,17 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
 
-    const body = await request.json().catch(() => null)
-    if (!body || typeof body.name !== 'string' || !body.name.trim()) {
-      return errorResponse('name is required', 'INVALID_BODY', 400)
-    }
-    if (typeof body.prompt !== 'string' || !body.prompt.trim()) {
-      return errorResponse('prompt is required', 'INVALID_BODY', 400)
-    }
-    if (body.name.trim().length > 100) {
-      return errorResponse('name must be 100 characters or fewer', 'INVALID_BODY', 400)
-    }
-    if (typeof body.description === 'string' && body.description.trim().length > 500) {
-      return errorResponse('description must be 500 characters or fewer', 'INVALID_BODY', 400)
-    }
-    if (body.prompt.trim().length > 2000) {
-      return errorResponse('prompt must be 2000 characters or fewer', 'INVALID_BODY', 400)
-    }
+    const validated = await validateBody(request, createTemplateSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
 
     const { data, error } = await supabase
       .from('note_templates')
       .insert({
         user_id: user.id,
-        name: body.name.trim(),
-        description: typeof body.description === 'string' ? body.description.trim() : null,
-        prompt: body.prompt.trim(),
+        name: body.name,
+        description: body.description ?? null,
+        prompt: body.prompt,
       })
       .select('*')
       .single()

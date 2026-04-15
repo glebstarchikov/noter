@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, UIMessage } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { z } from 'zod'
@@ -44,14 +45,12 @@ export async function POST(req: Request) {
       }
     }
 
-    const rawBody = await req.json().catch(() => null)
-    const parsedBody = globalChatRequestSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
+    const validated = await validateBody(req, globalChatRequestSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
 
-    const model = resolveChatModelId(parsedBody.data.model)
-    const { messages, searchEnabled } = parsedBody.data
+    const model = resolveChatModelId(body.model)
+    const { messages, searchEnabled } = body
 
     const { data: meetings } = await supabase
       .from('meetings')
