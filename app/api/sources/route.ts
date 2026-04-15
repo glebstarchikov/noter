@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { z } from 'zod'
 import { extractTextFromFile } from '@/lib/file-text'
 import { Ratelimit } from '@upstash/ratelimit'
@@ -171,12 +172,9 @@ export async function DELETE(request: NextRequest) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
-    const rawBody = await request.json().catch(() => null)
-    const parsedBody = deleteSourceSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
-    const { sourceId } = parsedBody.data
+    const validated = await validateBody(request, deleteSourceSchema)
+    if (validated instanceof Response) return validated
+    const { sourceId } = validated.data
 
     const { error } = await supabase
       .from('meeting_sources')

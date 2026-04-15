@@ -153,6 +153,6 @@ describe('DELETE /api/sources', () => {
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.error).toBe('Invalid request body')
-    expect(data.code).toBe('INVALID_REQUEST')
+    expect(data.code).toBe('INVALID_INPUT')
   })
 })
