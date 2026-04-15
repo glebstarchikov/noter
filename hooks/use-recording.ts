@@ -59,7 +59,17 @@ export function useRecording({
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const mediaStream = useMediaStream()
+  const {
+    recordSystemAudio,
+    hasSystemAudio,
+    setRecordSystemAudio,
+    analyserNode,
+    acquireStream,
+    stopAllStreams,
+    closeAudioSession,
+    suspendAudioContext,
+    resumeAudioContext,
+  } = useMediaStream()
   const { startTranscription, stopTranscription, isConnected, liveSegments } =
     useDeepgramTranscription()
 
@@ -78,11 +88,10 @@ export function useRecording({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
-      mediaStream.stopAllStreams()
-      mediaStream.closeAudioSession()
+      stopAllStreams()
+      closeAudioSession()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [stopAllStreams, closeAudioSession])
 
   // Warn before closing tab during active recording or upload
   useEffect(() => {
@@ -97,25 +106,22 @@ export function useRecording({
   }, [phase])
 
   const resetRecordingSurface = useCallback(() => {
-    mediaStream.stopAllStreams()
-    mediaStream.closeAudioSession()
+    stopAllStreams()
+    closeAudioSession()
 
     setPhase('setup')
     setIsPaused(false)
     setDuration(0)
     chunksRef.current = []
     mediaRecorderRef.current = null
-  }, [mediaStream])
+  }, [stopAllStreams, closeAudioSession])
 
   const handleStartRecording = useCallback(async () => {
     try {
       setIsPaused(false)
       setDuration(0)
 
-      const acquired = await mediaStream.acquireStream()
-      if (!acquired) return
-
-      const { finalStream } = acquired
+      const { finalStream } = await acquireStream()
 
       await startTranscription(finalStream)
 
@@ -141,13 +147,13 @@ export function useRecording({
       }, 1000)
       setPhase('recording')
     } catch (error: unknown) {
-      mediaStream.stopAllStreams()
+      stopAllStreams()
       mediaRecorderRef.current = null
-      mediaStream.closeAudioSession()
+      closeAudioSession()
 
       toast.error(error instanceof Error ? error.message : "We couldn't access your microphone. Please check your permissions.")
     }
-  }, [mediaStream, startTranscription])
+  }, [acquireStream, closeAudioSession, startTranscription, stopAllStreams])
 
   const togglePause = useCallback(() => {
     const recorder = mediaRecorderRef.current
@@ -155,16 +161,16 @@ export function useRecording({
 
     if (isPaused) {
       recorder.resume()
-      mediaStream.resumeAudioContext()
+      resumeAudioContext()
       timerRef.current = setInterval(() => setDuration((value) => value + 1), 1000)
     } else {
       recorder.pause()
-      mediaStream.suspendAudioContext()
+      suspendAudioContext()
       if (timerRef.current) clearInterval(timerRef.current)
     }
 
     setIsPaused((value) => !value)
-  }, [isPaused, mediaStream])
+  }, [isPaused, resumeAudioContext, suspendAudioContext])
 
   const handleStop = useCallback(async () => {
     setPhase('stopping')
@@ -260,26 +266,26 @@ export function useRecording({
       resetRecordingSurface()
     } finally {
       if (timerRef.current) clearInterval(timerRef.current)
-      mediaStream.stopAllStreams()
+      stopAllStreams()
       mediaRecorderRef.current = null
       chunksRef.current = []
-      mediaStream.closeAudioSession()
+      closeAudioSession()
       setIsPaused(false)
     }
-  }, [duration, meetingId, mediaStream, resetRecordingSurface, router, stopTranscription])
+  }, [closeAudioSession, duration, meetingId, resetRecordingSurface, router, stopAllStreams, stopTranscription])
 
   return {
     phase,
-    recordSystemAudio: mediaStream.recordSystemAudio,
-    hasSystemAudio: mediaStream.hasSystemAudio,
+    recordSystemAudio,
+    hasSystemAudio,
     isPaused,
     duration,
     savedSegments,
     savedTranscript,
-    analyserNode: mediaStream.analyserNode,
+    analyserNode,
     isConnected,
     liveSegments,
-    setRecordSystemAudio: mediaStream.setRecordSystemAudio,
+    setRecordSystemAudio,
     handleStartRecording,
     togglePause,
     handleStop,

@@ -2,10 +2,9 @@
 
 import { useState, useRef, useCallback } from 'react'
 
-export interface AcquiredStream {
+export interface AcquiredMediaStream {
   finalStream: MediaStream
   analyser: AnalyserNode
-  onDataAvailable: (handler: (event: BlobEvent) => void) => MediaRecorder
 }
 
 export interface UseMediaStreamReturn {
@@ -13,10 +12,7 @@ export interface UseMediaStreamReturn {
   hasSystemAudio: boolean
   setRecordSystemAudio: (value: boolean) => void
   analyserNode: AnalyserNode | null
-  acquireStream: () => Promise<{
-    finalStream: MediaStream
-    analyser: AnalyserNode
-  } | null>
+  acquireStream: () => Promise<AcquiredMediaStream>
   stopAllStreams: () => void
   closeAudioSession: () => void
   suspendAudioContext: () => void
@@ -69,10 +65,7 @@ export function useMediaStream(): UseMediaStreamReturn {
     void audioContextRef.current?.resume()
   }, [])
 
-  const acquireStream = useCallback(async (): Promise<{
-    finalStream: MediaStream
-    analyser: AnalyserNode
-  } | null> => {
+  const acquireStream = useCallback(async (): Promise<AcquiredMediaStream> => {
     setHasSystemAudio(false)
 
     const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
