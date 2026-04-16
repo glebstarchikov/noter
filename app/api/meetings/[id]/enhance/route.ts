@@ -52,17 +52,15 @@ export async function POST(
       proposedDocument: llmResult.proposedDocument,
     })
   } catch (error: unknown) {
-    const isEnhanceError = (e: unknown): e is EnhanceRouteError => e instanceof EnhanceRouteError
-
+    const isEnhanceError = error instanceof EnhanceRouteError
     // EnhanceRouteError already carries a user-friendly message; translate everything else
-    const userMessage = isEnhanceError(error)
-      ? error.message
-      : translateToUserError(error).userMessage
-    const developerMessage = isEnhanceError(error)
+    const translated = isEnhanceError ? null : translateToUserError(error)
+    const userMessage = isEnhanceError ? error.message : translated!.userMessage
+    const developerMessage = isEnhanceError
       ? (error.logReason ?? error.message)
-      : translateToUserError(error).developerMessage
-    const code = isEnhanceError(error) ? error.code : 'MODEL_FAILED'
-    const status = isEnhanceError(error) ? error.status : 500
+      : translated!.developerMessage
+    const code = isEnhanceError ? error.code : 'MODEL_FAILED'
+    const status = isEnhanceError ? error.status : 500
 
     Sentry.captureException(error, {
       tags: { route: 'meetings/enhance', action: 'generate' },
