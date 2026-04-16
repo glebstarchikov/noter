@@ -4,8 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
 import { isStringArray, isActionItemArray } from '@/lib/type-guards'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { z } from 'zod'
 import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
 import { buildChatModelMessages, getLastUserText } from '@/lib/chat/chat-message-utils'
@@ -13,14 +12,7 @@ import { tiptapToPlainText } from '@/lib/tiptap/tiptap-converter'
 import { searchWeb } from '@/lib/tavily'
 import { MAX_CHAT_TRANSCRIPT_CHARS } from '@/lib/truncation-limits'
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(10, '10 s'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(10, '10 s')
 
 export const maxDuration = 60
 
@@ -41,11 +33,9 @@ export async function POST(req: Request) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`chat_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const allowed = await checkRateLimit(ratelimit, `chat_${user.id}`, 'chat')
+    if (!allowed) {
+      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
     }
 
     const validated = await validateBody(req, chatRequestSchema)

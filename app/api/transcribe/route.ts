@@ -4,18 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
 import { transcribeAudioFromStorage } from '@/lib/transcription'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { z } from 'zod'
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(5, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(5, '1 m')
 
 export const maxDuration = 120
 
@@ -37,11 +29,9 @@ export async function POST(request: NextRequest) {
     }
     userId = user.id
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`transcribe_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const allowed = await checkRateLimit(ratelimit, `transcribe_${user.id}`, 'transcribe')
+    if (!allowed) {
+      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
     }
 
     const validated = await validateBody(request, transcribeRequestSchema)

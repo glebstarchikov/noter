@@ -2,20 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { z } from 'zod'
 
 export const maxDuration = 30
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(10, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(10, '1 m')
 
 const startProcessingSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(256).optional(),
@@ -43,11 +35,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`process_start_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const allowed = await checkRateLimit(ratelimit, `process_start_${user.id}`, 'meetings/process')
+    if (!allowed) {
+      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
     }
 
     if (!isQueueConfigured()) {

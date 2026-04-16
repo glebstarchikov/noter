@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import * as Sentry from '@sentry/nextjs'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
@@ -12,14 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export { DraftProposalValidationError } from '@/lib/notes/draft-proposal'
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(5, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(5, '1 m')
 
 const tiptapDocumentSchema = z.unknown().refine(
   (v) => v == null || isTiptapDocument(v),
@@ -106,11 +98,9 @@ export async function validateEnhanceRequest(
     return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
   }
 
-  if (ratelimit) {
-    const { success } = await ratelimit.limit(`enhance_${user.id}`)
-    if (!success) {
-      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-    }
+  const allowed = await checkRateLimit(ratelimit, `enhance_${user.id}`, 'meetings/enhance')
+  if (!allowed) {
+    return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
   }
 
   const { data: meeting } = await supabase
