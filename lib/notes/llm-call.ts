@@ -58,7 +58,7 @@ export async function callNoteLlm<T>(
         temperature,
         abortSignal,
         ...(providerOptions !== undefined ? { providerOptions } : {}),
-      } as Parameters<typeof generate>[0])
+      } as never)
       return {
         object: result.object as T,
         usage: { totalTokens: result.usage?.totalTokens ?? 0 },

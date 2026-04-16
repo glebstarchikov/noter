@@ -45,18 +45,21 @@ describe('callNoteLlm', () => {
     expect(calls).toBe(2)
   })
 
-  test('throws LlmCallError after exhausting attempts', async () => {
+  test('throws LlmCallError after exhausting attempts with cause propagated', async () => {
+    const originalError = new Error('Persistent failure')
     const generate = mock(async () => {
-      throw new Error('Persistent failure')
+      throw originalError
     })
-    await expect(
-      callNoteLlm({
-        model: 'gpt-5-mini',
-        prompt: 'system prompt',
-        schema: testSchema,
-        maxAttempts: 2,
-        _generateObject: generate as never,
-      })
-    ).rejects.toThrow(LlmCallError)
+    const err = await callNoteLlm({
+      model: 'gpt-5-mini',
+      prompt: 'system prompt',
+      schema: testSchema,
+      maxAttempts: 2,
+      _generateObject: generate as never,
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(LlmCallError)
+    expect(err.code).toBe('MODEL_FAILED')
+    expect(err.cause).toBe(originalError)
+    expect(err.message).toBe('Persistent failure')
   })
 })
