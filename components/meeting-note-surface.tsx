@@ -306,13 +306,9 @@ export function MeetingNoteSurface({
   const loadingLabel =
     draftState === 'saving'
       ? 'Saving changes…'
-      : draftState === 'streaming'
-        ? actionMode === 'generate'
-          ? 'Writing draft…'
-          : 'Applying draft…'
-        : actionMode === 'generate'
-          ? 'Creating draft…'
-          : 'Improving…'
+      : actionMode === 'generate'
+        ? 'Creating draft…'
+        : 'Improving…'
   const draftActionLabel =
     noteSurfaceView === 'error'
       ? 'Try again'

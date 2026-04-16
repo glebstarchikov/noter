@@ -9,9 +9,7 @@ import { hasTiptapContent, type TiptapDocument } from '@/lib/tiptap/tiptap-conve
 import type { EnhancementOutcome, EnhancementState, Meeting, MeetingStatus } from '@/lib/types'
 
 export type DraftMode = 'generate' | 'enhance'
-export type DraftUiState = 'idle' | 'generating' | 'streaming' | 'saving'
-
-const STREAMING_BLOCK_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 50
+export type DraftUiState = 'idle' | 'generating' | 'saving'
 
 function normalizeReviewState(state: EnhancementState | null | undefined): EnhancementState {
   return {
@@ -95,7 +93,6 @@ export function useDraftProposal(
 
   const meetingIdRef = useRef(meeting.id)
   const draftStateRef = useRef(draftState)
-  const streamingCancelledRef = useRef(false)
   const currentDocumentRef = useRef(currentDocument)
 
   useEffect(() => {
@@ -116,7 +113,6 @@ export function useDraftProposal(
     setReviewState(serverReviewState)
     setWasEverEnhanced(false)
     setRegenPromptDismissed(false)
-    streamingCancelledRef.current = true
   }, [meeting.id, serverReviewState])
 
   // Sync server review state when idle and no pending undo
@@ -143,7 +139,7 @@ export function useDraftProposal(
     setUndoDocument(null)
   }, [])
 
-  const streamProposedDocument = useCallback(
+  const applyProposedDocument = useCallback(
     async ({
       sourceHash,
       baseDocument,
@@ -162,24 +158,7 @@ export function useDraftProposal(
         return
       }
 
-      streamingCancelledRef.current = false
-      setDraftState('streaming')
-
-      const blocks = proposedDocument.content ?? []
-
-      if (blocks.length > 0) {
-        editor.commands.setContent({ type: 'doc', content: [blocks[0]] }, { emitUpdate: false })
-      }
-
-      for (let i = 1; i < blocks.length; i += 1) {
-        await new Promise<void>((resolve) => setTimeout(resolve, STREAMING_BLOCK_DELAY_MS))
-        if (streamingCancelledRef.current) return
-        editor.commands.setContent(
-          { type: 'doc', content: blocks.slice(0, i + 1) },
-          { emitUpdate: false }
-        )
-      }
-
+      editor.commands.setContent(proposedDocument, { emitUpdate: false })
       setDraftState('saving')
 
       try {
@@ -275,7 +254,7 @@ export function useDraftProposal(
         }
 
         setReviewState((current) => ({ ...current, lastError: null }))
-        void streamProposedDocument({
+        void applyProposedDocument({
           sourceHash: payload.sourceHash,
           baseDocument: currentDocumentRef.current,
           proposedDocument: payload.proposedDocument,
@@ -297,7 +276,7 @@ export function useDraftProposal(
         setDraftState('idle')
       }
     },
-    [shouldShowAction, actionMode, persistDocument, streamProposedDocument]
+    [shouldShowAction, actionMode, persistDocument, applyProposedDocument]
   )
 
   return {
