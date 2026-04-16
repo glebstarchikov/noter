@@ -62,7 +62,7 @@ Use the `@/` path alias for imports.
 - **API route validation**: use `validateBody(request, schema)` from `@/lib/api/validate` for all JSON POST/PATCH routes. Don't hand-roll `request.json().catch(...)` + `schema.safeParse()` — that boilerplate was extracted in Phase 1 Task 3.
 - **Error responses**: use `errorResponse(message, code, status)` from `@/lib/api/api-helpers`. Never `NextResponse.json({ error })` directly in route handlers.
 - **Logging**: in `app/api/**` and `lib/api/**`, no bare `console.error` / `console.warn` / `console.info`. Route errors through `Sentry.captureException(error, { tags, extra })`, events through `Sentry.addBreadcrumb(...)` or `Sentry.captureMessage(...)`. `console.log` is fine in dev-only paths (`if (process.env.NODE_ENV === 'development')`).
-- **RLS is mandatory**: every table must have row-level security policies. Never use service-role Supabase client in user-facing routes — only in `/api/processing/worker` (cron-gated) and similar internal routes.
+- **RLS is mandatory**: every table must have row-level security policies. Never use service-role Supabase client in user-facing routes — only in internal/admin routes (cron-gated or server-only). Note: the `/api/processing/worker` route was removed in Phase 1.5; `createAdminClient` is now unused.
 - **Rate limiting**: expensive routes (enhance, generate-notes, chat) use Upstash `Ratelimit.slidingWindow` — see `app/api/meetings/[id]/enhance/route.ts` for the canonical pattern.
 
 ## Testing
@@ -134,10 +134,12 @@ Copy `.env.example` to `.env.local`. Required keys:
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `OPENAI_API_KEY` (or `AI_GATEWAY_API_KEY`)
 
-Optional: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `DEEPGRAM_API_KEY`, `TAVILY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`.
+Optional: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` (both were used by the processing-worker pipeline, removed in Phase 1.5 — self-host deployments now use the same direct note-generation path as SaaS), `DEEPGRAM_API_KEY`, `TAVILY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`.
 
 ## Database
 
-SQL migrations live in `scripts/` and are numbered sequentially (001–008). Always add new migrations; never modify existing ones. All tables use Row-Level Security.
+SQL migrations live in `scripts/` and are numbered sequentially (001–009). Always add new migrations; never modify existing ones. All tables use Row-Level Security.
 
-Upcoming migration (Phase 2 of the redesign): `scripts/009_drop_note_templates.sql` will drop the `note_templates` table along with the templates feature cut.
+- `scripts/009_drop_processing_jobs.sql` — drops the `processing_jobs` table (Phase 1.5 Task 3, worker pipeline removal)
+
+Upcoming migration (Phase 2 of the redesign): `scripts/010_drop_note_templates.sql` will drop the `note_templates` table along with the templates feature cut.

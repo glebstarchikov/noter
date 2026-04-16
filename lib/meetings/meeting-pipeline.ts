@@ -75,38 +75,3 @@ export async function waitForMeetingCompletion(
     throw new Error('Processing timed out. Please open the meeting from dashboard and try again.')
 }
 
-/**
- * Run the legacy two-step pipeline (transcribe → generate notes) for self-hosted setups.
- */
-export async function runLegacyPipeline(
-    meetingId: string,
-    storagePath: string,
-    onProcessing: (state: ProcessingState) => void
-): Promise<void> {
-    onProcessing({ meetingId, step: 'transcribing' })
-
-    const transcribeRes = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId, storagePath }),
-    })
-
-    if (!transcribeRes.ok) {
-        const { message } = await readApiError(transcribeRes, 'Transcription failed')
-        throw new Error(message)
-    }
-
-    await transcribeRes.json()
-    onProcessing({ meetingId, step: 'generating' })
-
-    const notesRes = await fetch('/api/generate-notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId }),
-    })
-
-    if (!notesRes.ok) {
-        const { message } = await readApiError(notesRes, 'Notes generation failed')
-        throw new Error(message)
-    }
-}

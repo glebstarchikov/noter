@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/client'
 import {
   readApiError,
   waitForMeetingCompletion,
-  runLegacyPipeline,
   type ProcessingState,
 } from '@/lib/meetings/meeting-pipeline'
 
@@ -47,23 +46,32 @@ export async function uploadAndProcessMeeting({
 
   if (audioUrlError) throw new Error('Failed to save audio URL: ' + audioUrlError.message)
 
-  const processRes = await fetch(`/api/meetings/${meetingId}/process`, {
+  onProcessing({ meetingId, step: 'transcribing' })
+
+  const transcribeRes = await fetch('/api/transcribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ meetingId, storagePath }),
   })
 
-  if (!processRes.ok) {
-    const processError = await readApiError(processRes, 'Failed to queue processing')
-    if (processError.code === 'QUEUE_UNAVAILABLE') {
-      await runLegacyPipeline(meetingId, storagePath, onProcessing)
-      onProcessing({ meetingId, step: 'done' })
-      return
-    }
-    throw new Error(processError.message)
+  if (!transcribeRes.ok) {
+    const { message } = await readApiError(transcribeRes, 'Transcription failed')
+    throw new Error(message)
   }
 
-  onProcessing({ meetingId, step: 'transcribing' })
+  onProcessing({ meetingId, step: 'generating' })
+
+  const notesRes = await fetch('/api/generate-notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ meetingId }),
+  })
+
+  if (!notesRes.ok) {
+    const { message } = await readApiError(notesRes, 'Notes generation failed')
+    throw new Error(message)
+  }
+
   await waitForMeetingCompletion(meetingId, onProcessing)
   onProcessing({ meetingId, step: 'done' })
 }
