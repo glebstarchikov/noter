@@ -72,7 +72,7 @@ export function AudioUploader({ onProcessing, templateId }: Props) {
         .insert({
           user_id: user.id,
           title: file.name.replace(/\.[^/.]+$/, ''),
-          status: 'uploading',
+          status: 'generating',
           ...(templateId ? { template_id: templateId } : {}),
         })
         .select('id')

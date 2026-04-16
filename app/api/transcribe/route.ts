@@ -53,13 +53,6 @@ export async function POST(request: NextRequest) {
       return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
 
-    // Update status to transcribing
-    await supabase
-      .from('meetings')
-      .update({ status: 'transcribing' })
-      .eq('id', meetingId)
-      .eq('user_id', user.id)
-
     const transcription = await transcribeAudioFromStorage(supabase, storagePath)
 
     // Save transcript

@@ -52,7 +52,7 @@ export async function waitForMeetingCompletion(
 
         if (
             status &&
-            ['recording', 'uploading', 'transcribing', 'generating', 'done', 'error'].includes(status)
+            ['recording', 'generating', 'done', 'error'].includes(status)
         ) {
             onProcessing({
                 meetingId,

@@ -43,8 +43,6 @@ function statusMeta(status: MeetingStatus): StatusMeta {
       return { label: 'Needs attention', tone: 'error' }
     case 'recording':
       return { label: 'Recording', tone: 'active' }
-    case 'uploading':
-    case 'transcribing':
     case 'generating':
       return { label: 'In progress', tone: 'active' }
     default:
@@ -85,7 +83,7 @@ const STATUS_OPTIONS: { value: MeetingStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All notes' },
   { value: 'done', label: 'Ready' },
   { value: 'recording', label: 'Recording' },
-  { value: 'transcribing', label: 'In progress' },
+  { value: 'generating', label: 'In progress' },
   { value: 'error', label: 'Needs attention' },
 ]
 
@@ -100,10 +98,6 @@ const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
 
 function matchesStatusFilter(status: MeetingStatus, filter: MeetingStatus | 'all') {
   if (filter === 'all') return true
-  if (filter === 'transcribing') {
-    return status === 'uploading' || status === 'transcribing' || status === 'generating'
-  }
-
   return status === filter
 }
 

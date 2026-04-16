@@ -59,8 +59,6 @@ export interface ActionItem {
 
 export type MeetingStatus =
   | 'recording'
-  | 'uploading'
-  | 'transcribing'
   | 'generating'
   | 'done'
   | 'error'

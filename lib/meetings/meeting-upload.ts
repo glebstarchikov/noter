@@ -30,7 +30,7 @@ export async function uploadAndProcessMeeting({
 }: UploadAndProcessOptions): Promise<void> {
   const supabase = createClient()
 
-  onProcessing({ meetingId, step: 'uploading' })
+  onProcessing({ meetingId, step: 'generating' })
 
   const storagePath = `${userId}/${meetingId}.${extension}`
   const { error: uploadError } = await supabase.storage
@@ -45,8 +45,6 @@ export async function uploadAndProcessMeeting({
     .eq('id', meetingId)
 
   if (audioUrlError) throw new Error('Failed to save audio URL: ' + audioUrlError.message)
-
-  onProcessing({ meetingId, step: 'transcribing' })
 
   const transcribeRes = await fetch('/api/transcribe', {
     method: 'POST',

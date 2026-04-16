@@ -18,8 +18,6 @@ export function shouldUseProcessingView(
 
 function isProcessingStatus(status: MeetingStatus): boolean {
   return (
-    status === 'uploading' ||
-    status === 'transcribing' ||
     status === 'generating' ||
     status === 'error'
   )

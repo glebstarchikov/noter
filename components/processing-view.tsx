@@ -32,18 +32,6 @@ type StepState = 'done' | 'active' | 'pending'
 
 function buildDisplaySteps(currentStep: MeetingStatus) {
   switch (currentStep) {
-    case 'uploading':
-      return [
-        { label: 'Uploading audio…', state: 'active' as const },
-        { label: 'Preparing transcript', state: 'pending' as const },
-        { label: 'Writing notes', state: 'pending' as const },
-      ]
-    case 'transcribing':
-      return [
-        { label: 'Audio ready', state: 'done' as const },
-        { label: 'Preparing transcript…', state: 'active' as const },
-        { label: 'Writing notes', state: 'pending' as const },
-      ]
     case 'generating':
       return [
         { label: 'Audio ready', state: 'done' as const },
@@ -250,8 +238,6 @@ export function ProcessingView({ meetingId, step, error }: Props) {
         )}
 
         {(currentStep === 'recording' ||
-          currentStep === 'uploading' ||
-          currentStep === 'transcribing' ||
           currentStep === 'generating') &&
           meetingId && (
           <div className="flex">

@@ -113,7 +113,7 @@ describe('GET /api/meetings/[id]', () => {
   it('returns meeting status when found', async () => {
     mockSupabase({ id: 'user-1' }, {
       id: 'meeting-1',
-      status: 'transcribing',
+      status: 'generating',
       error_message: null,
       updated_at: '2026-03-03T00:00:00.000Z',
     })
@@ -126,7 +126,7 @@ describe('GET /api/meetings/[id]', () => {
     expect(await response.json()).toEqual({
       meeting: {
         id: 'meeting-1',
-        status: 'transcribing',
+        status: 'generating',
         error_message: null,
         updated_at: '2026-03-03T00:00:00.000Z',
       },
