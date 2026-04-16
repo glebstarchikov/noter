@@ -1,6 +1,7 @@
-import { generateObject, NoObjectGeneratedError } from 'ai'
+import { NoObjectGeneratedError } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { ENHANCEMENT_MODEL } from '@/lib/ai-models'
+import { callNoteLlm, LlmCallError } from '@/lib/notes/llm-call'
 import {
   assertSupportedEnhancementSourceDocument,
   compileDraftProposalToTiptap,
@@ -76,6 +77,26 @@ function isRetryableDraftError(error: unknown) {
   )
 }
 
+const PROPOSAL_PROVIDER_OPTIONS = {
+  openai: { strictJsonSchema: true },
+}
+
+async function attemptProposalGeneration(prompt: string) {
+  const { object } = await callNoteLlm({
+    model: openai(ENHANCEMENT_MODEL),
+    schema: draftProposalSchema,
+    temperature: 0.2,
+    // 5 s headroom under the 60 s maxDuration set in app/api/meetings/[id]/enhance/route.ts
+    abortSignal: AbortSignal.timeout(55_000),
+    providerOptions: PROPOSAL_PROVIDER_OPTIONS,
+    maxAttempts: 1,
+    prompt,
+  })
+  const proposal = validateDraftProposal(object)
+  const proposedDocument = compileDraftProposalToTiptap(proposal)
+  return { proposal, proposedDocument }
+}
+
 async function generateProposalDocument({
   mode,
   template,
@@ -89,75 +110,63 @@ async function generateProposalDocument({
   structuredContext: string
   transcript: string
 }) {
-  let firstPassFailureReason: string | null = null
+  const firstPrompt = buildDraftProposalPrompt({
+    mode,
+    template,
+    currentDocumentText,
+    structuredContext,
+    transcript,
+    repairFeedback: null,
+  })
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const { object } = await generateObject({
-        model: openai(ENHANCEMENT_MODEL),
-        schema: draftProposalSchema,
-        temperature: 0.2,
-        // 5 s headroom under the 60 s maxDuration set in app/api/meetings/[id]/enhance/route.ts
-        abortSignal: AbortSignal.timeout(55_000),
-        providerOptions: {
-          openai: {
-            strictJsonSchema: true,
-          },
-        },
-        prompt: buildDraftProposalPrompt({
-          mode,
-          template,
-          currentDocumentText,
-          structuredContext,
-          transcript,
-          repairFeedback: attempt === 2 ? firstPassFailureReason : null,
-        }),
-      })
+  // First attempt
+  try {
+    const result = await attemptProposalGeneration(firstPrompt)
+    return { ...result, retryUsed: false, firstPassFailureReason: null }
+  } catch (firstError: unknown) {
+    const firstFailureReason = getErrorMessage(firstError)
+    const isRetryable = isRetryableDraftError(firstError) ||
+      (firstError instanceof LlmCallError && firstError.code === 'MODEL_FAILED' &&
+        isRetryableDraftError(firstError.cause))
 
-      const proposal = validateDraftProposal(object)
-      const proposedDocument = compileDraftProposalToTiptap(proposal)
-
-      return {
-        proposal,
-        proposedDocument,
-        retryUsed: attempt === 2,
-        firstPassFailureReason,
-      }
-    } catch (error: unknown) {
-      const failureReason = getErrorMessage(error)
-
-      if (attempt === 1 && isRetryableDraftError(error)) {
-        firstPassFailureReason = failureReason
-        continue
-      }
-
-      if (isRetryableDraftError(error)) {
-        throw new EnhanceRouteError(
-          ENHANCEMENT_INVALID_PROPOSAL_MESSAGE,
-          'INVALID_PROPOSAL',
-          502,
-          failureReason,
-          true
-        )
-      }
-
+    if (!isRetryable) {
       throw new EnhanceRouteError(
         ENHANCEMENT_MODEL_FAILED_MESSAGE,
         'MODEL_FAILED',
         502,
-        failureReason,
+        firstFailureReason,
         false
       )
     }
-  }
 
-  throw new EnhanceRouteError(
-    ENHANCEMENT_MODEL_FAILED_MESSAGE,
-    'MODEL_FAILED',
-    502,
-    'Draft generation exhausted unexpectedly',
-    true
-  )
+    // Second attempt with repair feedback injected into the prompt
+    const repairPrompt = buildDraftProposalPrompt({
+      mode,
+      template,
+      currentDocumentText,
+      structuredContext,
+      transcript,
+      repairFeedback: firstFailureReason,
+    })
+
+    try {
+      const result = await attemptProposalGeneration(repairPrompt)
+      return { ...result, retryUsed: true, firstPassFailureReason: firstFailureReason }
+    } catch (secondError: unknown) {
+      const secondFailureReason = getErrorMessage(secondError)
+      const isSecondRetryable = isRetryableDraftError(secondError) ||
+        (secondError instanceof LlmCallError && secondError.code === 'MODEL_FAILED' &&
+          isRetryableDraftError(secondError.cause))
+
+      throw new EnhanceRouteError(
+        isSecondRetryable ? ENHANCEMENT_INVALID_PROPOSAL_MESSAGE : ENHANCEMENT_MODEL_FAILED_MESSAGE,
+        isSecondRetryable ? 'INVALID_PROPOSAL' : 'MODEL_FAILED',
+        502,
+        secondFailureReason,
+        true
+      )
+    }
+  }
 }
 
 export async function runEnhanceLlm(
