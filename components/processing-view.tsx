@@ -30,31 +30,33 @@ interface Props {
 
 type StepState = 'done' | 'active' | 'pending'
 
-function buildDisplaySteps(currentStep: MeetingStatus) {
+function buildDisplaySteps(currentStep: MeetingStatus): Array<{ label: string; state: StepState }> {
   switch (currentStep) {
+    case 'recording':
+      return [
+        { label: 'Recording in progress…', state: 'active' },
+        { label: 'Preparing transcript', state: 'pending' },
+        { label: 'Writing notes', state: 'pending' },
+      ]
     case 'generating':
       return [
-        { label: 'Audio ready', state: 'done' as const },
-        { label: 'Transcript ready', state: 'done' as const },
-        { label: 'Writing notes…', state: 'active' as const },
+        { label: 'Audio ready', state: 'done' },
+        { label: 'Transcript ready', state: 'done' },
+        { label: 'Writing notes…', state: 'active' },
       ]
     case 'done':
       return [
-        { label: 'Audio ready', state: 'done' as const },
-        { label: 'Transcript ready', state: 'done' as const },
-        { label: 'Notes complete', state: 'done' as const },
+        { label: 'Audio ready', state: 'done' },
+        { label: 'Transcript ready', state: 'done' },
+        { label: 'Notes complete', state: 'done' },
       ]
-    case 'recording':
+    case 'error':
+      // Error banner renders above the steps; show progress frozen at the
+      // 'generating' step (last active phase) with the final step unresolved.
       return [
-        { label: 'Recording in progress…', state: 'active' as const },
-        { label: 'Preparing transcript', state: 'pending' as const },
-        { label: 'Writing notes', state: 'pending' as const },
-      ]
-    default:
-      return [
-        { label: 'Audio ready', state: 'done' as const },
-        { label: 'Preparing transcript', state: 'pending' as const },
-        { label: 'Writing notes', state: 'pending' as const },
+        { label: 'Audio ready', state: 'done' },
+        { label: 'Transcript ready', state: 'done' },
+        { label: 'Writing notes', state: 'pending' },
       ]
   }
 }
