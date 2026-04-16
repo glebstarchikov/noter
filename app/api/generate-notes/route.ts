@@ -6,6 +6,7 @@ import { validateBody } from '@/lib/api/validate'
 import { generateNotesFromTranscript } from '@/lib/notes/notes-generation'
 import { generatedNotesToTiptap } from '@/lib/tiptap/tiptap-converter'
 import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
+import { translateToUserError } from '@/lib/notes/error-messages'
 import { z } from 'zod'
 import type { DiarizedSegment } from '@/lib/types'
 
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ notes: normalizedNotes, meetingId })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Notes generation failed'
+    const translated = translateToUserError(error)
 
     // Set meeting status to error so it doesn't stay stuck
     if (meetingId && userId) {
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
           .from('meetings')
           .update({
             status: 'error',
-            error_message: message,
+            error_message: translated.userMessage,
             updated_at: new Date().toISOString(),
           })
           .eq('id', meetingId)
@@ -111,6 +112,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return errorResponse(message, 'NOTES_GENERATION_FAILED', 500)
+    Sentry.captureException(error, {
+      tags: { route: 'generate-notes' },
+      extra: { developerMessage: translated.developerMessage },
+    })
+    return errorResponse(translated.userMessage, 'NOTES_GENERATION_FAILED', 500)
   }
 }

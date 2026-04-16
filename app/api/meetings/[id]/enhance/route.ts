@@ -8,6 +8,7 @@ import {
   persistEnhancementError,
 } from '@/lib/notes/enhance-persist'
 import { errorResponse } from '@/lib/api/api-helpers'
+import { translateToUserError } from '@/lib/notes/error-messages'
 
 export const maxDuration = 60
 
@@ -28,10 +29,13 @@ export async function POST(
     try {
       return await persistCompleteResult(validated)
     } catch (error: unknown) {
-      Sentry.captureException(error, { tags: { route: 'meetings/enhance', action: 'complete' } })
-      const message = error instanceof Error ? error.message : 'Enhancement failed'
-      await persistEnhancementError(validated, message)
-      return errorResponse(message, 'ENHANCEMENT_FAILED', 500)
+      const translated = translateToUserError(error)
+      Sentry.captureException(error, {
+        tags: { route: 'meetings/enhance', action: 'complete' },
+        extra: { developerMessage: translated.developerMessage },
+      })
+      await persistEnhancementError(validated, translated.userMessage)
+      return errorResponse(translated.userMessage, 'ENHANCEMENT_FAILED', 500)
     }
   }
 
@@ -50,12 +54,21 @@ export async function POST(
   } catch (error: unknown) {
     const isEnhanceError = (e: unknown): e is EnhanceRouteError => e instanceof EnhanceRouteError
 
-    const message = error instanceof Error ? error.message : 'Enhancement failed'
+    // EnhanceRouteError already carries a user-friendly message; translate everything else
+    const userMessage = isEnhanceError(error)
+      ? error.message
+      : translateToUserError(error).userMessage
+    const developerMessage = isEnhanceError(error)
+      ? (error.logReason ?? error.message)
+      : translateToUserError(error).developerMessage
     const code = isEnhanceError(error) ? error.code : 'MODEL_FAILED'
     const status = isEnhanceError(error) ? error.status : 500
 
-    Sentry.captureException(error, { tags: { route: 'meetings/enhance', action: 'generate' } })
-    await persistEnhancementError(validated, message)
-    return errorResponse(message, code, status)
+    Sentry.captureException(error, {
+      tags: { route: 'meetings/enhance', action: 'generate' },
+      extra: { developerMessage },
+    })
+    await persistEnhancementError(validated, userMessage)
+    return errorResponse(userMessage, code, status)
   }
 }

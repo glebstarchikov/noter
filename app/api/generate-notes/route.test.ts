@@ -282,12 +282,12 @@ describe('POST /api/generate-notes', () => {
     const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
     expect(res.status).toBe(500)
     expect(await res.json()).toMatchObject({
-      error: 'OpenAI unavailable',
+      error: 'Something went wrong. Please try again.',
       code: 'NOTES_GENERATION_FAILED',
     })
 
     const errorUpdate = updateCalls[1] as { status: string; error_message: string }
     expect(errorUpdate.status).toBe('error')
-    expect(errorUpdate.error_message).toBe('OpenAI unavailable')
+    expect(errorUpdate.error_message).toBe('Something went wrong. Please try again.')
   })
 })

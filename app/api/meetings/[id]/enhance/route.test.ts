@@ -703,13 +703,13 @@ describe('POST /api/meetings/[id]/enhance', () => {
 
     expect(response.status).toBe(500)
     expect(await response.json()).toMatchObject({
-      error: 'DB unavailable',
+      error: 'Something went wrong. Please try again.',
       code: 'ENHANCEMENT_FAILED',
     })
     expect((updateCalls[1] as Record<string, unknown>).enhancement_status).toBe('error')
     expect(
       ((updateCalls[1] as Record<string, unknown>).enhancement_state as Record<string, unknown>)
         .lastError
-    ).toBe('DB unavailable')
+    ).toBe('Something went wrong. Please try again.')
   })
 })
