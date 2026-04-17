@@ -6,7 +6,7 @@ export function LandingHero() {
       {/* Left — text */}
       <div>
         <div className="mb-4 flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-accent" />
+          <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
           <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-accent">
             Open source · Self-hostable
           </span>
@@ -32,7 +32,7 @@ export function LandingHero() {
           </Link>
           <Link
             href="/docs/self-host"
-            className="rounded-full border border-border px-5 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-card"
+            className="rounded-full px-5 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-card"
           >
             Self-host →
           </Link>
@@ -40,7 +40,7 @@ export function LandingHero() {
       </div>
 
       {/* Right — screenshot placeholder */}
-      <div className="h-80 rounded-[16px] border border-border bg-card" />
+      <div className="h-80 rounded-xl border border-border bg-card" />
     </section>
   )
 }
