@@ -45,6 +45,7 @@ import { toast } from 'sonner'
 import { deleteMeeting, toggleMeetingPin, copyMeetingNotes } from '@/lib/meetings/meeting-actions'
 import { useRecording } from '@/hooks/use-recording'
 import { MeetingNoteSurface } from '@/components/meeting-note-surface'
+import { AudioUploader } from '@/components/audio-uploader'
 import {
   buildAssistantTranscriptSegments,
   MeetingAssistantBridge,
@@ -84,6 +85,7 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
   const [isPinned, setIsPinned] = useState(meeting.is_pinned)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showUploader, setShowUploader] = useState(false)
 
   useEffect(() => {
     setIsPinned(meeting.is_pinned)
@@ -325,39 +327,59 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
         )}
 
         {(phase === 'done' || !showRecordingControls) && !hasTranscript && (
-          <StatusPanel
-            title="No recording yet"
-            description="Record a meeting or upload an audio file to get started."
-            actions={
-              <div className="flex flex-wrap items-center gap-3">
-                {meeting.status === 'recording' ? null : (
-                  <>
-                    <Button
-                      size="lg"
-                      className="rounded-full gap-2"
-                      onClick={() => {
-                        // Navigate to a fresh recording session for this meeting
-                        // by reloading with recording status
-                        toast.info('Start a new note with recording from the dashboard.')
-                      }}
-                    >
-                      <Mic className="size-4" />
-                      Record
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="lg"
-                      className="rounded-full gap-2"
-                      onClick={() => toast('Upload audio coming soon')}
-                    >
-                      <Upload className="size-4" />
-                      Upload audio
-                    </Button>
-                  </>
-                )}
-              </div>
-            }
-          />
+          showUploader ? (
+            <div className="space-y-4">
+              <Button
+                variant="ghost"
+                onClick={() => setShowUploader(false)}
+                className="px-0 text-sm text-muted-foreground hover:text-foreground"
+              >
+                Back
+              </Button>
+              <AudioUploader
+                meetingId={meeting.id}
+                userId={meeting.user_id}
+                onComplete={() => {
+                  setShowUploader(false)
+                  router.refresh()
+                }}
+              />
+            </div>
+          ) : (
+            <StatusPanel
+              title="No recording yet"
+              description="Record a meeting or upload an audio file to get started."
+              actions={
+                <div className="flex flex-wrap items-center gap-3">
+                  {meeting.status === 'recording' ? null : (
+                    <>
+                      <Button
+                        size="lg"
+                        className="rounded-full gap-2"
+                        onClick={() => {
+                          // Navigate to a fresh recording session for this meeting
+                          // by reloading with recording status
+                          toast.info('Start a new note with recording from the dashboard.')
+                        }}
+                      >
+                        <Mic className="size-4" />
+                        Record
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="lg"
+                        className="rounded-full gap-2"
+                        onClick={() => setShowUploader(true)}
+                      >
+                        <Upload className="size-4" />
+                        Upload audio
+                      </Button>
+                    </>
+                  )}
+                </div>
+              }
+            />
+          )
         )}
 
         {/* Zone 3 — Editor (always visible) */}

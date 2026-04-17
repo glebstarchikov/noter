@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { Upload, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
@@ -11,8 +10,13 @@ import { uploadAndTranscribeMeeting } from '@/lib/meetings/meeting-upload'
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
 
-export function AudioUploader() {
-  const router = useRouter()
+interface AudioUploaderProps {
+  meetingId: string
+  userId: string
+  onComplete: () => void
+}
+
+export function AudioUploader({ meetingId, userId, onComplete }: AudioUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -52,30 +56,22 @@ export function AudioUploader() {
 
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
 
-      const { data: meeting, error: insertError } = await supabase
+      // Set the meeting title to the filename (without extension)
+      await supabase
         .from('meetings')
-        .insert({
-          user_id: user.id,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          status: 'generating',
-        })
-        .select('id')
-        .single()
-
-      if (insertError || !meeting) throw new Error('Failed to create meeting')
+        .update({ title: file.name.replace(/\.[^/.]+$/, '') })
+        .eq('id', meetingId)
 
       const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
       await uploadAndTranscribeMeeting({
-        meetingId: meeting.id,
-        userId: user.id,
+        meetingId,
+        userId,
         blob: file,
         extension,
         contentType: file.type || 'audio/webm',
       })
-      router.push(`/dashboard/${meeting.id}`)
+      onComplete()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       toast.error(message)
@@ -170,7 +166,7 @@ export function AudioUploader() {
               Processing…
             </>
           ) : (
-            'Generate notes'
+            'Upload & transcribe'
           )}
         </Button>
       )}
