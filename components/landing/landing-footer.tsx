@@ -22,12 +22,9 @@ export function LandingFooter() {
           >
             GitHub
           </a>
-          <a
-            href="#"
-            className="text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-          >
+          <span className="text-[12px] text-muted-foreground">
             Made for AI Society
-          </a>
+          </span>
         </div>
       </div>
     </footer>
