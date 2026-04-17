@@ -68,7 +68,7 @@ export function DraftActionBar({
 
   const showHeaderDraftAction =
     (shouldShowAction || draftState !== 'idle') &&
-    (hasDocumentContent || Boolean(documentConflict))
+    (hasDocumentContent || Boolean(documentConflict) || canReview)
 
   const showHeaderActions =
     showHeaderDraftAction ||

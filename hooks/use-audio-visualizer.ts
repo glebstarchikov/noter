@@ -21,8 +21,9 @@ function getBucketRange(index: number, barCount: number, sampleCount: number) {
 export function reduceFrequencyToBars(
   data: Uint8Array,
   barCount: number,
+  maxBins?: number,
 ): number[] {
-  const sampleCount = data.length
+  const sampleCount = maxBins ? Math.min(maxBins, data.length) : data.length
   const bars: number[] = []
 
   for (let i = 0; i < barCount; i += 1) {
@@ -61,6 +62,7 @@ export function smoothBarHeights(
 export function useAudioVisualizer(
   analyserNode: AnalyserNode | null | undefined,
   barCount = 4,
+  maxBinRatio = 1.0,
 ): number[] {
   const [barHeights, setBarHeights] = useState<number[]>(() =>
     Array.from({ length: barCount }, () => 0),
@@ -89,7 +91,10 @@ export function useAudioVisualizer(
 
       if (now - lastFrameTimeRef.current >= FRAME_INTERVAL_MS) {
         analyserNode.getByteFrequencyData(dataRef.current)
-        const rawBars = reduceFrequencyToBars(dataRef.current, barCount)
+        const maxBins = maxBinRatio < 1.0
+          ? Math.floor(dataRef.current.length * maxBinRatio)
+          : undefined
+        const rawBars = reduceFrequencyToBars(dataRef.current, barCount, maxBins)
         const nextBars = smoothBarHeights(smoothedBarsRef.current, rawBars)
 
         smoothedBarsRef.current = nextBars
@@ -105,7 +110,7 @@ export function useAudioVisualizer(
     return () => {
       cancelAnimationFrame(rafRef.current)
     }
-  }, [analyserNode, barCount])
+  }, [analyserNode, barCount, maxBinRatio])
 
   return barHeights
 }

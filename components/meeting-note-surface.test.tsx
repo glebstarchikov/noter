@@ -114,9 +114,9 @@ describe('MeetingNoteSurface', () => {
 
     const { rerender } = render(<MeetingNoteSurface meeting={emptyMeeting} />)
 
-    // Empty docs no longer show a generate button (auto-generation UI was removed)
+    // Empty meeting with a transcript shows "Create first draft"; no auto-gen or improve button
     expect(screen.queryByRole('button', { name: /generate notes with ai/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /create first draft/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /create first draft/i })).not.toBeNull()
     expect(screen.queryByRole('button', { name: /improve with ai/i })).toBeNull()
 
     rerender(<MeetingNoteSurface meeting={populatedMeeting} />)

@@ -181,7 +181,7 @@ export function ChatShell({
                 ref={dockButtonRef}
                 type="button"
                 onClick={() => setMode("chat")}
-                className="flex h-full w-full items-center justify-between gap-4 rounded-full bg-card border border-border/60 px-5 text-left transition-[background-color,border-color,transform] hover:bg-card/80 hover:border-border shadow-sm"
+                className="flex h-full w-full items-center justify-between gap-4 rounded-full px-5 text-left transition-[background-color] hover:bg-secondary"
                 aria-expanded="false"
                 aria-label="Open chat"
               >
