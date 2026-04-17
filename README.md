@@ -17,7 +17,7 @@ Record, transcribe, and generate structured meeting notes with AI. Self-host on 
 
 - **Frontend** — Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Tiptap 3
 - **Backend** — Supabase (Postgres + Auth + RLS), Vercel serverless functions
-- **AI** — OpenAI / Anthropic Claude via Vercel AI SDK
+- **AI** — OpenAI via Vercel AI SDK (AI Gateway supported)
 - **Transcription** — Deepgram real-time WebSocket
 
 ## Self-host quickstart
