@@ -3,46 +3,48 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* noter: monochrome theme with warm rose accent */
+/* noter: Workspace design language — sage accent, warm tinted surfaces */
 :root {
-    --background: oklch(0.985 0.004 85);
-    --foreground: oklch(0.18 0.01 80);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.18 0.01 80);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.18 0.01 80);
-    --primary: oklch(0.18 0.01 80);
-    --primary-foreground: oklch(0.98 0 0);
-    --secondary: oklch(0.958 0.004 85);
-    --secondary-foreground: oklch(0.2 0.01 80);
-    --muted: oklch(0.95 0.004 85);
-    --muted-foreground: oklch(0.49 0.01 80);
-    --accent: oklch(0.68 0.07 28);
-    --accent-foreground: oklch(0.98 0 0);
-    --destructive: oklch(0.55 0.22 27);
-    --destructive-foreground: oklch(0.98 0 0);
-    --border: oklch(0.9 0.004 85);
-    --input: oklch(0.9 0.004 85);
-    --ring: oklch(0.68 0.07 28);
+    --background: oklch(0.97 0.004 85);
+    --foreground: oklch(0.18 0.004 85);
+    --card: oklch(0.94 0.007 85);
+    --card-foreground: oklch(0.18 0.004 85);
+    --popover: oklch(0.97 0.004 85);
+    --popover-foreground: oklch(0.18 0.004 85);
+    --primary: oklch(0.18 0.004 85);
+    --primary-foreground: oklch(0.97 0.004 85);
+    --secondary: oklch(0.94 0.007 85);
+    --secondary-foreground: oklch(0.18 0.004 85);
+    --muted: oklch(0.91 0.006 85);
+    --muted-foreground: oklch(0.49 0.006 85);
+    --accent: oklch(0.61 0.10 145);
+    --accent-foreground: oklch(0.97 0.004 85);
+    --accent-soft: oklch(0.61 0.10 145 / 0.14);
+    --accent-ring: oklch(0.61 0.10 145 / 0.18);
+    --destructive: oklch(0.59 0.15 40);
+    --destructive-foreground: oklch(0.97 0.004 85);
+    --border: oklch(0.91 0.005 85);
+    --input: oklch(0.91 0.005 85);
+    --ring: oklch(0.61 0.10 145);
     --chart-1: oklch(0.68 0.07 28);
     --chart-2: oklch(0.55 0 0);
     --chart-3: oklch(0.45 0 0);
     --chart-4: oklch(0.7 0.04 60);
     --chart-5: oklch(0.6 0.05 200);
-    --radius: 0.75rem;
-    --sidebar: oklch(0.972 0.004 85);
-    --sidebar-foreground: oklch(0.18 0.01 80);
-    --sidebar-primary: oklch(0.18 0.01 80);
-    --sidebar-primary-foreground: oklch(0.98 0 0);
-    --sidebar-accent: oklch(0.94 0.004 85);
-    --sidebar-accent-foreground: oklch(0.18 0.01 80);
-    --sidebar-border: oklch(0.9 0.004 85);
-    --sidebar-ring: oklch(0.68 0.07 28);
-    --assistant-glass: oklch(1 0 0 / 0.72);
-    --assistant-glass-strong: oklch(1 0 0 / 0.82);
-    --assistant-glass-soft: oklch(0.97 0.004 85 / 0.58);
-    --assistant-glass-border: oklch(0.84 0.01 85 / 0.6);
-    --assistant-glass-shadow: 0 32px 70px -40px oklch(0.18 0.01 80 / 0.32);
+    --radius: 0.875rem;
+    --sidebar: oklch(0.94 0.007 85);
+    --sidebar-foreground: oklch(0.18 0.004 85);
+    --sidebar-primary: oklch(0.18 0.004 85);
+    --sidebar-primary-foreground: oklch(0.97 0.004 85);
+    --sidebar-accent: oklch(0.91 0.006 85);
+    --sidebar-accent-foreground: oklch(0.18 0.004 85);
+    --sidebar-border: oklch(0.91 0.005 85);
+    --sidebar-ring: oklch(0.61 0.10 145);
+    --assistant-glass: oklch(0.97 0.004 85 / 0.72);
+    --assistant-glass-strong: oklch(0.97 0.004 85 / 0.82);
+    --assistant-glass-soft: oklch(0.94 0.007 85 / 0.58);
+    --assistant-glass-border: oklch(0.84 0.006 85 / 0.6);
+    --assistant-glass-shadow: 0 32px 70px -40px oklch(0.18 0.004 85 / 0.32);
     --assistant-glass-inset: inset 0 1px 0 oklch(1 0 0 / 0.72);
     --recording: oklch(0.66 0.11 24);
     --recording-soft: oklch(0.74 0.07 24 / 0.42);
@@ -109,8 +111,7 @@
 
 @theme inline {
     --font-sans:
-        "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial,
-        sans-serif;
+        "Inter", system-ui, sans-serif;
     --font-mono:
         "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
         monospace;
@@ -128,6 +129,8 @@
     --color-muted-foreground: var(--muted-foreground);
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
+    --color-accent-soft: var(--accent-soft);
+    --color-accent-ring: var(--accent-ring);
     --color-destructive: var(--destructive);
     --color-destructive-foreground: var(--destructive-foreground);
     --color-border: var(--border);
@@ -159,6 +162,27 @@
 
     body {
         @apply bg-background text-foreground;
+        font-family: 'Inter', system-ui, sans-serif;
+    }
+}
+
+@layer utilities {
+    /* Tabular numerals on timestamps / durations / counts */
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+
+    /* Uppercase meta labels — section headings, status rows */
+    .meta-label {
+        font-size: 11px;
+        line-height: 1;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 500;
+        color: var(--muted-foreground);
+    }
+
+    /* Left-stripe note block — AI-generated content marker */
+    .note-block-ai {
+        box-shadow: inset 3px 0 0 var(--accent);
     }
 }
 
