@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:tes
 
 const mockBuildChatModelMessages = mock(() => Promise.resolve([]))
 const mockSearchWeb = mock(() => Promise.resolve(''))
-const mockGateway = mock((model: string) => model)
+const mockOpenai = mock((model: string) => model)
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
@@ -10,7 +10,10 @@ mock.module('@/lib/supabase/server', () => ({
 
 mock.module('ai', () => ({
   streamText: mock(() => {}),
-  gateway: mockGateway,
+}))
+
+mock.module('@ai-sdk/openai', () => ({
+  openai: mockOpenai,
 }))
 
 mock.module('@/lib/chat/chat-message-utils', () => ({
@@ -125,7 +128,7 @@ describe('POST /api/chat/global', () => {
     })
   })
 
-  it('routes model selection through gateway without querying meeting_sources', async () => {
+  it('uses fixed model without querying meeting_sources', async () => {
     const meetings = [
       {
         id: 'm-1',
@@ -148,7 +151,6 @@ describe('POST /api/chat/global', () => {
 
     const response = await POST(makeRequest({
       messages: [],
-      model: 'gpt-5.4',
       searchEnabled: false,
     }))
 
@@ -156,7 +158,7 @@ describe('POST /api/chat/global', () => {
     expect(eqMock).toHaveBeenCalledWith('user_id', 'user-1')
     expect(from).toHaveBeenCalledTimes(1)
     expect(from).toHaveBeenCalledWith('meetings')
-    expect(mockGateway).toHaveBeenCalledWith('openai/gpt-5.4')
+    expect(mockOpenai).toHaveBeenCalledWith('gpt-5-mini')
   })
 
   it('builds note context with fallbacks and includes web search when enabled', async () => {

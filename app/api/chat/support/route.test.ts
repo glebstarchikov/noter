@@ -1,11 +1,14 @@
 import { beforeAll, beforeEach, describe, expect, it, jest, mock } from 'bun:test'
 
 const mockBuildChatModelMessages = mock(() => Promise.resolve([]))
-const mockGateway = mock((model: string) => model)
+const mockOpenai = mock((model: string) => model)
 
 mock.module('ai', () => ({
   streamText: mock(() => {}),
-  gateway: mockGateway,
+}))
+
+mock.module('@ai-sdk/openai', () => ({
+  openai: mockOpenai,
 }))
 
 mock.module('@/lib/chat/chat-message-utils', () => ({
@@ -53,14 +56,14 @@ describe('POST /api/chat/support', () => {
     })
   })
 
-  it('allows unauthenticated support requests and routes through AI Gateway', async () => {
+  it('allows unauthenticated support requests and routes through OpenAI', async () => {
     const response = await POST(makeRequest({
       messages: [{ id: 'msg-1', role: 'user', parts: [{ type: 'text', text: 'How do I get started?' }] }],
     }))
 
     expect(response.status).toBe(200)
     expect(mockBuildChatModelMessages).toHaveBeenCalled()
-    expect(mockGateway).toHaveBeenCalledWith('openai/gpt-5-mini')
+    expect(mockOpenai).toHaveBeenCalledWith('gpt-5-mini')
   })
 
   it('grounds the assistant in noter-only support instructions', async () => {

@@ -14,8 +14,6 @@ const baseProps: ChatComposerProps = {
   activeScope: 'meeting',
   allowGlobalToggle: false,
   onScopeChange: () => {},
-  model: 'gpt-5-mini',
-  onModelChange: () => {},
   searchEnabled: false,
   onSearchToggle: () => {},
   selectedFiles: [],

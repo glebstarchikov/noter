@@ -132,7 +132,7 @@ The Workspace design language is the target for v1 (OSS release). It replaces th
 Copy `.env.example` to `.env.local`. Required keys:
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `OPENAI_API_KEY` (or `AI_GATEWAY_API_KEY`)
+- `OPENAI_API_KEY`
 
 Optional: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` (both were used by the processing-worker pipeline, removed in Phase 1.5 — self-host deployments now use the same direct note-generation path as SaaS), `DEEPGRAM_API_KEY`, `TAVILY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`.
 

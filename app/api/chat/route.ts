@@ -1,12 +1,13 @@
 import * as Sentry from '@sentry/nextjs'
-import { gateway, streamText, UIMessage } from 'ai'
+import { streamText, UIMessage } from 'ai'
+import { openai } from '@ai-sdk/openai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
 import { isStringArray, isActionItemArray } from '@/lib/type-guards'
 import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { z } from 'zod'
-import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
+import { CHAT_MODEL } from '@/lib/ai-models'
 import { buildChatModelMessages, getLastUserText } from '@/lib/chat/chat-message-utils'
 import { tiptapToPlainText } from '@/lib/tiptap/tiptap-converter'
 import { searchWeb } from '@/lib/tavily'
@@ -19,7 +20,6 @@ export const maxDuration = 60
 const chatRequestSchema = z.object({
   meetingId: z.string().trim().min(1),
   messages: z.array(z.unknown()).max(100).default([]),
-  model: z.enum(['gpt-5-mini', 'gpt-5.4']).optional(),
   searchEnabled: z.boolean().optional().default(false),
 })
 
@@ -43,7 +43,6 @@ export async function POST(req: Request) {
     const { data: body } = validated
 
     const { meetingId, messages, searchEnabled } = body
-    const model = resolveChatModelId(body.model)
 
     const { data: meeting } = await supabase
       .from('meetings')
@@ -125,26 +124,21 @@ export async function POST(req: Request) {
       ? await searchWeb(getLastUserText(messages as UIMessage[]))
       : ''
 
-    const systemPrompt = `You are noter AI, a thoughtful meeting assistant.
+    const systemPrompt = `You are noter AI, a meeting assistant answering questions about a single note.
 
-Your job is to:
-- Answer questions about this note using the note, transcript, and structured meeting metadata
-- Use any attached files included in the user messages
-- When web search context is provided, use it carefully and call out when information comes from the web instead of the note
-- Stay concise, specific, and honest
+# Context
 
-Rules:
-- Prefer the note and transcript over external information.
-- If something is not in the provided note materials, say so clearly.
-- When using web search context, mention that it came from web search.
-- Format responses with markdown when it helps readability.
+${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` : ''}
+# Instructions
 
-Here is the meeting context:
-
-${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` : ''}`
+- Answer using the note, transcript, and structured metadata above. Cite specific details (names, dates, decisions) rather than giving vague summaries.
+- Use attached files in the user messages when relevant.
+- If something is not in the provided materials, say so clearly — do not invent details.
+- When using web search context, say it came from web search.
+- Format responses with markdown when it aids readability. Keep answers focused and proportional to the question.`
 
     const result = streamText({
-      model: gateway(resolveChatModel(model)),
+      model: openai(CHAT_MODEL),
       system: systemPrompt,
       messages: await buildChatModelMessages(messages as UIMessage[]),
       abortSignal: req.signal,

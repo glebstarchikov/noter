@@ -147,6 +147,53 @@ function nodeToPlainText(node: TiptapNode): string {
   return childText
 }
 
+function nodeToMarkdown(node: TiptapNode): string {
+  if (node.text) {
+    let text = node.text
+    if (node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type === 'bold') text = `**${text}**`
+        else if (mark.type === 'italic') text = `_${text}_`
+        else if (mark.type === 'code') text = `\`${text}\``
+      }
+    }
+    return text
+  }
+
+  const children = node.content ?? []
+
+  switch (node.type) {
+    case 'heading': {
+      const level = (node.attrs?.level as number) ?? 1
+      return `${'#'.repeat(level)} ${children.map(nodeToMarkdown).join('')}`
+    }
+    case 'paragraph':
+      return children.map(nodeToMarkdown).join('')
+    case 'bulletList':
+      return children.map(nodeToMarkdown).join('\n')
+    case 'listItem':
+      return `- ${children.map(nodeToMarkdown).join(' ').trim()}`
+    case 'taskList':
+      return children.map(nodeToMarkdown).join('\n')
+    case 'taskItem': {
+      const checked = node.attrs?.checked ? 'x' : ' '
+      return `- [${checked}] ${children.map(nodeToMarkdown).join(' ').trim()}`
+    }
+    default:
+      return children.map(nodeToMarkdown).join('\n')
+  }
+}
+
+export function tiptapToMarkdown(value: unknown): string {
+  if (!isTiptapDocument(value)) return ''
+  return value.content
+    .map(nodeToMarkdown)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .join('\n\n')
+    .trim()
+}
+
 export function tiptapToPlainText(value: unknown): string {
   if (!isTiptapDocument(value)) return ''
 

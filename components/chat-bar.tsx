@@ -106,8 +106,6 @@ export function ChatBar({
               activeScope={chat.activeScope}
               allowGlobalToggle={allowGlobalToggle}
               onScopeChange={chat.setActiveScope}
-              model={chat.model}
-              onModelChange={chat.setModel}
               searchEnabled={chat.searchEnabled}
               onSearchToggle={() =>
                 chat.setSearchEnabled((current) => !current)

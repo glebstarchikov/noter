@@ -1,11 +1,12 @@
 import * as Sentry from '@sentry/nextjs'
-import { gateway, streamText, UIMessage } from 'ai'
+import { streamText, UIMessage } from 'ai'
+import { openai } from '@ai-sdk/openai'
 import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
 import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { z } from 'zod'
-import { resolveChatModel, resolveChatModelId } from '@/lib/ai-models'
+import { CHAT_MODEL } from '@/lib/ai-models'
 import { buildChatModelMessages, getLastUserText } from '@/lib/chat/chat-message-utils'
 import { searchWeb } from '@/lib/tavily'
 import { buildGlobalChatContext, type GlobalChatMeetingRow } from '@/lib/chat/global-chat-context'
@@ -16,7 +17,6 @@ export const maxDuration = 60
 
 const globalChatRequestSchema = z.object({
   messages: z.array(z.unknown()).default([]),
-  model: z.enum(['gpt-5-mini', 'gpt-5.4']).optional(),
   searchEnabled: z.boolean().optional().default(false),
 })
 
@@ -39,7 +39,6 @@ export async function POST(req: Request) {
     if (validated instanceof Response) return validated
     const { data: body } = validated
 
-    const model = resolveChatModelId(body.model)
     const { messages, searchEnabled } = body
 
     const { data: meetings } = await supabase
@@ -61,26 +60,22 @@ export async function POST(req: Request) {
       ? await searchWeb(getLastUserText(messages as UIMessage[]))
       : ''
 
-    const systemPrompt = `You are noter AI, a global note assistant.
+    const systemPrompt = `You are noter AI, a cross-note assistant answering questions that span multiple meeting notes.
 
-Your job is to:
-- Answer questions that span multiple notes
-- Find patterns and recurring themes
-- Track action items across notes
-- Use attached files included in the current user messages when relevant
+# Context
 
-Rules:
-- Only answer based on the provided note context and any explicit web search context.
-- Mention which note a fact came from whenever you summarize across multiple notes.
-- When using web search context, say that it came from the web.
-- Keep answers focused and practical.
+${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` : ''}
+# Instructions
 
-Here is the note context:
-
-${context}${webSearchContext ? `\n## Web Search Context\n${webSearchContext}\n` : ''}`
+- Answer using the note context above. When drawing from a specific note, name it.
+- Find patterns, recurring themes, and cross-note action items when asked.
+- Use attached files in the current user messages when relevant.
+- Only answer based on the provided note context or explicit web search results — do not invent details.
+- When using web search context, say it came from web search.
+- Keep answers focused, specific, and practical.`
 
     const result = streamText({
-      model: gateway(resolveChatModel(model)),
+      model: openai(CHAT_MODEL),
       system: systemPrompt,
       messages: await buildChatModelMessages(messages as UIMessage[]),
       abortSignal: req.signal,
