@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  AlertCircle,
   ArrowLeft,
   CheckCircle2,
   Clock,
@@ -15,6 +14,7 @@ import {
   MoreHorizontal,
   Pin,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-shell'
 import { RecordingErrorBoundary } from '@/components/recording-error-boundary'
@@ -52,9 +52,10 @@ import {
 import type { Meeting } from '@/lib/types'
 import { formatTime, formatDate, formatDuration } from '@/lib/date-formatter'
 
-export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
+export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
   const router = useRouter()
 
+  // ── Recording hook ────────────────────────────────────────────────
   const {
     phase,
     recordSystemAudio,
@@ -79,6 +80,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     initialAudioDuration: meeting.audio_duration,
   })
 
+  // ── Local state ───────────────────────────────────────────────────
   const [isPinned, setIsPinned] = useState(meeting.is_pinned)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -96,36 +98,13 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     prevStatusRef.current = meeting.status
   }, [meeting.status])
 
-  const togglePin = async () => {
-    const prev = isPinned
-    setIsPinned(!prev)
-    try {
-      await toggleMeetingPin(meeting.id, prev)
-    } catch {
-      setIsPinned(prev)
-      toast.error("We couldn't update this note right now. Please try again.")
-    }
-  }
-
-  const handleCopyNotes = useCallback(() => {
-    copyMeetingNotes(meeting)
-  }, [meeting])
-
-  const handleDelete = async () => {
-    setIsDeleting(true)
-    try {
-      await deleteMeeting(meeting.id)
-      router.push('/dashboard')
-    } catch {
-      toast.error("We couldn't delete this note. Please try again.")
-      setIsDeleting(false)
-      setShowDeleteDialog(false)
-    }
-  }
-
+  // ── Derived values ────────────────────────────────────────────────
   const showRecordingControls = meeting.status === 'recording'
   const live = showRecordingControls && (phase === 'recording' || phase === 'stopping')
   const transcriptForDrawer = savedTranscript || meeting.transcript
+  const hasTranscript = Boolean(transcriptForDrawer?.trim()) || savedSegments.length > 0
+
+  // ── Assistant bridge context ──────────────────────────────────────
   const assistantTranscriptSegments = useMemo(
     () =>
       liveSegments.length > 0
@@ -140,6 +119,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           }),
     [liveSegments, savedSegments, transcriptForDrawer]
   )
+
   const assistantContext = useMemo(
     () => ({
       sourceId: `meeting:${meeting.id}`,
@@ -180,11 +160,41 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
     ]
   )
 
+  // ── Actions ───────────────────────────────────────────────────────
+  const togglePin = async () => {
+    const prev = isPinned
+    setIsPinned(!prev)
+    try {
+      await toggleMeetingPin(meeting.id, prev)
+    } catch {
+      setIsPinned(prev)
+      toast.error("We couldn't update this note right now. Please try again.")
+    }
+  }
+
+  const handleCopyNotes = useCallback(() => {
+    copyMeetingNotes(meeting)
+  }, [meeting])
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteMeeting(meeting.id)
+      router.push('/dashboard')
+    } catch {
+      toast.error("We couldn't delete this note. Please try again.")
+      setIsDeleting(false)
+      setShowDeleteDialog(false)
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────
   return (
     <>
       <MeetingAssistantBridge context={assistantContext} />
 
       <div className="flex flex-col gap-8">
+        {/* Zone 1 — Page header */}
         <PageHeader
           eyebrow={
             <Link
@@ -244,105 +254,113 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
           }
         />
 
+        {/* Zone 2 — Recording controls */}
         <RecordingErrorBoundary onReset={resetRecordingSurface}>
-        {showRecordingControls && phase === 'setup' && (
+          {/* Setup: ready to record */}
+          {showRecordingControls && phase === 'setup' && (
+            <StatusPanel
+              title="Ready to record"
+              description="Press Start to begin. The live transcript will appear as you speak."
+              actions={
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    size="lg"
+                    className="rounded-full gap-2"
+                    onClick={handleStartRecording}
+                  >
+                    <Mic className="size-4" />
+                    Start recording
+                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={recordSystemAudio}
+                          onCheckedChange={setRecordSystemAudio}
+                        />
+                        <Label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <Monitor className="size-3.5" />
+                          System audio
+                        </Label>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Also capture audio playing on your device</TooltipContent>
+                  </Tooltip>
+                </div>
+              }
+            />
+          )}
+
+          {/* Active recording */}
+          {showRecordingControls && phase === 'recording' && (
+            <div aria-live="polite">
+              <RecordingStatusBar
+                isPaused={isPaused}
+                isConnected={isConnected}
+                hasSystemAudio={hasSystemAudio}
+                durationLabel={formatTime(duration)}
+                onTogglePause={togglePause}
+                onStop={handleStop}
+              />
+            </div>
+          )}
+
+          {/* Stopping: saving recording */}
+          {showRecordingControls && phase === 'stopping' && (
+            <StatusPanel
+              icon={<Loader2 className="animate-spin text-accent" />}
+              title="Saving your recording…"
+              description="Uploading audio and preparing your transcript."
+            />
+          )}
+        </RecordingErrorBoundary>
+
+        {/* Post-recording: quiet completion panel or record/upload actions */}
+        {(phase === 'done' || !showRecordingControls) && hasTranscript && (
           <StatusPanel
-            title="Ready to record"
-            description="Press Start to begin. The live transcript will appear as you speak."
+            icon={<CheckCircle2 className="text-accent" />}
+            title="Recording complete"
+            description="Your note stays editable. Open the transcript only when you need more detail."
+          />
+        )}
+
+        {(phase === 'done' || !showRecordingControls) && !hasTranscript && (
+          <StatusPanel
+            title="No recording yet"
+            description="Record a meeting or upload an audio file to get started."
             actions={
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  size="lg"
-                  className="rounded-full gap-2"
-                  onClick={handleStartRecording}
-                >
-                  <Mic className="size-4" />
-                  Start recording
-                </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={recordSystemAudio}
-                        onCheckedChange={setRecordSystemAudio}
-                      />
-                      <Label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Monitor className="size-3.5" />
-                        System audio
-                      </Label>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Also capture audio playing on your device</TooltipContent>
-                </Tooltip>
+                {meeting.status === 'recording' ? null : (
+                  <>
+                    <Button
+                      size="lg"
+                      className="rounded-full gap-2"
+                      onClick={() => {
+                        // Navigate to a fresh recording session for this meeting
+                        // by reloading with recording status
+                        toast.info('Start a new note with recording from the dashboard.')
+                      }}
+                    >
+                      <Mic className="size-4" />
+                      Record
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      className="rounded-full gap-2"
+                      onClick={() => toast('Upload audio coming soon')}
+                    >
+                      <Upload className="size-4" />
+                      Upload audio
+                    </Button>
+                  </>
+                )}
               </div>
             }
           />
         )}
 
-        {showRecordingControls && phase === 'recording' && (
-          <div aria-live="polite">
-          <RecordingStatusBar
-            isPaused={isPaused}
-            isConnected={isConnected}
-            hasSystemAudio={hasSystemAudio}
-            durationLabel={formatTime(duration)}
-            onTogglePause={togglePause}
-            onStop={handleStop}
-          />
-          </div>
-        )}
-
-        {showRecordingControls && phase === 'stopping' && (
-          <StatusPanel
-            icon={<Loader2 className="animate-spin text-accent" />}
-            title="Saving your recording\u2026"
-            description="Uploading audio and preparing your transcript."
-          />
-        )}
-        </RecordingErrorBoundary>
-
-        {(phase === 'done' || !showRecordingControls) && (
-          <StatusPanel
-            tone={meeting.status === 'error' ? 'destructive' : 'default'}
-            icon={
-              meeting.status === 'generating' ? (
-                <Loader2 className="animate-spin text-accent" />
-              ) : meeting.status === 'error' ? (
-                <AlertCircle className="text-destructive" />
-              ) : (
-                <CheckCircle2 className="text-accent" />
-              )
-            }
-            title={
-              meeting.status === 'generating'
-                ? 'Building your notes'
-                : meeting.status === 'error'
-                  ? 'Automatic note generation hit a problem'
-                  : 'Recording complete'
-            }
-            description={
-              meeting.status === 'generating' ? (
-                <span className="mt-2 flex flex-col gap-2">
-                  <span className="flex items-center gap-3">
-                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
-                    <span className="text-sm font-medium text-accent">Audio saved</span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <CheckCircle2 className="size-4 shrink-0 text-accent" />
-                    <span className="text-sm font-medium text-accent">Transcript analyzed</span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <Loader2 className="size-4 shrink-0 animate-spin text-foreground" />
-                    <span className="text-sm font-semibold text-foreground">Writing your notes\u2026</span>
-                  </span>
-                </span>
-              ) : meeting.status === 'error'
-                ? meeting.error_message || 'Please try again.'
-                : 'Your note stays editable. Open the transcript only when you need more detail.'
-            }
-          />
-        )}
-
+        {/* Zone 3 — Editor (always visible) */}
         <MeetingNoteSurface
           meeting={meeting}
           transcript={transcriptForDrawer}
@@ -350,6 +368,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
         />
       </div>
 
+      {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
