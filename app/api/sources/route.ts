@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { z } from 'zod'
 import { extractTextFromFile } from '@/lib/file-text'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(10, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(10, '1 m')
 
 export const maxDuration = 30
 
@@ -49,11 +42,9 @@ export async function POST(request: NextRequest) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`sources_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const allowed = await checkRateLimit(ratelimit, `sources_${user.id}`, 'sources')
+    if (!allowed) {
+      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
     }
 
     const formData = await request.formData()
@@ -171,12 +162,9 @@ export async function DELETE(request: NextRequest) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED', 401)
     }
 
-    const rawBody = await request.json().catch(() => null)
-    const parsedBody = deleteSourceSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
-    const { sourceId } = parsedBody.data
+    const validated = await validateBody(request, deleteSourceSchema)
+    if (validated instanceof Response) return validated
+    const { sourceId } = validated.data
 
     const { error } = await supabase
       .from('meeting_sources')

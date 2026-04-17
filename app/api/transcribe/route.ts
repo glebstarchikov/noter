@@ -1,20 +1,13 @@
 import * as Sentry from '@sentry/nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { transcribeAudioFromStorage } from '@/lib/transcription'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 import { z } from 'zod'
 
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(5, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(5, '1 m')
 
 export const maxDuration = 120
 
@@ -36,20 +29,17 @@ export async function POST(request: NextRequest) {
     }
     userId = user.id
 
-    if (ratelimit) {
-      const { success } = await ratelimit.limit(`transcribe_${user.id}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const allowed = await checkRateLimit(ratelimit, `transcribe_${user.id}`, 'transcribe')
+    if (!allowed) {
+      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
     }
 
-    const rawBody = await request.json().catch(() => null)
-    const parsedBody = transcribeRequestSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
-    meetingId = parsedBody.data.meetingId
-    const { storagePath } = parsedBody.data
+    const validated = await validateBody(request, transcribeRequestSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
+
+    meetingId = body.meetingId
+    const { storagePath } = body
 
     // Verify user owns the meeting
     const { data: meeting } = await supabase
@@ -62,13 +52,6 @@ export async function POST(request: NextRequest) {
     if (!meeting) {
       return errorResponse('Meeting not found', 'MEETING_NOT_FOUND', 404)
     }
-
-    // Update status to transcribing
-    await supabase
-      .from('meetings')
-      .update({ status: 'transcribing' })
-      .eq('id', meetingId)
-      .eq('user_id', user.id)
 
     const transcription = await transcribeAudioFromStorage(supabase, storagePath)
 

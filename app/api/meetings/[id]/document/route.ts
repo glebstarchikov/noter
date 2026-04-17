@@ -1,12 +1,22 @@
 import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { hashDocumentContent } from '@/lib/document-hash'
 import {
   isTiptapDocument,
   normalizeTiptapDocument,
-} from '@/lib/tiptap-converter'
+} from '@/lib/tiptap/tiptap-converter'
+
+const documentPatchSchema = z.object({
+  document_content: z.unknown().refine(
+    (v) => isTiptapDocument(v),
+    { message: 'document_content must be a valid Tiptap document' }
+  ),
+  baseHash: z.string().trim().min(1),
+})
 
 export const maxDuration = 10
 
@@ -18,20 +28,9 @@ export async function PATCH(
     const { id } = await context.params
     if (!id) return errorResponse('Missing meeting id', 'INVALID_MEETING_ID', 400)
 
-    const body = await request.json().catch(() => null)
-    if (
-      !body ||
-      typeof body.document_content !== 'object' ||
-      !isTiptapDocument(body.document_content) ||
-      typeof body.baseHash !== 'string' ||
-      body.baseHash.trim().length === 0
-    ) {
-      return errorResponse(
-        'Request body must include { document_content: TiptapDocument, baseHash: string }',
-        'INVALID_BODY',
-        400
-      )
-    }
+    const validated = await validateBody(request, documentPatchSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
 
     const contentSize = JSON.stringify(body.document_content).length
     if (contentSize > 2_000_000) {

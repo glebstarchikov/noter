@@ -4,7 +4,7 @@ import {
   compileDraftProposalToTiptap,
   draftProposalLimits,
   validateDraftProposal,
-} from '@/lib/draft-proposal'
+} from '@/lib/notes/draft-proposal'
 
 describe('draft proposal helpers', () => {
   it('compiles supported blocks into deterministic tiptap content', () => {

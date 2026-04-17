@@ -1,22 +1,15 @@
 import * as Sentry from '@sentry/nextjs'
 import { gateway, streamText, type UIMessage } from 'ai'
 import { z } from 'zod'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
+import { validateBody } from '@/lib/api/validate'
 import { DEFAULT_CHAT_MODEL, resolveChatModel } from '@/lib/ai-models'
-import { buildChatModelMessages } from '@/lib/chat-message-utils'
-import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/prompts'
-import { Ratelimit } from '@upstash/ratelimit'
-import { Redis } from '@upstash/redis'
+import { buildChatModelMessages } from '@/lib/chat/chat-message-utils'
+import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/notes/prompts'
+import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
 
 /** IP-based rate limit: 10 requests per minute (no auth on this route). */
-const ratelimit =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(10, '1 m'),
-      analytics: true,
-    })
-    : null
+const ratelimit = createRateLimiter(10, '1 m')
 
 /** Maximum total character length across all message contents. */
 const MAX_MESSAGES_TOTAL_LENGTH = 10_000
@@ -30,21 +23,17 @@ const supportChatRequestSchema = z.object({
 export async function POST(req: Request) {
   try {
     // IP-based rate limiting (this endpoint has no auth)
-    if (ratelimit) {
-      const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
-      const { success } = await ratelimit.limit(`support_chat_${ip}`)
-      if (!success) {
-        return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
-      }
+    const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
+    const allowed = await checkRateLimit(ratelimit, `support_chat_${ip}`, 'chat/support')
+    if (!allowed) {
+      return errorResponse('Too Many Requests', 'RATE_LIMITED', 429)
     }
 
-    const rawBody = await req.json().catch(() => null)
-    const parsedBody = supportChatRequestSchema.safeParse(rawBody)
-    if (!parsedBody.success) {
-      return errorResponse('Invalid request body', 'INVALID_REQUEST', 400)
-    }
+    const validated = await validateBody(req, supportChatRequestSchema)
+    if (validated instanceof Response) return validated
+    const { data: body } = validated
 
-    const { messages } = parsedBody.data
+    const { messages } = body
 
     // Guard against oversized payloads
     const totalLength = messages.reduce<number>((sum, msg) => {

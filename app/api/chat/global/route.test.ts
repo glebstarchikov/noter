@@ -13,7 +13,7 @@ mock.module('ai', () => ({
   gateway: mockGateway,
 }))
 
-mock.module('@/lib/chat-message-utils', () => ({
+mock.module('@/lib/chat/chat-message-utils', () => ({
   buildChatModelMessages: mockBuildChatModelMessages,
   getLastUserText: mock(() => 'What changed across notes?'),
 }))
@@ -108,8 +108,8 @@ describe('POST /api/chat/global', () => {
 
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({
-      error: 'Invalid request body',
-      code: 'INVALID_REQUEST',
+      error: 'Request body must be valid JSON',
+      code: 'INVALID_INPUT',
     })
   })
 

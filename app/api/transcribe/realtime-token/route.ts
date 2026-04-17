@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { errorResponse } from '@/lib/api-helpers'
+import { errorResponse } from '@/lib/api/api-helpers'
 
 export const maxDuration = 10
 
@@ -58,9 +58,12 @@ export async function POST() {
     }
 
     // Development fallback: return the raw key but warn about it.
-    console.warn(
-      '[realtime-token] DEEPGRAM_PROJECT_ID is not set — returning raw API key. ' +
-      'Set DEEPGRAM_PROJECT_ID in production to enable short-lived temporary keys.',
+    Sentry.captureMessage(
+      'DEEPGRAM_PROJECT_ID is not set — returning raw API key. Set DEEPGRAM_PROJECT_ID in production to enable short-lived temporary keys.',
+      {
+        level: 'warning',
+        tags: { route: 'transcribe/realtime-token' },
+      },
     )
     return NextResponse.json({ key: apiKey })
   } catch (error: unknown) {

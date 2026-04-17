@@ -1,19 +1,13 @@
 'use client'
 
-import { MeetingDetail } from '@/components/meeting-detail'
-import { MeetingWorkspace } from '@/components/meeting-workspace'
+import { UnifiedMeetingPage } from '@/components/unified-meeting-page'
 import { PageShell } from '@/components/page-shell'
-import { isRecordingOriginMeeting } from '@/lib/meeting-workspace'
 import type { Meeting } from '@/lib/types'
 
 export function MeetingDetailWrapper({ meeting }: { meeting: Meeting }) {
   return (
     <PageShell size="detail">
-      {isRecordingOriginMeeting(meeting) ? (
-        <MeetingWorkspace meeting={meeting} />
-      ) : (
-        <MeetingDetail meeting={meeting} />
-      )}
+      <UnifiedMeetingPage meeting={meeting} />
     </PageShell>
   )
 }

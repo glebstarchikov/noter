@@ -5,7 +5,7 @@ import {
   type DocumentSaveSuccess,
   type DocumentSaveConflict,
 } from '../document-sync'
-import type { TiptapDocument } from '../tiptap-converter'
+import type { TiptapDocument } from '../tiptap/tiptap-converter'
 
 const testDoc: TiptapDocument = {
   type: 'doc',

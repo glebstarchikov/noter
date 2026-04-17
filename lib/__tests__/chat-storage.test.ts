@@ -6,7 +6,7 @@ import {
   getGlobalChatMessages,
   saveGlobalChatMessages,
   clearGlobalChatMessages,
-} from '../chat-storage'
+} from '../chat/chat-storage'
 import type { UIMessage } from 'ai'
 
 function makeMessage(id: string, role: 'user' | 'assistant', text: string): UIMessage {

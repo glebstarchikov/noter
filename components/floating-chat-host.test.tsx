@@ -15,7 +15,7 @@ import {
   saveChatMessages,
   saveGlobalChatMessages,
   saveSupportChatMessages,
-} from "@/lib/chat-storage";
+} from "@/lib/chat/chat-storage";
 
 let pathname = "/";
 let authUser: { id: string } | null = { id: "user-1" };
@@ -180,6 +180,9 @@ describe("FloatingChatHost", () => {
 
     expect(await screen.findByText("Meeting-only answer")).not.toBeNull();
 
+    // Tools are behind [+] tray after Phase 3 modularization
+    fireEvent.click(screen.getByRole("button", { name: /more tools/i }));
+
     fireEvent.click(screen.getByRole("button", { name: /^Context$/i }));
     expect(await screen.findByText("Active context")).not.toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: /^All notes$/i }));
@@ -199,6 +202,13 @@ describe("FloatingChatHost", () => {
         name: /summarize notes from this week/i,
       }),
     ).not.toBeNull();
+
+    // Context and file tools are behind [+] tray after Phase 3 modularization
+    expect(screen.queryByRole("button", { name: /^Context$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /add files/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /more tools/i }));
+
     expect(screen.getByRole("button", { name: /^Context$/i })).not.toBeNull();
     expect(screen.getByRole("button", { name: /add files/i })).not.toBeNull();
 
@@ -255,13 +265,20 @@ describe("FloatingChatHost", () => {
 
     expect(shell?.getAttribute("data-state")).toBe("expanded");
     expect(shell?.getAttribute("data-generating")).toBe("false");
-    expect(screen.getByText("GPT-5 mini")).not.toBeNull();
     expect(screen.getByRole("button", { name: /^close$/i })).not.toBeNull();
-    expect(screen.getByRole("button", { name: /^Context$/i })).not.toBeNull();
 
     const textarea = screen.getByLabelText("Ask across your notes...");
     expect(textarea.className.includes("min-h-[3rem]")).toBe(true);
     expect(textarea.className.includes("overflow-y-auto")).toBe(true);
+
+    // Tools are behind [+] tray after Phase 3 modularization
+    expect(screen.queryByRole("button", { name: /^Context$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /search web/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /more tools/i }));
+
+    expect(screen.getByText("GPT-5 mini")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /^Context$/i })).not.toBeNull();
 
     const searchButton = screen.getByRole("button", { name: /search web/i });
     expect(searchButton.getAttribute("data-active")).toBe("false");
@@ -281,6 +298,9 @@ describe("FloatingChatHost", () => {
     expect(
       await screen.findByLabelText("Ask across your notes..."),
     ).not.toBeNull();
+
+    // Open [+] tray again to access more actions
+    fireEvent.click(screen.getByRole("button", { name: /more tools/i }));
 
     fireEvent.pointerDown(
       screen.getByRole("button", { name: /more chat actions/i }),

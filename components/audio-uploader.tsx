@@ -1,28 +1,22 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { Upload, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import type { MeetingStatus } from '@/lib/types'
-import { uploadAndProcessMeeting } from '@/lib/meeting-upload'
+import { uploadAndTranscribeMeeting } from '@/lib/meetings/meeting-upload'
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
 
-interface Props {
-  onProcessing: (state: {
-    meetingId: string
-    step: MeetingStatus
-    error?: string
-  }) => void
-  templateId?: string
+interface AudioUploaderProps {
+  meetingId: string
+  userId: string
+  onComplete: () => void
 }
 
-export function AudioUploader({ onProcessing, templateId }: Props) {
-  const router = useRouter()
+export function AudioUploader({ meetingId, userId, onComplete }: AudioUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -55,46 +49,32 @@ export function AudioUploader({ onProcessing, templateId }: Props) {
     if (f) handleFile(f)
   }
 
-
   const handleSubmit = async () => {
     if (!file || submittingRef.current) return
     submittingRef.current = true
     setIsSubmitting(true)
-    let currentMeetingId = ''
 
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
 
-      const { data: meeting, error: insertError } = await supabase
+      // Set the meeting title to the filename (without extension)
+      await supabase
         .from('meetings')
-        .insert({
-          user_id: user.id,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          status: 'uploading',
-          ...(templateId ? { template_id: templateId } : {}),
-        })
-        .select('id')
-        .single()
-
-      if (insertError || !meeting) throw new Error('Failed to create meeting')
-      currentMeetingId = meeting.id
+        .update({ title: file.name.replace(/\.[^/.]+$/, '') })
+        .eq('id', meetingId)
 
       const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
-      await uploadAndProcessMeeting({
-        meetingId: meeting.id,
-        userId: user.id,
+      await uploadAndTranscribeMeeting({
+        meetingId,
+        userId,
         blob: file,
         extension,
         contentType: file.type || 'audio/webm',
-        onProcessing,
       })
-      router.push(`/dashboard/${meeting.id}`)
+      onComplete()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       toast.error(message)
-      onProcessing({ meetingId: currentMeetingId, step: 'error', error: message })
     } finally {
       submittingRef.current = false
       setIsSubmitting(false)
@@ -186,7 +166,7 @@ export function AudioUploader({ onProcessing, templateId }: Props) {
               Processing…
             </>
           ) : (
-            'Generate notes'
+            'Upload & transcribe'
           )}
         </Button>
       )}

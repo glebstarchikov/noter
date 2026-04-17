@@ -22,3 +22,6 @@ coverage/
 .claude/skills/
 .claude/worktrees/
 .claude/settings.local.json
+
+# Brainstorming session artifacts (ephemeral mockups)
+.superpowers/

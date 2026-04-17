@@ -30,20 +30,12 @@ export function RecordingStatusBar({
       <div className="min-w-0 flex-1">
         <div className="min-w-0 space-y-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="relative flex size-2 shrink-0">
-              <span
-                className={cn(
-                  'absolute inline-flex h-full w-full rounded-full opacity-75',
-                  !isPaused ? 'animate-ping bg-accent' : 'bg-muted-foreground'
-                )}
-              />
-              <span
-                className={cn(
-                  'relative inline-flex size-2 rounded-full',
-                  !isPaused ? 'bg-accent' : 'bg-muted-foreground/40'
-                )}
-              />
-            </span>
+            <span
+              className={cn(
+                'inline-flex size-2 shrink-0 rounded-full',
+                !isPaused ? 'bg-accent' : 'bg-muted-foreground/40'
+              )}
+            />
             <span className="text-sm font-semibold text-foreground">
               {isPaused ? 'Paused' : 'Recording now'}
             </span>
@@ -77,7 +69,7 @@ export function RecordingStatusBar({
       <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           className="rounded-full gap-2 shadow-none"
           onClick={onTogglePause}

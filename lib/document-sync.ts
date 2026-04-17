@@ -1,7 +1,7 @@
 import {
   normalizeTiptapDocument,
   type TiptapDocument,
-} from '@/lib/tiptap-converter'
+} from '@/lib/tiptap/tiptap-converter'
 
 export type DocumentSaveSuccess = {
   ok: true

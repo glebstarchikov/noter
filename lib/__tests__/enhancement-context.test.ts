@@ -4,7 +4,7 @@ import {
   MAX_ENHANCEMENT_DOCUMENT_CHARS,
   MAX_ENHANCEMENT_STRUCTURED_CHARS,
   MAX_ENHANCEMENT_TRANSCRIPT_CHARS,
-} from '../enhancement-context'
+} from '../notes/enhancement-context'
 
 describe('shapeEnhancementContext', () => {
   it('passes through short content unchanged', () => {

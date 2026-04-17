@@ -87,7 +87,7 @@ describe('POST /api/transcribe', () => {
     expect(res.status).toBe(400)
     const payload = await res.json()
     expect(payload.error).toBe('Invalid request body')
-    expect(payload.code).toBe('INVALID_REQUEST')
+    expect(payload.code).toBe('INVALID_INPUT')
   })
 
   it('returns 404 if meeting is not found', async () => {

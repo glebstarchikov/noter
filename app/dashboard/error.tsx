@@ -28,7 +28,7 @@ export default function DashboardError({
         description="Please try again. If the problem keeps happening, head back to your workspace and reopen the page."
         actions={
           <>
-            <Button onClick={reset} variant="outline" className="shadow-none">
+            <Button onClick={reset} variant="ghost" className="shadow-none">
               Try again
             </Button>
             <Button asChild>

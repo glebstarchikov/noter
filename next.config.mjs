@@ -5,6 +5,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  serverExternalPackages: [
+    '@sentry/node',
+    '@sentry/opentelemetry',
+    '@opentelemetry/api',
+    '@opentelemetry/core',
+    '@opentelemetry/instrumentation',
+    'require-in-the-middle',
+    'import-in-the-middle',
+  ],
   experimental: {
     serverActions: {
       bodySizeLimit: '25mb',

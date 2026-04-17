@@ -30,7 +30,7 @@ export function ChatModelSelector({
         <InputGroupButton
           variant="ghost"
           size="sm"
-          className="liquid-glass-control border border-border/40"
+          className="rounded-lg hover:bg-accent-soft"
         >
           {getChatModelLabel(model)}
           <ChevronDown data-icon="inline-end" />

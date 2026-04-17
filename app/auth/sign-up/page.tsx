@@ -72,7 +72,7 @@ export default function SignUpPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-lg bg-background border-border/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent transition-colors shadow-sm"
+              className="h-11 rounded-xl bg-background border-border/70 shadow-sm"
             />
           </Field>
 
@@ -84,7 +84,7 @@ export default function SignUpPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-lg bg-background border-border/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent transition-colors shadow-sm"
+              className="h-11 rounded-xl bg-background border-border/70 shadow-sm"
             />
           </Field>
 
@@ -96,7 +96,7 @@ export default function SignUpPage() {
               required
               value={repeatPassword}
               onChange={(e) => setRepeatPassword(e.target.value)}
-              className="h-11 rounded-lg bg-background border-border/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-accent transition-colors shadow-sm"
+              className="h-11 rounded-xl bg-background border-border/70 shadow-sm"
             />
           </Field>
         </FieldGroup>
