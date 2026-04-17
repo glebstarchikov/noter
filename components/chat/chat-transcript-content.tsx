@@ -80,7 +80,7 @@ export function ChatTranscriptContent({
               size="icon-sm"
               onClick={onClose}
               aria-label="Close transcript"
-              className="liquid-glass-control ml-auto rounded-full border border-border/40"
+              className="ml-auto rounded-full"
             >
               <X />
             </Button>

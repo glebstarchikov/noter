@@ -27,7 +27,7 @@ function MessageBubble({
 }) {
   if (role === "user") {
     return (
-      <div className="liquid-glass-chip max-w-[85%] self-end rounded-[22px] px-4 py-2.5 text-sm leading-7 text-foreground">
+      <div className="bg-secondary border border-border max-w-[85%] self-end rounded-[22px] px-4 py-2.5 text-sm leading-7 text-foreground">
         <div className="whitespace-pre-wrap">{text}</div>
       </div>
     );
@@ -76,7 +76,7 @@ export function ChatMessageList({
             size="icon-sm"
             onClick={onCollapse}
             aria-label="Close"
-            className="liquid-glass-control absolute right-3 top-3 z-10 rounded-full border border-border/40"
+            className="absolute right-3 top-3 z-10 rounded-full"
           >
             <X />
           </Button>
@@ -102,7 +102,7 @@ export function ChatMessageList({
                     type="button"
                     variant="ghost"
                     onClick={() => onStarterPrompt(starterPrompt)}
-                    className="liquid-glass-prompt h-auto justify-start rounded-[20px] px-4 py-3 text-left whitespace-normal text-sm"
+                    className="bg-card border border-border h-auto justify-start rounded-[20px] px-4 py-3 text-left whitespace-normal text-sm hover:bg-secondary"
                   >
                     {starterPrompt}
                   </Button>

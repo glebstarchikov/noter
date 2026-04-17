@@ -14,7 +14,7 @@ function AttachmentChip({ file, onRemove }: AttachmentChipProps) {
   const isImage = mediaType.startsWith("image/");
 
   return (
-    <div className="liquid-glass-chip flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="bg-secondary border border-border flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-muted-foreground">
       {isImage ? (
         <ImageIcon className="size-3.5" />
       ) : (
