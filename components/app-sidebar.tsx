@@ -12,7 +12,6 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Logo } from '@/components/logo'
-import { ThemeToggleInline } from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,7 +50,7 @@ function SidebarBrandToggle() {
             <div className="flex items-center justify-between gap-2">
                 <Link
                     href="/dashboard"
-                    className="ring-sidebar-ring flex items-center gap-3 rounded-md outline-hidden focus-visible:ring-2"
+                    className="ring-sidebar-ring flex items-center gap-3 rounded-lg outline-hidden focus-visible:ring-2"
                     aria-label="Go to dashboard"
                 >
                     <Logo />
@@ -77,7 +76,7 @@ function SidebarBrandToggle() {
             type="button"
             onClick={toggleSidebar}
             aria-label="Expand sidebar"
-            className="group/brand text-sidebar-foreground ring-sidebar-ring relative flex size-8 items-center justify-center rounded-md outline-hidden focus-visible:ring-2"
+            className="group/brand text-sidebar-foreground ring-sidebar-ring relative flex size-8 items-center justify-center rounded-lg outline-hidden focus-visible:ring-2"
         >
             <span className="pointer-events-none transition-all duration-150 ease-out motion-reduce:transition-none group-hover/brand:translate-y-0.5 group-hover/brand:opacity-0 group-focus-visible/brand:translate-y-0.5 group-focus-visible/brand:opacity-0">
                 <Logo />
@@ -212,8 +211,6 @@ export function AppSidebar() {
                                         </div>
                                     </div>
                                 </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <ThemeToggleInline />
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleSignOut}>
                                     <LogOut />
