@@ -36,13 +36,14 @@ import { ChatAttachmentPreview } from "@/components/chat/chat-attachment-preview
 
 function ContextChip({ label }: { label: string }) {
   return (
-    <div className="liquid-glass-context-chip flex items-center rounded-full px-3 py-1.5 text-xs font-medium text-foreground">
+    <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground">
+      <span className="size-1.5 shrink-0 rounded-full bg-accent" />
       {label}
     </div>
   );
 }
 
-interface ChatComposerProps {
+export interface ChatComposerProps {
   input: string;
   onInputChange: (value: string) => void;
   onSubmit: (text: string) => void;
@@ -195,7 +196,7 @@ export function ChatComposer({
                     </PopoverTrigger>
                     <PopoverContent
                       align="start"
-                      className="liquid-glass-popover w-[18rem] rounded-[24px] border-border/40 p-4"
+                      className="w-[18rem] rounded-xl border border-border bg-card p-4 shadow-lg"
                     >
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-1">
@@ -244,7 +245,7 @@ export function ChatComposer({
                                   }
                                 }}
                                 aria-label="Chat scope"
-                                className="liquid-glass-toolbar w-full"
+                                className="w-full"
                               >
                                 <ToggleGroupItem
                                   value="meeting"
