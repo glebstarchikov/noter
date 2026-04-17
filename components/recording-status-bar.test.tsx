@@ -51,4 +51,19 @@ describe('RecordingStatusBar', () => {
     expect(screen.queryByText(/transcript live/i)).toBeNull()
     expect(screen.getByRole('button', { name: /resume/i })).not.toBeNull()
   })
+
+  it('recording dot has no animate-ping class', () => {
+    const { container } = render(
+      <RecordingStatusBar
+        isPaused={false}
+        isConnected={true}
+        hasSystemAudio={false}
+        durationLabel="01:23"
+        onTogglePause={() => {}}
+        onStop={() => {}}
+      />
+    )
+    const pingSpan = container.querySelector('.animate-ping')
+    expect(pingSpan).toBeNull()
+  })
 })
