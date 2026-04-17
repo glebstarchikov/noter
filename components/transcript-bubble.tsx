@@ -45,7 +45,7 @@ function AudioBars({
           )}
           style={{
             width: "2.5px",
-            height: `${Math.max(4, height * 16)}px`,
+            height: `${Math.max(4, height * 20)}px`,
             opacity: barStyle === "live" ? 1 : 0.9,
           }}
         />
@@ -88,7 +88,7 @@ export function TranscriptBubble() {
             data-open={isTranscriptMode ? "true" : "false"}
             onClick={() => shellContext?.setMode("transcript")}
             className={cn(
-              "assistant-shell-trigger pointer-events-auto flex size-12 items-center justify-center rounded-full",
+              "assistant-shell-trigger pointer-events-auto flex size-16 items-center justify-center rounded-full",
               "transition-[border-color,box-shadow,background-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
               isRecording && "ring-[3px] ring-[var(--recording)]/20",
             )}
