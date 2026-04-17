@@ -28,6 +28,9 @@ Prefer TypeScript and functional React components. Keep route files in App Route
 
 Follow the surrounding file’s formatting closely. In new TS/TSX files, prefer 2-space indentation, clear prop names, and small focused components. Linting is enforced with `eslint.config.mjs`; no Prettier config is present.
 
+## Design Language
+New components must follow the Workspace design language — see **§Design Rules** in `CLAUDE.md`. Key points: sage accent (`--accent`), tinted `bg-card` surfaces (never white-on-white), `rounded-xl` for cards, `rounded-lg` for chips and inputs, `rounded-md` banned except tiny elements, 3-button hierarchy (primary / ghost / destructive — no `outline` or `secondary` variants), `ghost-icon` for toolbar buttons. Dark mode is deferred to post-v1; do not add dark-mode-only styles.
+
 ## Testing Guidelines
 Tests use `bun:test`, `@testing-library/react`, `@testing-library/jest-dom`, and Happy DOM via `test.setup.ts`. Keep test files named `*.test.ts` or `*.test.tsx`.
 
