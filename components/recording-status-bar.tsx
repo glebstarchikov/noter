@@ -77,7 +77,7 @@ export function RecordingStatusBar({
       <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           className="rounded-full gap-2 shadow-none"
           onClick={onTogglePause}

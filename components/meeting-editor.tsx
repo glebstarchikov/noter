@@ -45,7 +45,7 @@ function ToolbarButton({
   return (
     <Button
       type="button"
-      variant={active ? 'secondary' : 'ghost-icon'}
+      variant={active ? 'ghost' : 'ghost-icon'}
       size="icon-xs"
       onMouseDown={(e) => {
         e.preventDefault()

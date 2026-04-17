@@ -211,7 +211,7 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="outline"
+              variant="ghost"
               className="h-11 rounded-2xl border-border/70 bg-card px-4 text-sm text-muted-foreground shadow-none"
             >
               <SlidersHorizontal className="size-4" />

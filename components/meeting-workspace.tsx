@@ -215,7 +215,7 @@ export function MeetingWorkspace({ meeting }: { meeting: Meeting }) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon-sm" className="shadow-none" aria-label="More actions">
+                      <Button variant="ghost" size="icon-sm" className="shadow-none" aria-label="More actions">
                         <MoreHorizontal className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>

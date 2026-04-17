@@ -367,7 +367,7 @@ export function MeetingNoteSurface({
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={handleLoadLatestVersion}
                     className="h-8 rounded-full border-amber-300/70 bg-transparent shadow-none"
@@ -422,7 +422,7 @@ export function MeetingNoteSurface({
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           className="relative gap-2 rounded-full border-border/70 bg-background/80 shadow-none"
                           onClick={() => void handleDraftRequest()}
@@ -585,7 +585,7 @@ export function MeetingNoteSurface({
 
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     className="rounded-full"
                     onClick={() => setShowManualEditor(true)}
                   >

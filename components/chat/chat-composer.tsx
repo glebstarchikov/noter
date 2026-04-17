@@ -309,7 +309,7 @@ export function ChatComposer({
               <TooltipTrigger asChild>
                 <InputGroupButton
                   type="submit"
-                  variant="default"
+                  variant="primary"
                   size="icon-sm"
                   disabled={submitDisabled}
                   aria-label="Send message"

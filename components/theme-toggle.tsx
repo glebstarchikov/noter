@@ -36,7 +36,7 @@ export function ThemeToggle({ className }: { className?: string }) {
                     <DropdownMenuTrigger asChild>
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
                             size="icon-sm"
                             className={cn('text-muted-foreground shadow-none', className)}
                             aria-label="Theme"
