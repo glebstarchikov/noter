@@ -194,6 +194,11 @@ scripts/010_drop_note_templates.sql  → run last`}</code>
                   ],
                   ['OPENAI_API_KEY', 'Yes', 'platform.openai.com/api-keys'],
                   [
+                    'AI_GATEWAY_API_KEY',
+                    'Alt for OPENAI_API_KEY',
+                    'Vercel AI Gateway — use instead of OPENAI_API_KEY',
+                  ],
+                  [
                     'DEEPGRAM_API_KEY',
                     'For live transcription',
                     'console.deepgram.com',
@@ -219,6 +224,11 @@ scripts/010_drop_note_templates.sql  → run last`}</code>
                     'sentry.io → project → settings',
                   ],
                   ['TAVILY_API_KEY', 'Optional', 'app.tavily.com'],
+                  [
+                    'NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL',
+                    'Local dev only',
+                    'Set to http://localhost:3000/auth/callback',
+                  ],
                 ] as [string, string, string][]
               ).map(([name, required, where]) => (
                 <tr key={name}>
