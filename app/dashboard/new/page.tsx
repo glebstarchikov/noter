@@ -5,21 +5,14 @@ import { useRouter } from 'next/navigation'
 import { Mic, Upload, Loader2 } from 'lucide-react'
 import { AudioUploader } from '@/components/audio-uploader'
 import { PageHeader, PageShell } from '@/components/page-shell'
-import { ProcessingView } from '@/components/processing-view'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import type { MeetingStatus } from '@/lib/types'
 
 type ActiveCard = 'upload' | null
 
 export default function NewMeetingPage() {
   const router = useRouter()
-  const [processing, setProcessing] = useState<{
-    meetingId: string
-    step: MeetingStatus
-    error?: string
-  } | null>(null)
   const [activeCard, setActiveCard] = useState<ActiveCard>(null)
   const [isCreating, setIsCreating] = useState(false)
 
@@ -51,18 +44,6 @@ export default function NewMeetingPage() {
       toast.error(err instanceof Error ? err.message : 'Could not start recording')
       setIsCreating(false)
     }
-  }
-
-  if (processing) {
-    return (
-      <PageShell>
-        <ProcessingView
-          meetingId={processing.meetingId}
-          step={processing.step}
-          error={processing.error}
-        />
-      </PageShell>
-    )
   }
 
   return (
@@ -123,7 +104,7 @@ export default function NewMeetingPage() {
             Back
           </Button>
           <div className="surface-document px-7 py-8">
-            <AudioUploader onProcessing={setProcessing} />
+            <AudioUploader />
           </div>
         </div>
       )}

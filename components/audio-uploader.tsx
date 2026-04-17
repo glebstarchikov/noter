@@ -6,21 +6,12 @@ import { Upload, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import type { MeetingStatus } from '@/lib/types'
-import { uploadAndProcessMeeting } from '@/lib/meetings/meeting-upload'
+import { uploadAndTranscribeMeeting } from '@/lib/meetings/meeting-upload'
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg']
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
 
-interface Props {
-  onProcessing: (state: {
-    meetingId: string
-    step: MeetingStatus
-    error?: string
-  }) => void
-}
-
-export function AudioUploader({ onProcessing }: Props) {
+export function AudioUploader() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -54,12 +45,10 @@ export function AudioUploader({ onProcessing }: Props) {
     if (f) handleFile(f)
   }
 
-
   const handleSubmit = async () => {
     if (!file || submittingRef.current) return
     submittingRef.current = true
     setIsSubmitting(true)
-    let currentMeetingId = ''
 
     try {
       const supabase = createClient()
@@ -77,22 +66,19 @@ export function AudioUploader({ onProcessing }: Props) {
         .single()
 
       if (insertError || !meeting) throw new Error('Failed to create meeting')
-      currentMeetingId = meeting.id
 
       const extension = file.name.split('.').pop()?.toLowerCase() || 'webm'
-      await uploadAndProcessMeeting({
+      await uploadAndTranscribeMeeting({
         meetingId: meeting.id,
         userId: user.id,
         blob: file,
         extension,
         contentType: file.type || 'audio/webm',
-        onProcessing,
       })
       router.push(`/dashboard/${meeting.id}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       toast.error(message)
-      onProcessing({ meetingId: currentMeetingId, step: 'error', error: message })
     } finally {
       submittingRef.current = false
       setIsSubmitting(false)

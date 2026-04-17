@@ -1,36 +1,30 @@
 import { createClient } from '@/lib/supabase/client'
-import {
-  readApiError,
-  waitForMeetingCompletion,
-  type ProcessingState,
-} from '@/lib/meetings/meeting-pipeline'
+import { readApiError } from '@/lib/meetings/meeting-pipeline'
 
-type OnProcessing = (state: ProcessingState) => void
-
-interface UploadAndProcessOptions {
+interface UploadAndTranscribeOptions {
   meetingId: string
   userId: string
   blob: Blob
   extension: string
   contentType: string
-  onProcessing: OnProcessing
+  onProgress?: (step: 'uploading' | 'transcribing' | 'done') => void
 }
 
 /**
- * Uploads audio to Supabase Storage, saves the path, triggers processing,
- * and waits for completion. Shared between AudioRecorder and AudioUploader.
+ * Uploads audio to Supabase Storage, saves the path, and triggers transcription.
+ * Note generation is user-triggered separately via the enhance route.
  */
-export async function uploadAndProcessMeeting({
+export async function uploadAndTranscribeMeeting({
   meetingId,
   userId,
   blob,
   extension,
   contentType,
-  onProcessing,
-}: UploadAndProcessOptions): Promise<void> {
+  onProgress,
+}: UploadAndTranscribeOptions): Promise<void> {
   const supabase = createClient()
 
-  onProcessing({ meetingId, step: 'generating' })
+  onProgress?.('uploading')
 
   const storagePath = `${userId}/${meetingId}.${extension}`
   const { error: uploadError } = await supabase.storage
@@ -46,6 +40,8 @@ export async function uploadAndProcessMeeting({
 
   if (audioUrlError) throw new Error('Failed to save audio URL: ' + audioUrlError.message)
 
+  onProgress?.('transcribing')
+
   const transcribeRes = await fetch('/api/transcribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -57,19 +53,5 @@ export async function uploadAndProcessMeeting({
     throw new Error(message)
   }
 
-  onProcessing({ meetingId, step: 'generating' })
-
-  const notesRes = await fetch('/api/generate-notes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ meetingId }),
-  })
-
-  if (!notesRes.ok) {
-    const { message } = await readApiError(notesRes, 'Notes generation failed')
-    throw new Error(message)
-  }
-
-  await waitForMeetingCompletion(meetingId, onProcessing)
-  onProcessing({ meetingId, step: 'done' })
+  onProgress?.('done')
 }
