@@ -63,7 +63,7 @@ describe('POST /api/chat/support', () => {
 
     expect(response.status).toBe(200)
     expect(mockBuildChatModelMessages).toHaveBeenCalled()
-    expect(mockOpenai).toHaveBeenCalledWith('gpt-5-mini')
+    expect(mockOpenai).toHaveBeenCalledWith('gpt-5.4-mini')
   })
 
   it('grounds the assistant in noter-only support instructions', async () => {

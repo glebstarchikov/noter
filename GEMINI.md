@@ -8,7 +8,7 @@
 - **UI & Styling:** Tailwind CSS v4, shadcn/ui, Radix UI primitives — Workspace design language (sage accent, tinted card surfaces, `rounded-xl` cards)
 - **Package Manager & Runtime:** Bun
 - **Database & Auth:** Supabase (Postgres + RLS on all tables, `@supabase/ssr` for server-side auth)
-- **AI:** Vercel AI SDK + OpenAI (`gpt-5-mini` for chat, `gpt-5.4` for note enhancement)
+- **AI:** Vercel AI SDK + OpenAI (`gpt-5.4-mini` for chat, `gpt-5.4` for note enhancement)
 - **Transcription:** Deepgram WebSocket (`nova-3-meeting` model)
 - **Editor:** Tiptap 3 rich text editor (document stored as JSONB)
 - **Testing:** Bun test runner, React Testing Library, Happy DOM

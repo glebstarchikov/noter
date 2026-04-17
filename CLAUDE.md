@@ -74,7 +74,7 @@ Use the `@/` path alias for imports.
 - **Supabase** for auth (RLS on all tables) and Postgres database
 - **Tiptap 3** rich text editor — document stored as JSON in `document_content` JSONB column
 - **Deepgram** for real-time audio transcription via WebSocket (`nova-3-meeting` model)
-- **Vercel AI SDK + OpenAI** for chat (`gpt-5-mini`); direct OpenAI SDK for note generation (`gpt-5.4`) and metadata extraction (`gpt-5-mini`)
+- **Vercel AI SDK + OpenAI** for chat (`gpt-5.4-mini`); direct OpenAI SDK for note generation (`gpt-5.4`) and metadata extraction (`gpt-5.4-mini`)
 - Meeting page (`/dashboard/[id]`) is a tri-state surface: recording → processing → done
 - Auto-save: 2s debounce → PATCH `/api/meetings/[id]/document`
 

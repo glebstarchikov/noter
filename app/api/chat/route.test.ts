@@ -134,7 +134,7 @@ describe('POST /api/chat', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(mockOpenai).toHaveBeenCalledWith('gpt-5-mini')
+    expect(mockOpenai).toHaveBeenCalledWith('gpt-5.4-mini')
     expect(from).toHaveBeenCalledTimes(1)
     expect(from).toHaveBeenCalledWith('meetings')
   })

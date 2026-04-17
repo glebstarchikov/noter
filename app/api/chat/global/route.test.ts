@@ -158,7 +158,7 @@ describe('POST /api/chat/global', () => {
     expect(eqMock).toHaveBeenCalledWith('user_id', 'user-1')
     expect(from).toHaveBeenCalledTimes(1)
     expect(from).toHaveBeenCalledWith('meetings')
-    expect(mockOpenai).toHaveBeenCalledWith('gpt-5-mini')
+    expect(mockOpenai).toHaveBeenCalledWith('gpt-5.4-mini')
   })
 
   it('builds note context with fallbacks and includes web search when enabled', async () => {

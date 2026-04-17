@@ -13,7 +13,7 @@ describe('callNoteLlm', () => {
       usage: { totalTokens: 100 },
     }))
     const result = await callNoteLlm({
-      model: 'gpt-5-mini',
+      model: 'gpt-5.4-mini',
       prompt: 'system prompt',
       schema: testSchema,
       maxAttempts: 2,
@@ -34,7 +34,7 @@ describe('callNoteLlm', () => {
       return { object: { summary: 'success' }, usage: { totalTokens: 50 } }
     })
     const result = await callNoteLlm({
-      model: 'gpt-5-mini',
+      model: 'gpt-5.4-mini',
       prompt: 'system prompt',
       schema: testSchema,
       maxAttempts: 2,
@@ -51,7 +51,7 @@ describe('callNoteLlm', () => {
       throw originalError
     })
     const err = await callNoteLlm({
-      model: 'gpt-5-mini',
+      model: 'gpt-5.4-mini',
       prompt: 'system prompt',
       schema: testSchema,
       maxAttempts: 2,
