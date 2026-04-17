@@ -13,7 +13,7 @@ import {
 } from "@/lib/assistant-shell-layout";
 import { cn } from "@/lib/utils";
 
-const IDLE_BAR_HEIGHTS = [0.1, 0.14, 0.12, 0.16, 0.11, 0.13];
+const IDLE_BAR_HEIGHTS = [0.12, 0.12, 0.12, 0.12];
 
 type BarStyle = "live" | "active" | "idle";
 
@@ -44,8 +44,8 @@ function AudioBars({
                 : "bg-muted-foreground/45",
           )}
           style={{
-            width: "3px",
-            height: `${Math.max(4, height * 22)}px`,
+            width: "2.5px",
+            height: `${Math.max(4, height * 16)}px`,
             opacity: barStyle === "live" ? 1 : 0.9,
           }}
         />
@@ -88,17 +88,15 @@ export function TranscriptBubble() {
             data-open={isTranscriptMode ? "true" : "false"}
             onClick={() => shellContext?.setMode("transcript")}
             className={cn(
-              "assistant-shell-trigger pointer-events-auto relative flex h-16 w-14 items-center justify-center rounded-[22px]",
+              "assistant-shell-trigger pointer-events-auto flex size-12 items-center justify-center rounded-full",
               "transition-[border-color,box-shadow,background-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              isRecording && "ring-[3px] ring-[var(--recording)]/20",
             )}
             aria-label={
               isRecording ? "Open live transcript" : "Open transcript"
             }
             aria-pressed={isTranscriptMode}
           >
-            {isRecording ? (
-              <span className="absolute right-2 top-2 size-1.5 rounded-full bg-[var(--recording)]" />
-            ) : null}
             <AudioBars barHeights={displayBars} barStyle={barStyle} />
           </button>
         </TooltipTrigger>

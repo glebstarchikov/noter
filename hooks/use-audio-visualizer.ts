@@ -6,7 +6,7 @@ const FRAME_INTERVAL_MS = 1000 / 30
 const NOISE_FLOOR = 0.045
 const BASELINE_HEIGHT = 0.035
 const ATTACK_SMOOTHING = 0.38
-const RELEASE_SMOOTHING = 0.14
+const RELEASE_SMOOTHING = 0.20
 
 function getBucketRange(index: number, barCount: number, sampleCount: number) {
   const start = Math.floor(Math.pow(index / barCount, 1.7) * sampleCount)
@@ -60,7 +60,7 @@ export function smoothBarHeights(
 
 export function useAudioVisualizer(
   analyserNode: AnalyserNode | null | undefined,
-  barCount = 6,
+  barCount = 4,
 ): number[] {
   const [barHeights, setBarHeights] = useState<number[]>(() =>
     Array.from({ length: barCount }, () => 0),
