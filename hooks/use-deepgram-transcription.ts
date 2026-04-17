@@ -31,7 +31,7 @@ async function fetchDeepgramToken(): Promise<string> {
 
 function buildDeepgramUrl(): string {
   const params = new URLSearchParams({
-    model: 'nova-3',
+    model: 'nova-3-meeting',
     diarize: 'true',
     smart_format: 'true',
     interim_results: 'true',

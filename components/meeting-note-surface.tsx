@@ -11,6 +11,7 @@ import {
   normalizeTiptapDocument,
   type TiptapDocument,
 } from '@/lib/tiptap/tiptap-converter'
+import { copyDocumentAsMarkdown } from '@/lib/meetings/meeting-actions'
 import type { Meeting } from '@/lib/types'
 import { useNoteEnhancement } from '@/hooks/use-note-enhancement'
 
@@ -146,6 +147,10 @@ export function MeetingNoteSurface({
     [setDocumentConflict]
   )
 
+  const handleCopyMarkdown = useCallback(() => {
+    copyDocumentAsMarkdown(currentDocument, meeting.title)
+  }, [currentDocument, meeting.title])
+
   const handleAutosaveSuccess = useCallback(
     (payload: { documentHash: string }) => {
       setAcknowledgedHash(payload.documentHash)
@@ -173,6 +178,7 @@ export function MeetingNoteSurface({
             meetingErrorMessage={meeting.error_message}
             onDraftRequest={() => void handleDraftRequest()}
             onUndo={handleUndo}
+            onCopyMarkdown={handleCopyMarkdown}
           />
 
           <NoteEditorSurface

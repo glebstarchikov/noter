@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { DEFAULT_CHAT_MODEL, type ChatModelId } from "@/lib/ai-models";
+import { CHAT_MODEL } from "@/lib/ai-models";
 import {
   clearStoredMessages,
   getComposerPrompt,
@@ -64,7 +64,6 @@ export function useChatSession({
   const [activeScope, setActiveScope] =
     useState<ChatSurfaceScope>(defaultScope);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState<ChatModelId>(DEFAULT_CHAT_MODEL);
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [files, setFiles] = useState<FileList | undefined>(undefined);
   const [hasHydratedMessages, setHasHydratedMessages] = useState(false);
@@ -187,7 +186,7 @@ export function useChatSession({
         body:
           activeScope === "support"
             ? undefined
-            : { model, searchEnabled },
+            : { model: CHAT_MODEL, searchEnabled },
       });
 
       resetComposer();
@@ -197,7 +196,6 @@ export function useChatSession({
       authenticated,
       files,
       isLoading,
-      model,
       resetComposer,
       searchEnabled,
       sendMessage,
@@ -239,8 +237,6 @@ export function useChatSession({
     setActiveScope,
     input,
     setInput,
-    model,
-    setModel,
     searchEnabled,
     setSearchEnabled,
     files,

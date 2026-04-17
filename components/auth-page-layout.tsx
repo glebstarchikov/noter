@@ -14,12 +14,12 @@ export function AuthPageLayout({ title, description, children }: AuthPageLayoutP
       {/* Centered Auth Card Area */}
       <div className="w-full max-w-[420px] z-10 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
         
-        {/* Minimalist Centered Logo */}
-        <Link 
-          href="/" 
-          className="mb-8 flex items-center justify-center rounded-2xl size-14 bg-secondary/50 border border-border/50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group transition-transform hover:-translate-y-1"
+        {/* Centered Logo */}
+        <Link
+          href="/"
+          className="mb-8 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-transform hover:-translate-y-1"
         >
-          <Logo size="sm" className="bg-foreground text-background" />
+          <Logo size="lg" className="bg-foreground text-background" />
         </Link>
         
         {/* Form Container */}

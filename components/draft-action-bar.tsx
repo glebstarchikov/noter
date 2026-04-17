@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
+import { ClipboardCopy, Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -25,6 +25,7 @@ interface DraftActionBarProps {
   meetingErrorMessage: string | null
   onDraftRequest: () => void
   onUndo: () => void
+  onCopyMarkdown?: () => void
 }
 
 export function DraftActionBar({
@@ -42,6 +43,7 @@ export function DraftActionBar({
   meetingErrorMessage,
   onDraftRequest,
   onUndo,
+  onCopyMarkdown,
 }: DraftActionBarProps) {
   const isNeutralDraftFeedback = isNeutralEnhancementMessage(reviewState.lastError)
 
@@ -95,6 +97,21 @@ export function DraftActionBar({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold tracking-tight text-foreground">Notes</h2>
+            {onCopyMarkdown && hasDocumentContent && draftState === 'idle' ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={onCopyMarkdown}
+                    className="flex items-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Copy notes as Markdown"
+                  >
+                    <ClipboardCopy className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Copy as Markdown</TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{headerStateCopy}</p>
         </div>

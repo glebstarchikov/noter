@@ -194,11 +194,6 @@ scripts/010_drop_note_templates.sql  → run last`}</code>
                   ],
                   ['OPENAI_API_KEY', 'Yes', 'platform.openai.com/api-keys'],
                   [
-                    'AI_GATEWAY_API_KEY',
-                    'Alt for OPENAI_API_KEY',
-                    'Vercel AI Gateway — use instead of OPENAI_API_KEY',
-                  ],
-                  [
                     'DEEPGRAM_API_KEY',
                     'For live transcription',
                     'console.deepgram.com',

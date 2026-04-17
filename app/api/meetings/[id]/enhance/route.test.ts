@@ -268,11 +268,11 @@ describe('POST /api/meetings/[id]/enhance', () => {
     expect(response.status).toBe(200)
 
     const generateCall = (mockGenerateObject as any).mock.calls[0][0]
-    expect(generateCall.model).toEqual({ provider: 'openai', modelId: 'gpt-4o-mini' })
-    expect(generateCall.prompt).toContain("Preserve the user's structure and tone whenever possible")
+    expect(generateCall.model).toEqual({ provider: 'openai', modelId: 'gpt-5.4' })
+    expect(generateCall.prompt).toContain('Expand and improve the existing draft')
     expect(generateCall.prompt).toContain('Selected note format: General Meeting')
     expect(generateCall.prompt).toContain('"schemaVersion": 1')
-    expect(generateCall.prompt).toContain('Allowed block types only: heading, paragraph, bullet_list, task_list.')
+    expect(generateCall.prompt).toContain('Allowed block types: heading, paragraph, bullet_list, task_list.')
 
     const payload = await response.json()
     expect(payload.sourceHash).toBe(hashDocumentContent(currentDocument))
@@ -377,7 +377,7 @@ describe('POST /api/meetings/[id]/enhance', () => {
     expect(response.status).toBe(200)
     expect(mockGenerateObject).toHaveBeenCalledTimes(2)
     expect((mockGenerateObject as any).mock.calls[1][0].prompt).toContain(
-      'Previous attempt failed this safety check:'
+      'Previous attempt failed this validation check:'
     )
   })
 

@@ -277,7 +277,6 @@ describe("FloatingChatHost", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /more tools/i }));
 
-    expect(screen.getByText("GPT-5 mini")).not.toBeNull();
     expect(screen.getByRole("button", { name: /^Context$/i })).not.toBeNull();
 
     const searchButton = screen.getByRole("button", { name: /search web/i });
@@ -299,22 +298,13 @@ describe("FloatingChatHost", () => {
       await screen.findByLabelText("Ask across your notes..."),
     ).not.toBeNull();
 
-    // Open [+] tray again to access more actions
+    // Open [+] tray again to verify clear button is directly accessible
     fireEvent.click(screen.getByRole("button", { name: /more tools/i }));
 
-    fireEvent.pointerDown(
-      screen.getByRole("button", { name: /more chat actions/i }),
-      { button: 0 },
-    );
-
-    expect(await screen.findByText("Clear conversation")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: /clear conversation/i }),
+    ).not.toBeNull();
     expect(screen.queryByText("Collapse")).toBeNull();
-
-    fireEvent.keyDown(document.body, { key: "Escape" });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Clear conversation")).toBeNull();
-    });
 
     fireEvent.keyDown(window, { key: "Escape" });
 

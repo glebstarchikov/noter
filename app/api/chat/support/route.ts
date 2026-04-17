@@ -1,9 +1,10 @@
 import * as Sentry from '@sentry/nextjs'
-import { gateway, streamText, type UIMessage } from 'ai'
+import { streamText, type UIMessage } from 'ai'
+import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
-import { DEFAULT_CHAT_MODEL, resolveChatModel } from '@/lib/ai-models'
+import { CHAT_MODEL } from '@/lib/ai-models'
 import { buildChatModelMessages } from '@/lib/chat/chat-message-utils'
 import { SUPPORT_CHAT_SYSTEM_PROMPT } from '@/lib/notes/prompts'
 import { createRateLimiter, checkRateLimit } from '@/lib/api/rate-limit'
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
     }
 
     const result = streamText({
-      model: gateway(resolveChatModel(DEFAULT_CHAT_MODEL)),
+      model: openai(CHAT_MODEL),
       system: SUPPORT_CHAT_SYSTEM_PROMPT,
       messages: await buildChatModelMessages(messages as UIMessage[]),
       abortSignal: req.signal,

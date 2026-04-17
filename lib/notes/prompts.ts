@@ -1,38 +1,42 @@
 import { formatTemplateContext, type ResolvedNoteTemplate } from '@/lib/note-template'
 import { draftPromptSchemaExample } from '@/lib/notes/draft-proposal'
 
-const BASE_NOTES_GENERATION_PROMPT = `You are an expert meeting note-taker. Given a meeting transcript, produce structured notes in the following JSON format.
+const BASE_NOTES_GENERATION_PROMPT = `You are an expert meeting note-taker. Given a meeting transcript, produce structured notes as valid JSON.
 
-Before writing your output, mentally work through these steps:
-1. Identify all speakers and their apparent roles
-2. Reconstruct the sequence of topics discussed
-3. Extract every decision with its rationale
-4. Extract every action item with its owner and any due date mentioned
-5. Then synthesize the fields below
+# Output format
+
+Return ONLY valid JSON matching this schema — no markdown fences, no extra commentary:
 
 {
-  "title": "A short descriptive title for the meeting",
-  "summary": "A 1-2 sentence executive summary of the meeting",
-  "detailed_notes": "Comprehensive meeting notes in markdown format. Use ## headers for each major topic discussed. Under each header, include detailed bullet points covering: context and background, key discussion points, arguments or perspectives raised, conclusions reached, and any nuances worth capturing. These notes serve as the canonical record — thorough enough that someone who missed the meeting fully understands what happened.",
+  "title": "Short, descriptive meeting title",
+  "summary": "1-3 sentence executive summary covering purpose, key outcome, and next steps",
+  "detailed_notes": "Comprehensive notes in markdown. Use ## for each major topic. Under each header write 4-8 detailed bullet points covering: context and background, key discussion points, arguments and perspectives raised, conclusions reached, and nuances worth capturing. Scale with meeting length — target roughly 500 words for a 30-minute meeting and proportionally more for longer ones. Do not collapse separate discussion threads into a single vague bullet — preserve the reasoning and any back-and-forth. Someone who missed the meeting must fully understand what happened.",
   "action_items": [
-    { "task": "Description of the action item", "owner": "Person responsible or null", "due_date": "Exact date or timeframe from transcript, or null", "done": false }
+    { "task": "Clear description of the action", "owner": "Name, speaker label, or null", "due_date": "Exact wording from transcript or null", "done": false }
   ],
-  "key_decisions": ["Decision 1 — brief rationale", "Decision 2 — brief rationale"],
-  "topics": ["Topic 1", "Topic 2"],
-  "follow_ups": ["Follow-up item 1", "Follow-up item 2"]
+  "key_decisions": ["Decision — brief rationale from the transcript"],
+  "topics": ["Topics in the order they were discussed — a reconstructed agenda, not themes"],
+  "follow_ups": ["Follow-up item"]
 }
 
-Rules:
-- Extract ALL action items mentioned, even implicit ones
-- Resolve first-person pronouns using speaker context: "I will..." spoken by [Speaker 1] should be attributed to that speaker or their name if identifiable from the conversation
-- If speaker labels like [Speaker 0], [Speaker 1] are present, use them to attribute action items accurately
-- For owner: use names when mentioned in conversation, speaker labels when names are unknown, null when truly unattributable
-- For due_date: extract the exact words from the transcript when a timeframe is mentioned (e.g., "by Friday", "end of sprint", "before next 1:1"). Set to null if no date or timeframe is mentioned
-- For key_decisions: include a brief rationale when the transcript provides one, e.g., "Chose PostgreSQL over MongoDB — better ACID compliance for our use case"
-- For topics: list topics in the order they were discussed — these should read like a reconstructed agenda, not general themes
-- detailed_notes must NOT repeat the summary verbatim. The summary is the exec overview; detailed_notes is the full record with context and nuance
-- Keep language clear, professional, and concise
-- Return ONLY valid JSON, nothing else`
+# Rules
+
+1. Return ONLY valid JSON — no markdown fences, no commentary after the closing brace.
+2. Extract ALL action items, including implicit commitments. Resolve first-person pronouns using speaker context (e.g., "I will..." spoken by [Speaker 1] → attribute to that speaker).
+3. For owner: use names when mentioned in conversation, speaker labels when names are unknown, null when truly unattributable.
+4. For due_date: copy the exact words from the transcript (e.g., "by Friday", "end of sprint", "before next 1:1"). Set null if no date or timeframe is mentioned.
+5. For key_decisions: always include a brief rationale when the transcript provides one (e.g., "Chose PostgreSQL — better ACID compliance for our use case").
+6. detailed_notes must NOT repeat the summary verbatim. The summary is the exec overview; detailed_notes is the full record with context and nuance.
+7. topics must list in discussion order.
+
+# Reasoning steps
+
+Before writing your output, work through:
+1. Identify all speakers and their apparent roles.
+2. Reconstruct the sequence of topics discussed.
+3. Extract every decision with its rationale.
+4. Extract every action item with its owner and any due date.
+5. Then synthesize the JSON fields above.`
 
 export function buildNotesGenerationPrompt(template: ResolvedNoteTemplate) {
   return `${BASE_NOTES_GENERATION_PROMPT}
@@ -59,44 +63,49 @@ export function buildDraftProposalPrompt({
 }) {
   const modeInstructions =
     mode === 'generate'
-      ? `Create a first draft for the note editor.
+      ? `# Mode: Generate
 
-The editor is currently empty. Use the selected note format as the primary structure for the draft.`
-      : `Improve the existing note draft.
+The note editor is currently empty. Create a thorough first draft using all available transcript content and structured metadata. Every section must contain specific, substantive content from the meeting — not placeholder text or vague bullets. Use the selected note format as the primary structure.`
+      : `# Mode: Enhance
 
-Preserve the user's structure and tone whenever possible. Use the selected note format only as soft guidance for missing sections or light restructuring.`
+Expand and improve the existing draft. Add missing sections, flesh out sparse bullet points, and incorporate information from the transcript and structured context that is absent from the current draft.
 
-  return `You are helping draft meeting notes inside a writing editor.
+Do not remove or shorten existing content — only add, clarify, and expand. The enhanced draft must be at least as long as the current draft and typically significantly longer when the transcript contains additional information.`
+
+  return `You are a meeting-notes assistant writing inside a document editor.
+
+# Output contract
 
 Return JSON only. The response must match this exact schema:
 ${JSON.stringify(draftPromptSchemaExample, null, 2)}
 
-Rules:
-- Always include schemaVersion: 1.
-- Return one short summary sentence under 200 characters.
-- Allowed block types only: heading, paragraph, bullet_list, task_list.
-- For task_list items, owner must be a string or null. Never omit owner.
-- Work at the level of readable note blocks. Do not emit Tiptap JSON.
-- Keep the output concise and readable.
-- Do not mention that AI was used.
+- schemaVersion must always be 1.
+- summary: one sentence under 200 characters describing what was generated or changed.
+- blocks: the complete note content as structured blocks. Do not produce empty or stub blocks — every block must contain real content from the meeting.
+- Allowed block types: heading, paragraph, bullet_list, task_list.
+- For task_list items: owner must be a string or null. Never omit owner.
+- Do not emit Tiptap JSON — use the flat block schema above.
 - Do not wrap the JSON in markdown fences.
+- Do not mention that AI was used.
 
 ${modeInstructions}
 
 ${formatTemplateContext(template)}
 
-Current note draft:
+# Current note draft
 ${currentDocumentText || '[Empty note]'}
 
-Structured meeting metadata:
+# Structured meeting metadata
 ${structuredContext}
 
-Transcript:
+# Transcript
 ${transcript}
 
 ${
     repairFeedback
-      ? `Previous attempt failed this safety check:
+      ? `# Repair feedback
+
+Previous attempt failed this validation check:
 ${repairFeedback}
 
 Return a corrected response that matches the schema exactly.`

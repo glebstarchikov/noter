@@ -1,18 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Check, ChevronDown, Loader2, MoreHorizontal, Paperclip, Plus, Search, Send, X } from "lucide-react";
-import type { ChatModelId } from "@/lib/ai-models";
+import { AlertCircle, Check, ChevronDown, Loader2, Paperclip, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { getActiveContextLabel, getComposerPrompt, getContextDescription, getErrorMessage } from "@/lib/chat/chat-ui-helpers";
 import type { ChatSurfaceScope } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   InputGroup,
   InputGroupAddon,
@@ -31,7 +24,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ChatModelSelector } from "@/components/chat/chat-model-selector";
 import { ChatAttachmentPreview } from "@/components/chat/chat-attachment-preview";
 
 function ContextChip({ label }: { label: string }) {
@@ -53,8 +45,6 @@ export interface ChatComposerProps {
   activeScope: ChatSurfaceScope;
   allowGlobalToggle: boolean;
   onScopeChange: (scope: "meeting" | "global") => void;
-  model: ChatModelId;
-  onModelChange: (model: ChatModelId) => void;
   searchEnabled: boolean;
   onSearchToggle: () => void;
   selectedFiles: File[];
@@ -77,8 +67,6 @@ export function ChatComposer({
   activeScope,
   allowGlobalToggle,
   onScopeChange,
-  model,
-  onModelChange,
   searchEnabled,
   onSearchToggle,
   selectedFiles,
@@ -281,49 +269,37 @@ export function ChatComposer({
                 ) : null}
 
                 {canUseTools ? (
-                  <>
-                    <InputGroupButton
-                      variant="ghost"
-                      size="sm"
-                      aria-pressed={searchEnabled}
-                      data-active={searchEnabled ? "true" : "false"}
-                      onClick={onSearchToggle}
-                      className="rounded-lg hover:bg-accent-soft"
-                    >
-                      <Search data-icon="inline-start" />
-                      Search web
-                      {searchEnabled ? (
-                        <Check data-icon="inline-end" />
-                      ) : null}
-                    </InputGroupButton>
-
-                    <ChatModelSelector
-                      model={model}
-                      onModelChange={onModelChange}
-                    />
-                  </>
+                  <InputGroupButton
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={searchEnabled}
+                    data-active={searchEnabled ? "true" : "false"}
+                    onClick={onSearchToggle}
+                    className="rounded-lg hover:bg-accent-soft"
+                  >
+                    <Search data-icon="inline-start" />
+                    Search web
+                    {searchEnabled ? (
+                      <Check data-icon="inline-end" />
+                    ) : null}
+                  </InputGroupButton>
                 ) : null}
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <InputGroupButton
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="More chat actions"
+                      aria-label="Clear conversation"
+                      disabled={messagesCount === 0}
+                      onClick={onClearChat}
                       className="rounded-lg hover:bg-accent-soft"
                     >
-                      <MoreHorizontal />
+                      <Trash2 className="size-4" />
                     </InputGroupButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem
-                      disabled={messagesCount === 0}
-                      onSelect={() => onClearChat()}
-                    >
-                      Clear conversation
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </TooltipTrigger>
+                  <TooltipContent>Clear conversation</TooltipContent>
+                </Tooltip>
               </>
             ) : null}
 

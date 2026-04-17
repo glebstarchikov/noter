@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, mock, jest } from 'bun:tes
 
 const mockBuildChatModelMessages = mock(() => Promise.resolve([]))
 const mockSearchWeb = mock(() => Promise.resolve(''))
-const mockGateway = mock((model: string) => model)
+const mockOpenai = mock((model: string) => model)
 
 mock.module('@/lib/supabase/server', () => ({
   createClient: mock(() => {}),
@@ -10,7 +10,10 @@ mock.module('@/lib/supabase/server', () => ({
 
 mock.module('ai', () => ({
   streamText: mock(() => {}),
-  gateway: mockGateway,
+}))
+
+mock.module('@ai-sdk/openai', () => ({
+  openai: mockOpenai,
 }))
 
 mock.module('@/lib/chat/chat-message-utils', () => ({
@@ -109,7 +112,7 @@ describe('POST /api/chat', () => {
     expect(payload.code).toBe('MEETING_NOT_FOUND')
   })
 
-  it('routes model selection through gateway and does not query meeting_sources', async () => {
+  it('uses fixed model and does not query meeting_sources', async () => {
     const meetingData = {
       title: 'Meeting',
       transcript: 'Transcript',
@@ -127,12 +130,11 @@ describe('POST /api/chat', () => {
     const response = await POST(makeRequest({
       meetingId: 'meeting-1',
       messages: [],
-      model: 'gpt-5.4',
       searchEnabled: false,
     }))
 
     expect(response.status).toBe(200)
-    expect(mockGateway).toHaveBeenCalledWith('openai/gpt-5.4')
+    expect(mockOpenai).toHaveBeenCalledWith('gpt-5.4-mini')
     expect(from).toHaveBeenCalledTimes(1)
     expect(from).toHaveBeenCalledWith('meetings')
   })

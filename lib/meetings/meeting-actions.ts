@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { clearChatMessages } from '@/lib/chat/chat-storage'
-import type { ActionItem, Meeting } from '@/lib/types'
+import { tiptapToMarkdown } from '@/lib/tiptap/tiptap-converter'
+import type { ActionItem, Meeting, DiarizedSegment } from '@/lib/types'
 
 /**
  * Deletes a meeting via the API, clears chat messages, and returns true on success.
@@ -62,5 +63,52 @@ export function copyMeetingNotes(meeting: Pick<Meeting, 'title' | 'summary' | 'd
     toast.success('Notes copied to clipboard')
   }).catch(() => {
     toast.error("We couldn't copy your notes. Please try again.")
+  })
+}
+
+export function copyDocumentAsMarkdown(
+  document: unknown,
+  title: string,
+): void {
+  const markdown = tiptapToMarkdown(document)
+  if (!markdown) {
+    toast.error('Nothing to copy yet.')
+    return
+  }
+  navigator.clipboard.writeText(`# ${title}\n\n${markdown}`).then(() => {
+    toast.success('Notes copied as Markdown')
+  }).catch(() => {
+    toast.error("We couldn't copy your notes. Please try again.")
+  })
+}
+
+export function copyTranscriptAsMarkdown(
+  title: string,
+  transcript: string | null,
+  diarizedTranscript: DiarizedSegment[] | null,
+): void {
+  const lines: string[] = [`# ${title} — Transcript`, '']
+
+  if (diarizedTranscript?.length) {
+    let currentSpeaker: string | null = null
+    for (const seg of diarizedTranscript) {
+      if (seg.speaker !== currentSpeaker) {
+        if (currentSpeaker !== null) lines.push('')
+        lines.push(`**${seg.speaker}:**`)
+        currentSpeaker = seg.speaker
+      }
+      lines.push(seg.text.trim())
+    }
+  } else if (transcript?.trim()) {
+    lines.push(transcript.trim())
+  } else {
+    toast.error('No transcript to copy.')
+    return
+  }
+
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    toast.success('Transcript copied as Markdown')
+  }).catch(() => {
+    toast.error("We couldn't copy the transcript. Please try again.")
   })
 }

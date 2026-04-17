@@ -42,7 +42,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { deleteMeeting, toggleMeetingPin, copyMeetingNotes } from '@/lib/meetings/meeting-actions'
+import { deleteMeeting, toggleMeetingPin, copyMeetingNotes, copyTranscriptAsMarkdown } from '@/lib/meetings/meeting-actions'
 import { useRecording } from '@/hooks/use-recording'
 import { MeetingNoteSurface } from '@/components/meeting-note-surface'
 import { AudioUploader } from '@/components/audio-uploader'
@@ -184,6 +184,10 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
     copyMeetingNotes(meeting)
   }, [meeting])
 
+  const handleCopyTranscript = useCallback(() => {
+    copyTranscriptAsMarkdown(meeting.title, transcriptForDrawer, meeting.diarized_transcript)
+  }, [meeting.title, meeting.diarized_transcript, transcriptForDrawer])
+
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
@@ -245,6 +249,12 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
                     <Copy className="size-4" />
                     Copy notes
                   </DropdownMenuItem>
+                  {hasTranscript ? (
+                    <DropdownMenuItem onSelect={handleCopyTranscript}>
+                      <Copy className="size-4" />
+                      Copy transcript
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem onSelect={togglePin}>
                     <Pin className={cn('size-4', isPinned && 'rotate-45')} />
                     {isPinned ? 'Unpin note' : 'Pin note'}

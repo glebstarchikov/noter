@@ -4,7 +4,7 @@ Single source of truth for interactive UI quality across landing and dashboard s
 
 ## State Contract
 - Every interactive control must define behavior for: `default`, `hover`, `focus-visible`, `active`, `disabled`, and `loading` (when applicable).
-- `focus-visible` must be clearly visible in both light and dark mode.
+- `focus-visible` must be clearly visible in light mode (dark mode deferred to post-v1).
 - `disabled` state must include both visual feedback and blocked interaction.
 
 ## Accessibility Contract
@@ -19,7 +19,7 @@ Single source of truth for interactive UI quality across landing and dashboard s
 
 ## QA Matrix
 - Viewports: `390x844`, `768x1024`, `1440x900`.
-- Themes: light and dark.
+- Themes: light only (dark mode deferred to post-v1).
 - Input modes: mouse, keyboard-only, touch.
 - Validate all interactive controls on:
   - Landing `/`
