@@ -3,7 +3,7 @@ import { Github } from 'lucide-react'
 
 export function LandingNav() {
   return (
-    <nav className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-12 py-4">
+    <nav aria-label="Site navigation" className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-12 py-4 backdrop-blur-sm">
       <span className="text-[15px] tracking-tight" style={{ fontWeight: 650 }}>
         noter
       </span>
