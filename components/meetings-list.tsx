@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, X, SlidersHorizontal, AudioLines, Pin } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
@@ -25,58 +24,11 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { StatusDot } from '@/components/ui/status-dot'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { toggleMeetingPin } from '@/lib/meetings/meeting-actions'
 import type { Meeting, MeetingStatus } from '@/lib/types'
-
-type StatusMeta = {
-  label: string
-  tone: 'quiet' | 'ready' | 'active' | 'error'
-}
-
-function statusMeta(status: MeetingStatus): StatusMeta {
-  switch (status) {
-    case 'done':
-      return { label: 'Ready', tone: 'ready' }
-    case 'error':
-      return { label: 'Needs attention', tone: 'error' }
-    case 'recording':
-      return { label: 'Recording', tone: 'active' }
-    case 'generating':
-      return { label: 'In progress', tone: 'active' }
-    default:
-      return { label: 'Saved', tone: 'quiet' }
-  }
-}
-
-function StatusDot({ status }: { status: MeetingStatus }) {
-  const meta = statusMeta(status)
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 text-xs',
-        meta.tone === 'ready' && 'text-muted-foreground',
-        meta.tone === 'quiet' && 'text-muted-foreground',
-        meta.tone === 'active' && 'text-foreground/80',
-        meta.tone === 'error' && 'text-destructive'
-      )}
-    >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          meta.tone === 'ready' && 'bg-accent/80',
-          meta.tone === 'quiet' && 'bg-muted-foreground/35',
-          meta.tone === 'active' && 'bg-foreground/55',
-          meta.tone === 'error' && 'bg-destructive'
-        )}
-      />
-      {meta.label}
-    </span>
-  )
-}
-
 import { formatRelativeDate } from '@/lib/date-formatter'
 
 const STATUS_OPTIONS: { value: MeetingStatus | 'all'; label: string }[] = [
@@ -217,7 +169,7 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
               <SlidersHorizontal className="size-4" />
               Sort & filter
               {hasActiveControls && (
-                <Badge variant="secondary" className="rounded-full">Active</Badge>
+                <span className="inline-block size-2 rounded-full bg-accent ring-[3px] ring-accent-ring" />
               )}
             </Button>
           </DropdownMenuTrigger>
@@ -275,7 +227,7 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
           {filteredMeetings.map((meeting) => (
             <div
               key={meeting.id}
-              className="group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-secondary/35"
+              className="group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-card"
             >
               <Link
                 href={`/dashboard/${meeting.id}`}
@@ -286,8 +238,18 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: Meeting[
                     {meeting.title}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                    <span>{formatRelativeDate(meeting.created_at)}</span>
-                    <StatusDot status={meeting.status} />
+                    <span className="text-[11px] uppercase tracking-wider font-medium text-muted-foreground">
+                      {formatRelativeDate(meeting.created_at)}
+                    </span>
+                    <StatusDot
+                      status={meeting.status}
+                      label={
+                        meeting.status === 'done' ? 'Ready'
+                        : meeting.status === 'error' ? 'Needs attention'
+                        : meeting.status === 'recording' ? 'Recording'
+                        : 'In progress'
+                      }
+                    />
                   </div>
                 </div>
               </Link>
