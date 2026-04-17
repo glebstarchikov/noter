@@ -59,7 +59,6 @@ export interface UseDraftProposalReturn {
   clearUndoDocument: () => void
   requestDraft: (params: {
     onAccepted: (payload: DraftAcceptedPayload) => void
-    onShowEditor: () => void
   }) => Promise<void>
 }
 
@@ -212,16 +211,10 @@ export function useDraftProposal(
   const requestDraft = useCallback(
     async ({
       onAccepted,
-      onShowEditor,
     }: {
       onAccepted: (payload: DraftAcceptedPayload) => void
-      onShowEditor: () => void
     }) => {
       if (!shouldShowAction || draftStateRef.current !== 'idle') return
-
-      if (actionMode === 'generate') {
-        onShowEditor()
-      }
 
       setRegenPromptDismissed(false)
       setDraftState('generating')

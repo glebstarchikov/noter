@@ -38,7 +38,6 @@ export function useNoteEnhancement(
     onDocumentAccepted,
     onAcknowledgedHashChange,
     onLoadLatestVersion: onLoadLatestVersionCallback,
-    onShowEditor,
   }: {
     currentDocument: TiptapDocument
     acknowledgedHash: string
@@ -54,8 +53,6 @@ export function useNoteEnhancement(
     }) => void
     onAcknowledgedHashChange: (hash: string) => void
     onLoadLatestVersion: (payload: { document: TiptapDocument; documentHash: string }) => void
-    /** Called when a draft is requested on an empty document, to show the editor immediately. */
-    onShowEditor: () => void
   }
 ): UseNoteEnhancementReturn {
   const [documentConflict, setDocumentConflict] = useState<DocumentSaveConflict | null>(null)
@@ -191,9 +188,8 @@ export function useNoteEnhancement(
         setDocumentConflict(null)
         onDocumentAccepted(payload)
       },
-      onShowEditor,
     })
-  }, [requestDraft, onAcknowledgedHashChange, onDocumentAccepted, onShowEditor])
+  }, [requestDraft, onAcknowledgedHashChange, onDocumentAccepted])
 
   return {
     draftState,
