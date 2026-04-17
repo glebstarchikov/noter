@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { readApiError } from '@/lib/meetings/meeting-pipeline'
 import { toast } from 'sonner'
 import { useDeepgramTranscription } from '@/hooks/use-deepgram-transcription'
 import { useMediaStream } from '@/hooks/use-media-stream'
@@ -176,8 +175,6 @@ export function useRecording({
     setPhase('stopping')
     if (timerRef.current) clearInterval(timerRef.current)
     const supabase = createClient()
-    let userId: string | null = null
-    let generationStarted = false
 
     try {
       const recorder = mediaRecorderRef.current
@@ -197,7 +194,6 @@ export function useRecording({
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
-      userId = user.id
 
       const storagePath = `${user.id}/${meetingId}.webm`
       const maxRetries = 3
@@ -214,7 +210,7 @@ export function useRecording({
       const { error: updateError } = await supabase
         .from('meetings')
         .update({
-          status: 'generating',
+          status: 'done',
           audio_url: storagePath,
           audio_duration: duration,
           ...(flatTranscript ? { transcript: flatTranscript } : {}),
@@ -225,43 +221,10 @@ export function useRecording({
 
       if (updateError) throw new Error(updateError.message)
 
-      generationStarted = true
       setPhase('done')
-
-      const notesRes = await fetch('/api/generate-notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meetingId }),
-      })
-
-      if (!notesRes.ok) {
-        const { message } = await readApiError(notesRes, 'Notes generation failed')
-        throw new Error(message)
-      }
-
       router.refresh()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save recording'
-
-      if (generationStarted && userId) {
-        try {
-          await supabase
-            .from('meetings')
-            .update({
-              status: 'error',
-              error_message: message,
-            })
-            .eq('id', meetingId)
-            .eq('user_id', userId)
-        } catch {
-          // Best effort only.
-        }
-
-        toast.error(message)
-        router.refresh()
-        return
-      }
-
       toast.error(message)
       resetRecordingSurface()
     } finally {
