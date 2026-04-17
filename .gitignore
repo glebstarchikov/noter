@@ -25,3 +25,6 @@ coverage/
 
 # Brainstorming session artifacts (ephemeral mockups)
 .superpowers/
+
+# Session recovery backups (ephemeral, never version-controlled)
+docs/recovered-sessions/

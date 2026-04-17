@@ -1,4 +1,4 @@
-# Easy Noter
+# noter
 
 AI-powered meeting notes app built with Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Supabase, and Tiptap 3.
 
@@ -47,8 +47,6 @@ Always run `bun run typecheck` and `bun run lint` before committing.
 
 Use the `@/` path alias for imports.
 
-> **Note**: The `lib/` subdomain reorganization is Phase 1 Task 2 of the Workspace redesign. Until that task lands, imports may reference the old flat `lib/*` paths. The structure above is the target; subagents executing Phase 1 should follow the plan's move map.
-
 ## Code Style
 
 - TypeScript, functional React components, 2-space indent
@@ -62,7 +60,7 @@ Use the `@/` path alias for imports.
 - **API route validation**: use `validateBody(request, schema)` from `@/lib/api/validate` for all JSON POST/PATCH routes. Don't hand-roll `request.json().catch(...)` + `schema.safeParse()` — that boilerplate was extracted in Phase 1 Task 3.
 - **Error responses**: use `errorResponse(message, code, status)` from `@/lib/api/api-helpers`. Never `NextResponse.json({ error })` directly in route handlers.
 - **Logging**: in `app/api/**` and `lib/api/**`, no bare `console.error` / `console.warn` / `console.info`. Route errors through `Sentry.captureException(error, { tags, extra })`, events through `Sentry.addBreadcrumb(...)` or `Sentry.captureMessage(...)`. `console.log` is fine in dev-only paths (`if (process.env.NODE_ENV === 'development')`).
-- **RLS is mandatory**: every table must have row-level security policies. Never use service-role Supabase client in user-facing routes — only in internal/admin routes (cron-gated or server-only). Note: the `/api/processing/worker` route was removed in Phase 1.5; `createAdminClient` is now unused.
+- **RLS is mandatory**: every table must have row-level security policies. Never use service-role Supabase client in user-facing routes — only in internal/admin routes.
 - **Rate limiting**: expensive routes (enhance, generate-notes, chat) use Upstash `Ratelimit.slidingWindow` — see `app/api/meetings/[id]/enhance/route.ts` for the canonical pattern.
 
 ## Testing
@@ -74,9 +72,9 @@ Use the `@/` path alias for imports.
 ## Architecture
 
 - **Supabase** for auth (RLS on all tables) and Postgres database
-- **Tiptap 3.20** rich text editor — document stored as JSON in `document_content` JSONB column
-- **Deepgram** for real-time audio transcription via WebSocket
-- **Vercel AI SDK + OpenAI** for note generation and chat
+- **Tiptap 3** rich text editor — document stored as JSON in `document_content` JSONB column
+- **Deepgram** for real-time audio transcription via WebSocket (`nova-3-meeting` model)
+- **Vercel AI SDK + OpenAI** for chat (`gpt-5-mini`); direct OpenAI SDK for note generation (`gpt-5.4`) and metadata extraction (`gpt-5-mini`)
 - Meeting page (`/dashboard/[id]`) is a tri-state surface: recording → processing → done
 - Auto-save: 2s debounce → PATCH `/api/meetings/[id]/document`
 
@@ -134,11 +132,8 @@ Copy `.env.example` to `.env.local`. Required keys:
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `OPENAI_API_KEY`
 
-Optional: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` (both were used by the processing-worker pipeline, removed in Phase 1.5 — self-host deployments now use the same direct note-generation path as SaaS), `DEEPGRAM_API_KEY`, `TAVILY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`.
+Optional: `DEEPGRAM_API_KEY`, `TAVILY_API_KEY`, `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`.
 
 ## Database
 
 SQL migrations live in `scripts/` and are numbered sequentially (001–010). Always add new migrations; never modify existing ones. All tables use Row-Level Security.
-
-- `scripts/009_drop_processing_jobs.sql` — drops the `processing_jobs` table (Phase 1.5 Task 3, worker pipeline removal)
-- `scripts/010_drop_note_templates.sql` — drops the `note_templates` table and `meetings.template_id` column (Phase 2, templates feature removal)
