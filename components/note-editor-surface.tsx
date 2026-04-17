@@ -51,14 +51,14 @@ export function NoteEditorSurface({
   return (
     <>
       {documentConflict && (
-        <Alert className="rounded-2xl border-amber-300/60 bg-amber-50/80 text-amber-950">
-          <AlertCircle />
+        <Alert className="rounded-xl border-destructive/20 bg-destructive/5 text-foreground">
+          <AlertCircle className="text-destructive" />
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="flex flex-col gap-1">
               <AlertTitle className="line-clamp-none">
                 A newer version of this note exists
               </AlertTitle>
-              <AlertDescription className="text-amber-900/80">
+              <AlertDescription className="text-muted-foreground">
                 {documentConflict.message}
               </AlertDescription>
             </div>
@@ -68,15 +68,16 @@ export function NoteEditorSurface({
                 variant="ghost"
                 size="sm"
                 onClick={onLoadLatestVersion}
-                className="h-8 rounded-full border-amber-300/70 bg-transparent shadow-none"
+                className="h-8 rounded-full shadow-none"
               >
                 Load latest
               </Button>
               <Button
                 type="button"
+                variant="ghost"
                 size="sm"
                 onClick={onKeepLocalDraft}
-                className="liquid-glass-button h-8 rounded-full"
+                className="h-8 rounded-full shadow-none"
               >
                 Replace with my draft
               </Button>
@@ -85,7 +86,7 @@ export function NoteEditorSurface({
                 variant="ghost"
                 size="sm"
                 onClick={onDismissConflict}
-                className="h-8 rounded-full text-amber-900/70 shadow-none"
+                className="h-8 rounded-full shadow-none"
               >
                 Keep editing
               </Button>
