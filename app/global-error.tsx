@@ -23,7 +23,7 @@ export default function GlobalError({
           <p className="text-sm text-muted-foreground">An unexpected error occurred. Please try again.</p>
           <button
             onClick={reset}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+            className="rounded-xl bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
           >
             Try again
           </button>

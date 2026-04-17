@@ -53,7 +53,7 @@ function ToolbarButton({
       }}
       aria-label={label}
       className={cn(
-        'rounded-md shadow-none',
+        'rounded-lg shadow-none',
         active && 'text-foreground'
       )}
     >
