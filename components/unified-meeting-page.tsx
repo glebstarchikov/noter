@@ -101,10 +101,16 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
   }, [meeting.status])
 
   // ── Derived values ────────────────────────────────────────────────
-  const showRecordingControls = meeting.status === 'recording'
-  const live = showRecordingControls && (phase === 'recording' || phase === 'stopping')
   const transcriptForDrawer = savedTranscript || meeting.transcript
   const hasTranscript = Boolean(transcriptForDrawer?.trim()) || savedSegments.length > 0
+  const isActivelyRecording = phase === 'recording' || phase === 'stopping'
+  const live = isActivelyRecording
+  // Show the "ready to record" panel whenever the user hasn't recorded yet and
+  // isn't currently mid-session. New notes are created with status 'done', so we
+  // must not gate this on meeting.status — the presence of a transcript (or an
+  // active recording phase) is the true signal.
+  const showReadyToRecord = !hasTranscript && !isActivelyRecording && !showUploader
+  const showRecordingComplete = hasTranscript && phase === 'done' && !isActivelyRecording
 
   // ── Assistant bridge context ──────────────────────────────────────
   const assistantTranscriptSegments = useMemo(
@@ -258,11 +264,11 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
 
         {/* Zone 2 — Recording controls */}
         <RecordingErrorBoundary onReset={resetRecordingSurface}>
-          {/* Setup: ready to record */}
-          {showRecordingControls && phase === 'setup' && (
+          {/* Ready to record: no transcript, not currently recording */}
+          {showReadyToRecord && (
             <StatusPanel
               title="Ready to record"
-              description="Press Start to begin. The live transcript will appear as you speak."
+              description="Press Record to begin — or upload an audio file. The live transcript will appear as you speak."
               actions={
                 <div className="flex flex-wrap items-center gap-3">
                   <Button
@@ -271,7 +277,16 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
                     onClick={handleStartRecording}
                   >
                     <Mic className="size-4" />
-                    Start recording
+                    Record
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    className="rounded-full gap-2"
+                    onClick={() => setShowUploader(true)}
+                  >
+                    <Upload className="size-4" />
+                    Upload audio
                   </Button>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -293,41 +308,8 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
             />
           )}
 
-          {/* Active recording */}
-          {showRecordingControls && phase === 'recording' && (
-            <div aria-live="polite">
-              <RecordingStatusBar
-                isPaused={isPaused}
-                isConnected={isConnected}
-                hasSystemAudio={hasSystemAudio}
-                durationLabel={formatTime(duration)}
-                onTogglePause={togglePause}
-                onStop={handleStop}
-              />
-            </div>
-          )}
-
-          {/* Stopping: saving recording */}
-          {showRecordingControls && phase === 'stopping' && (
-            <StatusPanel
-              icon={<Loader2 className="animate-spin text-accent" />}
-              title="Saving your recording…"
-              description="Uploading audio and preparing your transcript."
-            />
-          )}
-        </RecordingErrorBoundary>
-
-        {/* Post-recording: quiet completion panel or record/upload actions */}
-        {(phase === 'done' || !showRecordingControls) && hasTranscript && (
-          <StatusPanel
-            icon={<CheckCircle2 className="text-accent" />}
-            title="Recording complete"
-            description="Your note stays editable. Open the transcript only when you need more detail."
-          />
-        )}
-
-        {(phase === 'done' || !showRecordingControls) && !hasTranscript && (
-          showUploader ? (
+          {/* Uploader visible */}
+          {!hasTranscript && !isActivelyRecording && showUploader && (
             <div className="space-y-4">
               <Button
                 variant="ghost"
@@ -345,48 +327,46 @@ export function UnifiedMeetingPage({ meeting }: { meeting: Meeting }) {
                 }}
               />
             </div>
-          ) : (
+          )}
+
+          {/* Active recording */}
+          {phase === 'recording' && (
+            <div aria-live="polite">
+              <RecordingStatusBar
+                isPaused={isPaused}
+                isConnected={isConnected}
+                hasSystemAudio={hasSystemAudio}
+                durationLabel={formatTime(duration)}
+                onTogglePause={togglePause}
+                onStop={handleStop}
+              />
+            </div>
+          )}
+
+          {/* Stopping: saving recording */}
+          {phase === 'stopping' && (
             <StatusPanel
-              title="No recording yet"
-              description="Record a meeting or upload an audio file to get started."
-              actions={
-                <div className="flex flex-wrap items-center gap-3">
-                  {meeting.status === 'recording' ? null : (
-                    <>
-                      <Button
-                        size="lg"
-                        className="rounded-full gap-2"
-                        onClick={() => {
-                          // Navigate to a fresh recording session for this meeting
-                          // by reloading with recording status
-                          toast.info('Start a new note with recording from the dashboard.')
-                        }}
-                      >
-                        <Mic className="size-4" />
-                        Record
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="lg"
-                        className="rounded-full gap-2"
-                        onClick={() => setShowUploader(true)}
-                      >
-                        <Upload className="size-4" />
-                        Upload audio
-                      </Button>
-                    </>
-                  )}
-                </div>
-              }
+              icon={<Loader2 className="animate-spin text-accent" />}
+              title="Saving your recording…"
+              description="Uploading audio and preparing your transcript."
             />
-          )
-        )}
+          )}
+
+          {/* Quiet "recording complete" confirmation */}
+          {showRecordingComplete && (
+            <StatusPanel
+              icon={<CheckCircle2 className="text-accent" />}
+              title="Recording complete"
+              description="Your note stays editable. Open the transcript only when you need more detail."
+            />
+          )}
+        </RecordingErrorBoundary>
 
         {/* Zone 3 — Editor (always visible) */}
         <MeetingNoteSurface
           meeting={meeting}
           transcript={transcriptForDrawer}
-          isRecordingComplete={phase === 'done' || meeting.status !== 'recording'}
+          isRecordingComplete={phase === 'done' && !isActivelyRecording}
         />
       </div>
 
