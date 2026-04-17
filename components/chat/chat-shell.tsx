@@ -161,7 +161,7 @@ export function ChatShell({
             data-mode={visibleMode}
             data-generating={isLoading ? "true" : "false"}
             className={cn(
-              "liquid-glass-shell pointer-events-auto flex flex-1 origin-bottom flex-col overflow-hidden rounded-[30px]",
+              "pointer-events-auto flex flex-1 origin-bottom flex-col overflow-hidden rounded-[28px] border border-border/60 bg-card shadow-lg",
               "transition-[box-shadow,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
               isExpanded ? "translate-y-0 scale-100" : "translate-y-1 scale-[0.992]",
             )}
@@ -181,7 +181,7 @@ export function ChatShell({
                 ref={dockButtonRef}
                 type="button"
                 onClick={() => setMode("chat")}
-                className="liquid-glass-dock flex h-full w-full items-center justify-between gap-4 rounded-[30px] px-4 text-left transition-transform"
+                className="flex h-full w-full items-center justify-between gap-4 rounded-full bg-card border border-border/60 px-5 text-left transition-[background-color,border-color,transform] hover:bg-card/80 hover:border-border shadow-sm"
                 aria-expanded="false"
                 aria-label="Open chat"
               >

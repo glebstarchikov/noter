@@ -133,7 +133,7 @@ export function ChatComposer({
           onSubmit(input);
         }}
       >
-        <InputGroup className="liquid-glass-input h-auto rounded-[26px] border-border/60 shadow-none">
+        <InputGroup className="h-auto rounded-2xl border border-border/60 bg-background shadow-none focus-within:border-accent/40 transition-colors">
           {showContextRow ? (
             <div className="flex w-full flex-wrap gap-2 px-4 pt-4 pb-0">
               {canShowContext ? (
@@ -173,9 +173,9 @@ export function ChatComposer({
               size="icon-sm"
               onClick={() => setShowToolsTray((prev) => !prev)}
               aria-label={showToolsTray ? "Hide tools" : "More tools"}
-              className="liquid-glass-control border border-border/40"
+              className="rounded-full hover:bg-accent-soft"
             >
-              {showToolsTray ? <X /> : <Plus />}
+              {showToolsTray ? <X className="size-4" /> : <Plus className="size-4" />}
             </InputGroupButton>
 
             {/* Tools tray — shown when toggled open */}
@@ -187,7 +187,7 @@ export function ChatComposer({
                       <InputGroupButton
                         variant="ghost"
                         size="sm"
-                        className="liquid-glass-control border border-border/40"
+                        className="rounded-lg hover:bg-accent-soft"
                       >
                         Context
                         <ChevronDown data-icon="inline-end" />
@@ -272,7 +272,7 @@ export function ChatComposer({
                     variant="ghost"
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
-                    className="liquid-glass-control border border-border/40"
+                    className="rounded-lg hover:bg-accent-soft"
                   >
                     <Paperclip data-icon="inline-start" />
                     Add files
@@ -287,7 +287,7 @@ export function ChatComposer({
                       aria-pressed={searchEnabled}
                       data-active={searchEnabled ? "true" : "false"}
                       onClick={onSearchToggle}
-                      className="liquid-glass-control border border-border/40"
+                      className="rounded-lg hover:bg-accent-soft"
                     >
                       <Search data-icon="inline-start" />
                       Search web
@@ -309,7 +309,7 @@ export function ChatComposer({
                       variant="ghost"
                       size="icon-sm"
                       aria-label="More chat actions"
-                      className="liquid-glass-control border border-border/40"
+                      className="rounded-lg hover:bg-accent-soft"
                     >
                       <MoreHorizontal />
                     </InputGroupButton>
@@ -335,7 +335,7 @@ export function ChatComposer({
                   size="icon-sm"
                   disabled={submitDisabled}
                   aria-label="Send message"
-                  className="liquid-glass-button ml-auto"
+                  className="rounded-full ml-auto"
                 >
                   {isLoading ? (
                     <Loader2 className="animate-spin" />
