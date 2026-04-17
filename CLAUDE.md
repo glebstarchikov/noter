@@ -138,8 +138,7 @@ Optional: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` (both were used by the proc
 
 ## Database
 
-SQL migrations live in `scripts/` and are numbered sequentially (001–009). Always add new migrations; never modify existing ones. All tables use Row-Level Security.
+SQL migrations live in `scripts/` and are numbered sequentially (001–010). Always add new migrations; never modify existing ones. All tables use Row-Level Security.
 
 - `scripts/009_drop_processing_jobs.sql` — drops the `processing_jobs` table (Phase 1.5 Task 3, worker pipeline removal)
-
-Upcoming migration (Phase 2 of the redesign): `scripts/010_drop_note_templates.sql` will drop the `note_templates` table along with the templates feature cut.
+- `scripts/010_drop_note_templates.sql` — drops the `note_templates` table and `meetings.template_id` column (Phase 2, templates feature removal)

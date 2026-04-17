@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Verify user owns the meeting
     const { data: meeting } = await supabase
       .from('meetings')
-      .select('id, user_id, transcript, template_id, diarized_transcript, audio_duration')
+      .select('id, user_id, transcript, diarized_transcript, audio_duration')
       .eq('id', meetingId)
       .eq('user_id', user.id)
       .single()
@@ -68,10 +68,8 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId)
       .eq('user_id', user.id)
 
-    const normalizedNotes = await generateNotesFromTranscript(supabase, {
+    const normalizedNotes = await generateNotesFromTranscript({
       transcript: transcriptToProcess,
-      templateId: meeting.template_id,
-      userId: user.id,
       diarizedTranscript: meeting.diarized_transcript as DiarizedSegment[] | null,
       audioDuration: meeting.audio_duration as number | null,
     })

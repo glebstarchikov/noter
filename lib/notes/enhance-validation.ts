@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { validateBody } from '@/lib/api/validate'
 import { isTiptapDocument } from '@/lib/tiptap/tiptap-converter'
-import { resolveMeetingTemplate } from '@/lib/note-template'
+import { DEFAULT_NOTE_TEMPLATE } from '@/lib/note-template'
 import type { EnhancementState, Meeting } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -79,7 +79,7 @@ export interface ValidatedEnhanceRequest {
   supabase: SupabaseClient
   userId: string
   persistedState: EnhancementState
-  template: Awaited<ReturnType<typeof resolveMeetingTemplate>>
+  template: typeof DEFAULT_NOTE_TEMPLATE
 }
 
 export async function validateEnhanceRequest(
@@ -105,7 +105,7 @@ export async function validateEnhanceRequest(
 
   const { data: meeting } = await supabase
     .from('meetings')
-    .select('id, transcript, template_id, document_content, enhancement_state, summary, detailed_notes, action_items, key_decisions, topics, follow_ups')
+    .select('id, transcript, document_content, enhancement_state, summary, detailed_notes, action_items, key_decisions, topics, follow_ups')
     .eq('id', meetingId)
     .eq('user_id', user.id)
     .single()
@@ -124,26 +124,12 @@ export async function validateEnhanceRequest(
 
   const persistedState = normalizeEnhancementState(meeting.enhancement_state)
 
-  let template: Awaited<ReturnType<typeof resolveMeetingTemplate>>
-  try {
-    template = await resolveMeetingTemplate(
-      supabase as { from: (table: string) => any },
-      {
-        template_id: meeting.template_id,
-        user_id: user.id,
-      }
-    )
-  } catch (error: unknown) {
-    Sentry.captureException(error, { tags: { route: 'meetings/enhance', phase: 'template-resolve' } })
-    return errorResponse('Failed to resolve meeting template', 'TEMPLATE_ERROR', 500)
-  }
-
   return {
     meeting: meeting as Meeting,
     parsedBody: parsedBody.data,
     supabase: supabase as SupabaseClient,
     userId: user.id,
     persistedState,
-    template,
+    template: DEFAULT_NOTE_TEMPLATE,
   }
 }

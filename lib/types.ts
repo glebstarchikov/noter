@@ -15,7 +15,6 @@ export interface Meeting {
   error_message: string | null
   is_pinned: boolean
   document_content: Record<string, unknown> | null
-  template_id: string | null
   diarized_transcript: DiarizedSegment[] | null
   enhancement_status: EnhancementStatus
   enhancement_state: EnhancementState | null
@@ -28,26 +27,6 @@ export interface DiarizedSegment {
   start: number
   end: number
   text: string
-}
-
-export interface NoteTemplate {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  isBuiltin: boolean
-  isDefault?: boolean
-}
-
-export interface CustomNoteTemplate {
-  id: string
-  user_id: string
-  name: string
-  description: string | null
-  prompt: string
-  is_default: boolean
-  created_at: string
-  updated_at: string
 }
 
 export interface ActionItem {

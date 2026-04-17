@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
     FileText,
-    LayoutTemplate,
     LogOut,
     Plus,
     ChevronsUpDown,
@@ -40,7 +39,6 @@ import {
 
 const navItems = [
     { href: '/dashboard', label: 'Notes', icon: FileText },
-    { href: '/dashboard/templates', label: 'Formats', icon: LayoutTemplate },
 ]
 
 

@@ -21,7 +21,6 @@ const fakeMeeting = {
   error_message: null,
   is_pinned: false,
   document_content: null,
-  template_id: null,
   diarized_transcript: null,
   enhancement_status: 'idle',
   created_at: '2024-01-01T00:00:00Z',

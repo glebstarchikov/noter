@@ -45,7 +45,6 @@ describe('MeetingsList', () => {
       follow_ups: [],
       audio_url: null,
       document_content: null,
-      template_id: null,
       diarized_transcript: null,
       enhancement_status: 'idle',
       enhancement_state: null,

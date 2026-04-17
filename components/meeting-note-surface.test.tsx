@@ -87,7 +87,6 @@ function makeMeeting(overrides: Partial<Meeting> = {}): Meeting {
     error_message: null,
     is_pinned: false,
     document_content: makeDocument('Typed note from the user'),
-    template_id: null,
     diarized_transcript: null,
     enhancement_status: 'idle',
     enhancement_state: null,

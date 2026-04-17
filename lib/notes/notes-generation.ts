@@ -2,20 +2,14 @@ import { getOpenAI } from '@/lib/openai'
 import { normalizeStringArray, normalizeActionItems } from '@/lib/notes/note-normalization'
 import { buildNotesGenerationPrompt } from '@/lib/notes/prompts'
 import { generatedNotesSchema } from '@/lib/schemas'
-import { resolveMeetingTemplate, type ResolvedNoteTemplate } from '@/lib/note-template'
+import { DEFAULT_NOTE_TEMPLATE } from '@/lib/note-template'
 import { formatTranscriptForNotes, countSpeakers, buildMeetingContextHeader } from '@/lib/transcript-formatter'
 import { METADATA_MODEL } from '@/lib/ai-models'
 import { MAX_TRANSCRIPT_CHARS } from '@/lib/truncation-limits'
 import type { DiarizedSegment } from '@/lib/types'
 
-type SupabaseClient = {
-  from: (table: string) => unknown
-}
-
 export interface GenerateNotesInput {
   transcript: string
-  templateId: string | null
-  userId: string
   diarizedTranscript?: DiarizedSegment[] | null
   audioDuration?: number | null
 }
@@ -46,19 +40,15 @@ function shouldRetryWithoutStructuredResponseFormat(error: unknown) {
  * Shared between the direct `/api/generate-notes` route and the background worker.
  */
 export async function generateNotesFromTranscript(
-  supabase: SupabaseClient,
   input: GenerateNotesInput,
 ): Promise<GeneratedNotes> {
-  const { transcript, templateId, userId, diarizedTranscript, audioDuration } = input
+  const { transcript, diarizedTranscript, audioDuration } = input
 
   const truncatedTranscript = transcript.length > MAX_TRANSCRIPT_CHARS
     ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) + '\n\n[Transcript truncated due to length]'
     : transcript
 
-  const template: ResolvedNoteTemplate = await resolveMeetingTemplate(
-    supabase as Parameters<typeof resolveMeetingTemplate>[0],
-    { template_id: templateId, user_id: userId },
-  )
+  const template = DEFAULT_NOTE_TEMPLATE
 
   const formattedTranscript = formatTranscriptForNotes(truncatedTranscript, diarizedTranscript)
 

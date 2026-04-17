@@ -43,21 +43,12 @@ function buildMeetingsSelect(meetingData: unknown) {
   return mock(() => ({ eq: eqId }))
 }
 
-function buildNoteTemplatesSelect(templateData: unknown = null) {
-  const maybeSingle = mock(() => Promise.resolve({ data: templateData, error: null }))
-  const eqUser = mock(() => ({ maybeSingle }))
-  const eqId = mock(() => ({ eq: eqUser }))
-  return mock(() => ({ eq: eqId }))
-}
-
 function mockSupabase({
   user,
   meetingData = null,
-  templateData = null,
 }: {
   user: { id: string } | null
   meetingData?: unknown
-  templateData?: unknown
 }) {
   const updateCalls: unknown[] = []
   const updateMock = mock((payload: unknown) => {
@@ -72,12 +63,6 @@ function mockSupabase({
       return {
         select: buildMeetingsSelect(meetingData),
         update: updateMock,
-      }
-    }
-
-    if (table === 'note_templates') {
-      return {
-        select: buildNoteTemplatesSelect(templateData),
       }
     }
 
@@ -149,7 +134,7 @@ describe('POST /api/generate-notes', () => {
   it('returns 400 if transcript is missing in DB and request', async () => {
     mockSupabase({
       user: { id: 'user-1' },
-      meetingData: { id: 'meeting-1', user_id: 'user-1', transcript: null, template_id: null },
+      meetingData: { id: 'meeting-1', user_id: 'user-1', transcript: null },
     })
     const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
     expect(res.status).toBe(400)
@@ -159,64 +144,14 @@ describe('POST /api/generate-notes', () => {
     })
   })
 
-  it('uses the builtin template prompt and never writes document_content', async () => {
+  it('uses the default template and persists document_content', async () => {
     const { updateCalls } = mockSupabase({
       user: { id: 'user-1' },
       meetingData: {
         id: 'meeting-1',
         user_id: 'user-1',
         transcript: 'Transcript from DB',
-        template_id: 'sales-call',
       },
-    })
-
-    const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
-    expect(res.status).toBe(200)
-
-    const completionCall = (mockCompletionCreate as any).mock.calls[0][0]
-    expect(completionCall.messages[0].content).toContain('Selected note format: Sales Call')
-
-    const finalUpdate = updateCalls[1] as Record<string, unknown>
-    expect(finalUpdate.document_content).toBeDefined()
-    expect(finalUpdate.title).toBe('Weekly sync')
-    expect(finalUpdate.status).toBe('done')
-  })
-
-  it('uses a custom template prompt when template_id points to a user template', async () => {
-    mockSupabase({
-      user: { id: 'user-1' },
-      meetingData: {
-        id: 'meeting-1',
-        user_id: 'user-1',
-        transcript: 'Transcript from DB',
-        template_id: 'custom-template',
-      },
-      templateData: {
-        id: 'custom-template',
-        name: 'Board Update',
-        description: 'Investor-ready structure',
-        prompt: 'Focus on metrics, risks, and asks.',
-      },
-    })
-
-    const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
-    expect(res.status).toBe(200)
-
-    const completionCall = (mockCompletionCreate as any).mock.calls[0][0]
-    expect(completionCall.messages[0].content).toContain('Selected note format: Board Update')
-    expect(completionCall.messages[0].content).toContain('Focus on metrics, risks, and asks.')
-  })
-
-  it('falls back to the default template when the selected custom template is missing', async () => {
-    mockSupabase({
-      user: { id: 'user-1' },
-      meetingData: {
-        id: 'meeting-1',
-        user_id: 'user-1',
-        transcript: 'Transcript from DB',
-        template_id: 'missing-template',
-      },
-      templateData: null,
     })
 
     const res = await POST(makeRequest({ meetingId: 'meeting-1' }))
@@ -224,6 +159,11 @@ describe('POST /api/generate-notes', () => {
 
     const completionCall = (mockCompletionCreate as any).mock.calls[0][0]
     expect(completionCall.messages[0].content).toContain('Selected note format: General Meeting')
+
+    const finalUpdate = updateCalls[1] as Record<string, unknown>
+    expect(finalUpdate.document_content).toBeDefined()
+    expect(finalUpdate.title).toBe('Weekly sync')
+    expect(finalUpdate.status).toBe('done')
   })
 
   it('retries without response_format when the provider rejects structured output options', async () => {
@@ -253,7 +193,7 @@ describe('POST /api/generate-notes', () => {
         id: 'meeting-1',
         user_id: 'user-1',
         transcript: 'Transcript from DB',
-        template_id: null,
+
       },
     })
 
@@ -275,7 +215,7 @@ describe('POST /api/generate-notes', () => {
         id: 'meeting-1',
         user_id: 'user-1',
         transcript: 'Transcript from DB',
-        template_id: null,
+
       },
     })
 

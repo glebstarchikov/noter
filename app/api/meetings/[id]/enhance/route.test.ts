@@ -97,7 +97,6 @@ function makeMeeting(overrides: Record<string, unknown> = {}) {
     error_message: null,
     is_pinned: false,
     document_content: makeDocument('Typed note from the user'),
-    template_id: null,
     diarized_transcript: null,
     enhancement_status: 'idle',
     enhancement_state: null,
@@ -114,21 +113,12 @@ function buildMeetingsSelect(meetingData: unknown) {
   return mock(() => ({ eq: eqId }))
 }
 
-function buildNoteTemplatesSelect(templateData: unknown = null) {
-  const maybeSingle = mock(() => Promise.resolve({ data: templateData, error: null }))
-  const eqUser = mock(() => ({ maybeSingle }))
-  const eqId = mock(() => ({ eq: eqUser }))
-  return mock(() => ({ eq: eqId }))
-}
-
 function mockSupabase({
   user,
   meetingData = null,
-  templateData = null,
 }: {
   user: { id: string } | null
   meetingData?: unknown
-  templateData?: unknown
 }) {
   const updateCalls: unknown[] = []
   const updateMock = mock((payload: unknown) => {
@@ -143,12 +133,6 @@ function mockSupabase({
       return {
         select: buildMeetingsSelect(meetingData),
         update: updateMock,
-      }
-    }
-
-    if (table === 'note_templates') {
-      return {
-        select: buildNoteTemplatesSelect(templateData),
       }
     }
 
@@ -263,10 +247,10 @@ describe('POST /api/meetings/[id]/enhance', () => {
     )
   })
 
-  it('returns a refinement proposal for a populated note and uses template context softly', async () => {
+  it('returns a refinement proposal for a populated note and uses default template context', async () => {
     mockSupabase({
       user: { id: 'user-1' },
-      meetingData: makeMeeting({ template_id: 'one-on-one' }),
+      meetingData: makeMeeting(),
     })
 
     const currentDocument = makeDocument('Typed note from the user')
@@ -286,7 +270,7 @@ describe('POST /api/meetings/[id]/enhance', () => {
     const generateCall = (mockGenerateObject as any).mock.calls[0][0]
     expect(generateCall.model).toEqual({ provider: 'openai', modelId: 'gpt-4o-mini' })
     expect(generateCall.prompt).toContain("Preserve the user's structure and tone whenever possible")
-    expect(generateCall.prompt).toContain('Selected note format: 1:1 Meeting')
+    expect(generateCall.prompt).toContain('Selected note format: General Meeting')
     expect(generateCall.prompt).toContain('"schemaVersion": 1')
     expect(generateCall.prompt).toContain('Allowed block types only: heading, paragraph, bullet_list, task_list.')
 
@@ -655,7 +639,6 @@ describe('POST /api/meetings/[id]/enhance', () => {
     })
 
     const meetingsSelect = buildMeetingsSelect(failureStateMeeting)
-    const noteTemplatesSelect = buildNoteTemplatesSelect(null)
     const updateCalls: unknown[] = []
 
     const from = mock((table: string) => {
@@ -672,12 +655,6 @@ describe('POST /api/meetings/[id]/enhance', () => {
             const eqId = mock(() => ({ eq: eqUser }))
             return { eq: eqId }
           }),
-        }
-      }
-
-      if (table === 'note_templates') {
-        return {
-          select: noteTemplatesSelect,
         }
       }
 
