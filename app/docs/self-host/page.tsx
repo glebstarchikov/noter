@@ -100,7 +100,7 @@ export default function SelfHostPage() {
           <li>
             <div className="mb-2 font-semibold">1. Fork and clone</div>
             <pre className="overflow-x-auto rounded-xl bg-foreground p-4 font-mono text-[12px] text-[#a8b4a0]">
-              <code>{`git clone https://github.com/glebstar06/noter
+              <code>{`git clone https://github.com/glebstarchikov/noter
 cd noter
 bun install`}</code>
             </pre>

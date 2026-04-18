@@ -15,7 +15,7 @@ export function LandingFooter() {
             MIT License
           </span>
           <a
-            href="https://github.com/glebstar06/noter"
+            href="https://github.com/glebstarchikov/noter"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[12px] text-muted-foreground transition-colors hover:text-foreground"

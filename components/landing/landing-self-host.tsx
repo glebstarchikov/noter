@@ -23,7 +23,7 @@ export function LandingSelfHost() {
         <div className="flex w-full shrink-0 flex-col items-start gap-2.5 md:w-auto md:items-end">
           <code className="w-full overflow-x-auto whitespace-nowrap rounded-lg bg-foreground px-4 py-2.5 font-mono text-[11px] text-[#a8b4a0] sm:text-[12px] md:w-auto">
             <span className="text-accent">git clone</span>{' '}
-            github.com/glebstar06/noter
+            github.com/glebstarchikov/noter
           </code>
           <Link
             href="/docs/self-host"

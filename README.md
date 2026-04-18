@@ -3,7 +3,7 @@
 > AI meeting notes, on your own terms.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/glebstar06/noter)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/glebstarchikov/noter)
 
 Record, transcribe, and generate structured meeting notes with AI. Self-host on Vercel + Supabase in under 10 minutes.
 
@@ -22,7 +22,7 @@ Record, transcribe, and generate structured meeting notes with AI. Self-host on 
 
 ## Self-host quickstart
 
-1. Fork this repo and clone it: `git clone https://github.com/glebstar06/noter && cd noter`
+1. Fork this repo and clone it: `git clone https://github.com/glebstarchikov/noter && cd noter`
 2. Install dependencies: `bun install`
 3. Copy env vars: `cp .env.example .env.local` and fill in your keys (see `.env.example`)
 4. Run Supabase migrations: execute `scripts/001_*.sql` through `scripts/010_*.sql` in the Supabase SQL editor in order
