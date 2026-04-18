@@ -18,7 +18,7 @@ const STEPS = [
 
 export function LandingHowItWorks() {
   return (
-    <section className="mx-auto max-w-[1080px] px-12 py-16">
+    <section className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 md:px-12 md:py-16">
       <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-accent">
         How it works
       </p>
@@ -28,7 +28,7 @@ export function LandingHowItWorks() {
       >
         From recording to notes in three steps
       </h2>
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
         {STEPS.map((step) => (
           <div key={step.num} className="flex flex-col gap-2.5">
             <div className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">

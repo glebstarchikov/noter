@@ -3,7 +3,7 @@ import { Github } from 'lucide-react'
 
 export function LandingNav() {
   return (
-    <nav aria-label="Site navigation" className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-12 py-4 backdrop-blur-sm">
+    <nav aria-label="Site navigation" className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-4 py-4 backdrop-blur-sm sm:px-6 md:px-12">
       <span className="text-[15px] tracking-tight" style={{ fontWeight: 650 }}>
         noter
       </span>
@@ -21,7 +21,8 @@ export function LandingNav() {
           className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
           <Github className="size-3.5" />
-          View on GitHub
+          <span className="hidden sm:inline">View on GitHub</span>
+          <span className="sm:hidden">GitHub</span>
         </a>
       </div>
     </nav>

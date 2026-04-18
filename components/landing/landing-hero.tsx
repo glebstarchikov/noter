@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 export function LandingHero() {
   return (
-    <section className="mx-auto grid max-w-[1080px] grid-cols-2 items-center gap-12 px-12 py-[72px]">
+    <section className="mx-auto grid max-w-[1080px] grid-cols-1 items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 md:gap-12 md:px-12 md:py-[72px]">
       {/* Left — text */}
       <div>
         <div className="mb-4 flex items-center gap-1.5">
@@ -12,7 +12,7 @@ export function LandingHero() {
           </span>
         </div>
         <h1
-          className="mb-3.5 text-[36px] leading-[1.15] tracking-tight text-foreground"
+          className="mb-3.5 text-[28px] leading-[1.15] tracking-tight text-foreground sm:text-[36px]"
           style={{ fontWeight: 650 }}
         >
           AI meeting notes,
@@ -40,7 +40,7 @@ export function LandingHero() {
       </div>
 
       {/* Right — screenshot placeholder */}
-      <div className="h-80 rounded-xl border border-border bg-card" />
+      <div className="h-56 rounded-xl border border-border bg-card md:h-80" />
     </section>
   )
 }

@@ -2,8 +2,8 @@ import Link from 'next/link'
 
 export function LandingSelfHost() {
   return (
-    <section className="mx-auto max-w-[1080px] px-12 py-16">
-      <div className="flex items-center justify-between gap-8 rounded-xl border border-border bg-card px-10 py-9">
+    <section className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 md:px-12 md:py-16">
+      <div className="flex flex-col items-start gap-6 rounded-xl border border-border bg-card px-6 py-7 md:flex-row md:items-center md:justify-between md:gap-8 md:px-10 md:py-9">
         {/* Left */}
         <div>
           <h2
@@ -20,8 +20,8 @@ export function LandingSelfHost() {
         </div>
 
         {/* Right */}
-        <div className="flex shrink-0 flex-col items-end gap-2.5">
-          <code className="whitespace-nowrap rounded-lg bg-foreground px-4 py-2.5 font-mono text-[12px] text-[#a8b4a0]">
+        <div className="flex w-full shrink-0 flex-col items-start gap-2.5 md:w-auto md:items-end">
+          <code className="w-full overflow-x-auto whitespace-nowrap rounded-lg bg-foreground px-4 py-2.5 font-mono text-[11px] text-[#a8b4a0] sm:text-[12px] md:w-auto">
             <span className="text-accent">git clone</span>{' '}
             github.com/glebstar06/noter
           </code>

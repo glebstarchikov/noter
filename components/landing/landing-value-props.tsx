@@ -18,7 +18,7 @@ const PROPS = [
 
 export function LandingValueProps() {
   return (
-    <section className="mx-auto max-w-[1080px] px-12 py-16">
+    <section className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 md:px-12 md:py-16">
       <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-accent">
         Why noter
       </p>
@@ -28,7 +28,7 @@ export function LandingValueProps() {
       >
         Everything you need, nothing you don&apos;t
       </h2>
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3">
         {PROPS.map((prop) => (
           <div
             key={prop.title}
