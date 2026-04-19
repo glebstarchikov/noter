@@ -11,11 +11,8 @@ export default function HomePage() {
       <LandingNav />
       <main>
         <LandingHero />
-        <div className="mx-auto max-w-[1080px] border-t border-border" />
         <LandingValueProps />
-        <div className="mx-auto max-w-[1080px] border-t border-border" />
         <LandingHowItWorks />
-        <div className="mx-auto max-w-[1080px] border-t border-border" />
         <LandingSelfHost />
       </main>
       <LandingFooter />
