@@ -1,6 +1,7 @@
 'use client'
 
-import { ClipboardCopy, Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
+import { useState } from 'react'
+import { ClipboardCopy, Loader2, RefreshCcw, Undo2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -9,6 +10,8 @@ import type { DocumentSaveConflict } from '@/lib/document-sync'
 import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 import type { EnhancementState } from '@/lib/types'
 import type { DraftUiState, DraftMode } from '@/hooks/use-draft-proposal'
+import type { ResolvedNoteTemplate } from '@/lib/note-template'
+import { TemplatePicker } from '@/components/templates/template-picker'
 
 interface DraftActionBarProps {
   draftState: DraftUiState
@@ -23,7 +26,9 @@ interface DraftActionBarProps {
   regenPromptDismissed: boolean
   meetingStatus: string
   meetingErrorMessage: string | null
-  onDraftRequest: () => void
+  templates: ResolvedNoteTemplate[]
+  defaultTemplateId: string
+  onDraftRequest: (templateId: string) => void
   onUndo: () => void
   onCopyMarkdown?: () => void
 }
@@ -41,10 +46,14 @@ export function DraftActionBar({
   regenPromptDismissed,
   meetingStatus,
   meetingErrorMessage,
+  templates,
+  defaultTemplateId,
   onDraftRequest,
   onUndo,
   onCopyMarkdown,
 }: DraftActionBarProps) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const effectiveTemplateId = selectedTemplateId ?? defaultTemplateId
   const isNeutralDraftFeedback = isNeutralEnhancementMessage(reviewState.lastError)
 
   // Derive header description text
@@ -84,13 +93,6 @@ export function DraftActionBar({
         ? 'Creating draft...'
         : 'Improving...'
 
-  const draftActionLabel =
-    meetingStatus === 'error'
-      ? 'Try again'
-      : hasDocumentContent
-        ? 'Improve with AI'
-        : 'Create first draft'
-
   return (
     <div className="flex flex-col gap-4 border-b border-border/60 pb-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -119,33 +121,52 @@ export function DraftActionBar({
         {showHeaderActions ? (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {showHeaderDraftAction && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="relative gap-2 rounded-full border-border/70 bg-background/80 shadow-none"
-                    onClick={onDraftRequest}
-                    disabled={draftState !== 'idle'}
-                  >
-                    {draftState !== 'idle' ? (
+              draftState !== 'idle' ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="relative gap-2 rounded-full border-border/70 bg-background/80 shadow-none"
+                      disabled
+                    >
                       <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-4" />
-                    )}
-                    {draftState !== 'idle' ? loadingLabel : draftActionLabel}
-                    {showRegenPrompt && draftState === 'idle' ? (
-                      <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" />
-                    ) : null}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {showRegenPrompt
-                    ? 'Your note changed since the last improvement'
-                    : 'Use AI to review this note'}
-                </TooltipContent>
-              </Tooltip>
+                      {loadingLabel}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {showRegenPrompt
+                      ? 'Your note changed since the last improvement'
+                      : 'Use AI to review this note'}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <div className="relative">
+                  {showRegenPrompt ? (
+                    <span className="absolute -right-0.5 -top-0.5 z-10 size-2 rounded-full bg-accent" />
+                  ) : null}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <TemplatePicker
+                          templates={templates}
+                          selectedId={effectiveTemplateId}
+                          onChange={setSelectedTemplateId}
+                          onConfirm={(id) => onDraftRequest(id)}
+                          buttonLabel={hasDocumentContent ? 'Improve with AI:' : 'Create notes with:'}
+                          disabled={draftState !== 'idle'}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {showRegenPrompt
+                        ? 'Your note changed since the last improvement'
+                        : 'Use AI to review this note'}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )
             )}
 
             {undoDocument && draftState === 'idle' ? (
@@ -182,7 +203,7 @@ export function DraftActionBar({
                         variant="ghost"
                         size="sm"
                         className="h-7 rounded-full gap-1"
-                        onClick={onDraftRequest}
+                        onClick={() => onDraftRequest(effectiveTemplateId)}
                       >
                         <RefreshCcw className="size-3" />
                         Retry

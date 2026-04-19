@@ -59,6 +59,7 @@ export interface UseDraftProposalReturn {
   clearUndoDocument: () => void
   requestDraft: (params: {
     onAccepted: (payload: DraftAcceptedPayload) => void
+    templateId?: string
   }) => Promise<void>
 }
 
@@ -211,8 +212,10 @@ export function useDraftProposal(
   const requestDraft = useCallback(
     async ({
       onAccepted,
+      templateId,
     }: {
       onAccepted: (payload: DraftAcceptedPayload) => void
+      templateId?: string
     }) => {
       if (!shouldShowAction || draftStateRef.current !== 'idle') return
 
@@ -229,6 +232,7 @@ export function useDraftProposal(
             action: 'generate',
             mode: actionMode,
             documentContent: currentDocumentRef.current,
+            ...(templateId ? { template_id: templateId } : {}),
           }),
         })
 
