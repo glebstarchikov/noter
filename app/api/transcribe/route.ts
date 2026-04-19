@@ -55,12 +55,13 @@ export async function POST(request: NextRequest) {
 
     const transcription = await transcribeAudioFromStorage(supabase, storagePath)
 
-    // Save transcript
+    // Save transcript and mark meeting as done — note generation is user-triggered
+    // via the enhance route, so the transcribe step is the terminal step here.
     await supabase
       .from('meetings')
       .update({
         transcript: transcription,
-        status: 'generating',
+        status: 'done',
         updated_at: new Date().toISOString(),
       })
       .eq('id', meetingId)

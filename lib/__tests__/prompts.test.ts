@@ -5,7 +5,9 @@ import type { ResolvedNoteTemplate } from '@/lib/note-template'
 const template: ResolvedNoteTemplate = {
   id: 'default',
   name: 'General Meeting',
+  description: 'Default template for general meetings',
   prompt: 'A general-purpose meeting template.',
+  isBuiltin: true,
 }
 
 const baseArgs = {
