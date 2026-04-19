@@ -6,7 +6,7 @@ import type { Meeting } from '@/lib/types'
 
 export function MeetingDetailWrapper({ meeting }: { meeting: Meeting }) {
   return (
-    <PageShell size="detail">
+    <PageShell>
       <UnifiedMeetingPage meeting={meeting} />
     </PageShell>
   )
