@@ -161,7 +161,7 @@ export function ChatShell({
             data-mode={visibleMode}
             data-generating={isLoading ? "true" : "false"}
             className={cn(
-              "pointer-events-auto flex flex-1 origin-bottom flex-col overflow-hidden rounded-[28px] border border-border/60 bg-card shadow-lg",
+              "pointer-events-auto flex flex-1 origin-bottom flex-col overflow-hidden rounded-[28px] border border-border bg-card/85 shadow-lg backdrop-blur-md",
               "transition-[box-shadow,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
               isExpanded ? "translate-y-0 scale-100" : "translate-y-1 scale-[0.992]",
             )}
