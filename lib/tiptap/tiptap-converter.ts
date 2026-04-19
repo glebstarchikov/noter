@@ -170,7 +170,28 @@ function nodeToMarkdown(node: TiptapNode): string {
     case 'paragraph':
       return children.map(nodeToMarkdown).join('')
     case 'bulletList':
-      return children.map(nodeToMarkdown).join('\n')
+      return children
+        .map((child) => {
+          if (child.type === 'listItem') {
+            const inner = (child.content ?? []).map(nodeToMarkdown).join(' ').trim()
+            return `- ${inner}`
+          }
+          return nodeToMarkdown(child)
+        })
+        .join('\n')
+    case 'orderedList': {
+      const startAttr = node.attrs?.start as number | undefined
+      const start = typeof startAttr === 'number' && startAttr > 0 ? startAttr : 1
+      return children
+        .map((child, i) => {
+          if (child.type === 'listItem') {
+            const inner = (child.content ?? []).map(nodeToMarkdown).join(' ').trim()
+            return `${start + i}. ${inner}`
+          }
+          return nodeToMarkdown(child)
+        })
+        .join('\n')
+    }
     case 'listItem':
       return `- ${children.map(nodeToMarkdown).join(' ').trim()}`
     case 'taskList':

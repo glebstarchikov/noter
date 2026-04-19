@@ -3,6 +3,7 @@ import {
   isTiptapDocument,
   hasTiptapContent,
   tiptapToPlainText,
+  tiptapToMarkdown,
   generatedNotesToTiptap,
   createEmptyTiptapDocument,
   mergeTiptapDocuments,
@@ -362,5 +363,65 @@ describe('legacyMeetingToTiptap', () => {
     const doc = legacyMeetingToTiptap(meeting)
     expect(doc.type).toBe('doc')
     expect(doc.content.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('tiptapToMarkdown — list handling', () => {
+  it('exports ordered lists with numeric prefixes', () => {
+    const doc: TiptapDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'orderedList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Third' }] }] },
+          ],
+        },
+      ],
+    }
+    const md = tiptapToMarkdown(doc)
+    expect(md).toContain('1. First')
+    expect(md).toContain('2. Second')
+    expect(md).toContain('3. Third')
+    expect(md).not.toContain('- First')
+  })
+
+  it('honors the start attribute on ordered lists', () => {
+    const doc: TiptapDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'orderedList',
+          attrs: { start: 5 },
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Fifth' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Sixth' }] }] },
+          ],
+        },
+      ],
+    }
+    const md = tiptapToMarkdown(doc)
+    expect(md).toContain('5. Fifth')
+    expect(md).toContain('6. Sixth')
+  })
+
+  it('still exports bullet lists with dash prefixes', () => {
+    const doc: TiptapDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'One' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Two' }] }] },
+          ],
+        },
+      ],
+    }
+    const md = tiptapToMarkdown(doc)
+    expect(md).toContain('- One')
+    expect(md).toContain('- Two')
   })
 })
