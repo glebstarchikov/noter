@@ -30,3 +30,6 @@ coverage/
 docs/recovered-sessions/
 # Supabase CLI local cache (from supabase link)
 supabase/
+
+# Internal working artifacts (specs, plans, investigations) — keep local only
+docs/superpowers/
