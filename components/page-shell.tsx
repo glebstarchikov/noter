@@ -3,13 +3,13 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const pageShellVariants = cva(
-  'mx-auto flex w-full flex-col px-6 py-8 md:px-10 md:py-10',
+  'mx-auto flex w-full flex-col px-4 py-8 sm:px-6 md:px-10 md:py-10',
   {
     variants: {
       size: {
         default: 'max-w-6xl gap-8',
-        detail: 'max-w-[72rem] gap-8',
         narrow: 'max-w-5xl gap-8',
+        editor: 'max-w-[45rem] gap-6',
       },
     },
     defaultVariants: {
@@ -62,11 +62,11 @@ export function PageHeader({
       <div className="flex min-w-0 flex-col gap-3">
         {eyebrow ? <div>{eyebrow}</div> : null}
         <div className="flex min-w-0 flex-col gap-2">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-[2rem]">
+          <h1 className="text-xl font-[650] tracking-tight text-foreground md:text-2xl">
             {title}
           </h1>
           {description ? (
-            <div className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            <div className="max-w-[560px] text-[13px] leading-6 text-muted-foreground">
               {description}
             </div>
           ) : null}
