@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { ClipboardCopy, Loader2, RefreshCcw, Undo2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { isNeutralEnhancementMessage } from '@/lib/notes/enhancement-errors'
 import type { DocumentSaveConflict } from '@/lib/document-sync'
 import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
@@ -122,49 +122,22 @@ export function DraftActionBar({
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {showHeaderDraftAction && (
               draftState !== 'idle' ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="relative gap-2 rounded-full border-border/70 bg-background/80 shadow-none"
-                      disabled
-                    >
-                      <Loader2 className="size-4 animate-spin" />
-                      {loadingLabel}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {showRegenPrompt
-                      ? 'Your note changed since the last improvement'
-                      : 'Use AI to review this note'}
-                  </TooltipContent>
-                </Tooltip>
+                <LoadingPill
+                  label={loadingLabel}
+                  templateName={templates.find((t) => t.id === effectiveTemplateId)?.name ?? ''}
+                />
               ) : (
                 <div className="relative">
                   {showRegenPrompt ? (
                     <span className="absolute -right-0.5 -top-0.5 z-10 size-2 rounded-full bg-accent" />
                   ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <TemplatePicker
-                          templates={templates}
-                          selectedId={effectiveTemplateId}
-                          onChange={setSelectedTemplateId}
-                          onConfirm={(id) => onDraftRequest(id)}
-                          buttonLabel={hasDocumentContent ? 'Improve with AI:' : 'Create notes with:'}
-                          disabled={draftState !== 'idle'}
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {showRegenPrompt
-                        ? 'Your note changed since the last improvement'
-                        : 'Use AI to review this note'}
-                    </TooltipContent>
-                  </Tooltip>
+                  <TemplatePicker
+                    templates={templates}
+                    selectedId={effectiveTemplateId}
+                    onChange={setSelectedTemplateId}
+                    onConfirm={(id) => onDraftRequest(id)}
+                    buttonLabel={hasDocumentContent ? 'Improve with AI:' : 'Create notes with:'}
+                  />
                 </div>
               )
             )}
@@ -188,35 +161,70 @@ export function DraftActionBar({
             ) : null}
 
             {reviewState.lastError && draftState === 'idle' ? (
-              <>
-                <Badge
-                  variant={isNeutralDraftFeedback ? 'secondary' : 'destructive'}
-                  className="rounded-full"
-                >
-                  {isNeutralDraftFeedback ? 'No changes suggested' : 'Draft failed'}
-                </Badge>
-                {!isNeutralDraftFeedback && canReview ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 rounded-full gap-1"
-                        onClick={() => onDraftRequest(effectiveTemplateId)}
-                      >
-                        <RefreshCcw className="size-3" />
-                        Retry
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Try again</TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </>
+              isNeutralDraftFeedback ? (
+                <StatusPill tone="muted">No changes suggested</StatusPill>
+              ) : canReview ? (
+                <RetryPill onClick={() => onDraftRequest(effectiveTemplateId)} />
+              ) : (
+                <StatusPill tone="destructive">Draft failed</StatusPill>
+              )
             ) : null}
           </div>
         ) : null}
       </div>
     </div>
+  )
+}
+
+function LoadingPill({ label, templateName }: { label: string; templateName: string }) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-live="polite"
+      className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[13px] font-medium text-primary-foreground opacity-80 disabled:cursor-not-allowed"
+    >
+      <Loader2 className="size-4 animate-spin" />
+      <span>{label}</span>
+      {templateName ? (
+        <span className="rounded-lg bg-white/15 px-2 py-0.5 text-[12px]">{templateName}</span>
+      ) : null}
+    </button>
+  )
+}
+
+function RetryPill({ onClick }: { onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          className="inline-flex items-center gap-2 rounded-full bg-destructive px-5 py-2.5 text-[13px] font-medium text-destructive-foreground transition-opacity hover:opacity-90"
+        >
+          <span>Draft failed</span>
+          <span className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-0.5 text-[12px]">
+            <RefreshCcw className="size-3" />
+            Retry
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Try again with the selected template</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function StatusPill({ tone, children }: { tone: 'muted' | 'destructive'; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-5 py-2.5 text-[13px] font-medium',
+        tone === 'destructive'
+          ? 'bg-destructive text-destructive-foreground'
+          : 'bg-muted text-muted-foreground'
+      )}
+    >
+      {children}
+    </span>
   )
 }
