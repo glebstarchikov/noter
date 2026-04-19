@@ -129,7 +129,10 @@ export function DraftActionBar({
               ) : (
                 <div className="relative">
                   {showRegenPrompt ? (
-                    <span className="absolute -right-0.5 -top-0.5 z-10 size-2 rounded-full bg-accent" />
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-1 -top-1 z-10 size-2.5 rounded-full bg-accent ring-2 ring-background"
+                    />
                   ) : null}
                   <TemplatePicker
                     templates={templates}
