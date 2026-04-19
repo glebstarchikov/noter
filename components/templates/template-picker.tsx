@@ -31,7 +31,23 @@ export function TemplatePicker({
   const custom = templates.filter((t) => !t.isBuiltin)
   const selected = templates.find((t) => t.id === selectedId) ?? builtins[0]
 
-  if (!selected) return null
+  // Degraded fallback when /api/templates is unreachable. Render a plain
+  // pill that fires the action with the canonical built-in id; the server's
+  // resolveTemplate() falls back to builtin-general regardless. Better to
+  // ship a working button than to hide the only path to AI generation.
+  if (!selected) {
+    return (
+      <button
+        type="button"
+        onClick={() => onConfirm('builtin-general')}
+        disabled={disabled}
+        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+      >
+        <span>{buttonLabel}</span>
+        <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-[11px]">General</span>
+      </button>
+    )
+  }
 
   return (
     <div className="inline-flex h-8 items-center rounded-full bg-primary text-primary-foreground text-[12px] font-medium">

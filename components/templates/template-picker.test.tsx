@@ -49,4 +49,25 @@ describe('TemplatePicker', () => {
     fireEvent.click(screen.getByRole('button', { name: /create notes with/i }))
     expect(onConfirm).toHaveBeenCalledWith('builtin-1on1')
   })
+
+  it('renders a fallback pill when templates list is empty (degraded mode)', () => {
+    // Regression: when /api/templates fails or returns empty, the picker
+    // previously returned null and removed the only path to AI generation.
+    // Now it must render a working button that fires with builtin-general.
+    const onConfirm = mock()
+    render(
+      <TemplatePicker
+        templates={[]}
+        selectedId="builtin-general"
+        onChange={mock()}
+        onConfirm={onConfirm}
+      />
+    )
+
+    const button = screen.getByRole('button', { name: /create notes with/i })
+    expect(button).toBeDefined()
+
+    fireEvent.click(button)
+    expect(onConfirm).toHaveBeenCalledWith('builtin-general')
+  })
 })
