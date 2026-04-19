@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { PageShell, PageHeader } from '@/components/page-shell'
 
 export const metadata: Metadata = {
   title: 'Self-host noter',
@@ -8,27 +9,22 @@ export const metadata: Metadata = {
 
 export default function SelfHostPage() {
   return (
-    <div className="mx-auto max-w-[720px] px-6 py-16 text-foreground">
-      <Link
-        href="/"
-        className="mb-8 inline-block text-[13px] text-muted-foreground hover:text-foreground"
-      >
-        ← Back to noter
-      </Link>
-
-      <h1
-        className="mb-3 text-[32px] tracking-tight"
-        style={{ fontWeight: 650 }}
-      >
-        Self-host noter
-      </h1>
-      <p className="mb-12 text-[15px] text-muted-foreground">
-        Deploy noter on your own Vercel + Supabase stack. No custom
-        infrastructure needed.
-      </p>
+    <PageShell size="editor">
+      <PageHeader
+        eyebrow={
+          <Link
+            href="/"
+            className="text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            ← Back to noter
+          </Link>
+        }
+        title="Self-host noter"
+        description="Deploy noter on your own Vercel + Supabase stack. No custom infrastructure needed."
+      />
 
       {/* Prerequisites */}
-      <section className="mb-12">
+      <section>
         <h2 className="mb-4 text-[18px] font-semibold">Prerequisites</h2>
         <ul className="space-y-1.5 text-[14px] text-muted-foreground">
           <li>
@@ -94,7 +90,7 @@ export default function SelfHostPage() {
       </section>
 
       {/* Step-by-step */}
-      <section className="mb-12">
+      <section>
         <h2 className="mb-6 text-[18px] font-semibold">Step-by-step</h2>
         <ol className="space-y-8 text-[14px]">
           <li>
@@ -106,9 +102,7 @@ bun install`}</code>
             </pre>
           </li>
           <li>
-            <div className="mb-2 font-semibold">
-              2. Set up environment variables
-            </div>
+            <div className="mb-2 font-semibold">2. Set up environment variables</div>
             <p className="mb-2 text-muted-foreground">
               Copy the example and fill in your keys:
             </p>
@@ -133,7 +127,7 @@ bun install`}</code>
               <code>{`scripts/001_initial.sql  → run first
 scripts/002_*.sql
 ... (run each in ascending order)
-scripts/010_drop_note_templates.sql  → run last`}</code>
+scripts/011_revive_note_templates.sql  → run last`}</code>
             </pre>
           </li>
           <li>
@@ -164,7 +158,7 @@ scripts/010_drop_note_templates.sql  → run last`}</code>
       </section>
 
       {/* Env var reference */}
-      <section className="mb-12" id="env-vars">
+      <section id="env-vars">
         <h2 className="mb-4 text-[18px] font-semibold">
           Environment variable reference
         </h2>
@@ -314,6 +308,6 @@ scripts/010_drop_note_templates.sql  → run last`}</code>
           </div>
         </div>
       </section>
-    </div>
+    </PageShell>
   )
 }
