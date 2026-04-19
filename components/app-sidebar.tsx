@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
     FileText,
+    LayoutGrid,
     LogOut,
     Plus,
     ChevronsUpDown,
@@ -38,6 +39,7 @@ import {
 
 const navItems = [
     { href: '/dashboard', label: 'Notes', icon: FileText },
+    { href: '/dashboard/templates', label: 'Templates', icon: LayoutGrid },
 ]
 
 
@@ -148,7 +150,12 @@ export function AppSidebar() {
                                     : pathname.startsWith(item.href)
                                 return (
                                     <SidebarMenuItem key={item.href}>
-                                        <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            isActive={isActive}
+                                            tooltip={item.label}
+                                            className="data-[active=true]:bg-accent/10 data-[active=true]:text-accent data-[active=true]:hover:bg-accent/10 data-[active=true]:hover:text-accent"
+                                        >
                                             <Link href={item.href}>
                                                 <item.icon />
                                                 <span>{item.label}</span>
