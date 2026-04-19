@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { AuthPageLayout } from '@/components/auth-page-layout'
+import { SIGNUP_DISABLED } from '@/lib/auth/signup-config'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -93,15 +94,17 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="text-sm text-muted-foreground text-center mt-2">
-        {"Don't have an account? "}
-        <Link
-          href="/auth/sign-up"
-          className="font-medium text-foreground hover:text-accent transition-colors underline underline-offset-4 decoration-border hover:decoration-accent"
-        >
-          Sign up
-        </Link>
-      </p>
+      {SIGNUP_DISABLED ? null : (
+        <p className="text-sm text-muted-foreground text-center mt-2">
+          {"Don't have an account? "}
+          <Link
+            href="/auth/sign-up"
+            className="font-medium text-foreground hover:text-accent transition-colors underline underline-offset-4 decoration-border hover:decoration-accent"
+          >
+            Sign up
+          </Link>
+        </p>
+      )}
     </AuthPageLayout>
   )
 }

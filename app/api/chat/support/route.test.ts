@@ -75,8 +75,8 @@ describe('POST /api/chat/support', () => {
       mock: { calls: Array<[Record<string, unknown>]> }
     }).mock.calls[0][0]
 
-    expect(call.system).toContain('Answer only questions about noter')
-    expect(call.system).toContain('Users can sign in, create a meeting by recording live audio or uploading audio files')
-    expect(call.system).toContain('Do not invent pricing, legal, security, or roadmap details')
+    expect(call.system).toContain('You are noter support')
+    expect(call.system).toContain('REFUSE everything outside this list')
+    expect(call.system).toContain('Never invent pricing tiers, dates, roadmap, legal terms, or security claims')
   })
 })

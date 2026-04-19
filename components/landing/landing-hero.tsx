@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
+import { SIGNUP_DISABLED } from '@/lib/auth/signup-config'
 
 export function LandingHero() {
   return (
@@ -39,10 +40,10 @@ export function LandingHero() {
           </p>
           <div className="flex flex-wrap items-center gap-2.5">
             <Link
-              href="/auth/sign-up"
+              href={SIGNUP_DISABLED ? '/auth/login' : '/auth/sign-up'}
               className="rounded-full bg-primary px-5 py-2.5 text-[13px] font-medium text-primary-foreground transition-all hover:opacity-90 hover:shadow-md"
             >
-              Try the demo
+              {SIGNUP_DISABLED ? 'Sign in' : 'Try the demo'}
             </Link>
             <Link
               href="/docs/self-host"

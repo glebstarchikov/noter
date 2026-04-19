@@ -13,8 +13,42 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AuthPageLayout } from '@/components/auth-page-layout'
+import { SIGNUP_DISABLED } from '@/lib/auth/signup-config'
 
 export default function SignUpPage() {
+  if (SIGNUP_DISABLED) {
+    return <SignupClosedNotice />
+  }
+  return <SignUpForm />
+}
+
+function SignupClosedNotice() {
+  return (
+    <AuthPageLayout
+      title="Sign-ups are closed"
+      description="This deployment isn't accepting new accounts right now. You can self-host noter to run your own instance."
+    >
+      <div className="flex flex-col gap-4">
+        <Link
+          href="/auth/login"
+          className="text-center text-sm font-medium text-foreground underline underline-offset-4 decoration-border hover:text-accent hover:decoration-accent"
+        >
+          Sign in to an existing account →
+        </Link>
+        <a
+          href="https://github.com/glebstarchikov/noter"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-center text-sm text-muted-foreground hover:text-foreground"
+        >
+          Self-host noter on GitHub →
+        </a>
+      </div>
+    </AuthPageLayout>
+  )
+}
+
+function SignUpForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
