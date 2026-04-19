@@ -26,6 +26,8 @@ Record, transcribe, and turn meetings into structured notes with AI — running 
 - **Backend** — Supabase (Postgres + Auth + RLS), Vercel serverless functions
 - **AI** — OpenAI via Vercel AI SDK (AI Gateway supported)
 - **Transcription** — Deepgram real-time WebSocket (`nova-3` model)
+- **Rate limiting** — Upstash Redis (optional, recommended in production for the chat endpoints)
+- **Error tracking** — Sentry (optional)
 
 ## Self-host quickstart
 
