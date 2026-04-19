@@ -41,6 +41,16 @@ If you self-host noter, please:
 - **Set `Require Verified Commits`** in Vercel if you want to gate deployments to signed commits
 - **Rotate API keys** if any environment file is ever accidentally committed (then rewrite history with `git filter-repo`)
 
+## Disabling sign-ups on a deployment
+
+If you want to lock down a deployment so no new accounts can be created, do BOTH of these:
+
+**Step 1 — server-side enforcement (the actual gate).** In your Supabase project: **Authentication → Sign In / Up → toggle "Allow new users to sign up" off**. This is the master switch — Supabase rejects all new account creations at the auth layer regardless of method (email/password, magic link, OAuth). Existing users can still sign in.
+
+**Step 2 — UI (cosmetic).** Set `NEXT_PUBLIC_DISABLE_SIGNUP=true` in your Vercel env vars. This hides the sign-up form, swaps the landing CTA to "Sign in", and removes the sign-up URL from the sitemap. Without this, the sign-up form would still render and just fail with a confusing error when the user submits.
+
+**Why no migration?** An earlier draft of this section pointed at a Postgres trigger on `auth.users` for self-contained enforcement. That was over-engineering — Supabase already exposes the right primitive as a one-click dashboard toggle. Use it.
+
 ## Disclosure timeline
 
 After a fix lands, we'll publicly disclose the vulnerability:
