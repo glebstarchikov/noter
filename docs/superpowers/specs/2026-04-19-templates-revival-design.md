@@ -241,6 +241,12 @@ Matches existing Workspace design rules:
 - `Inter` only, weights 400/500/550/650
 - No `shadow-md` on inline cards — dropdown and editor form use the project's existing shadow conventions
 
+### Sidebar selected-state treatment
+
+With the introduction of `/dashboard/templates` as a second nav item, all selected nav items use the same treatment: `bg-accent/10 text-accent` (soft sage tint). This applies to both `Notes` and `Templates` — whichever matches the current pathname gets the sage highlight. The "+ New meeting" action button at the top of the sidebar stays unchanged — it's a CTA, not a nav item.
+
+Implementation touches [components/app-sidebar.tsx](../../../components/app-sidebar.tsx) and whatever `SidebarMenuButton` styling the project uses for `data-[active=true]`.
+
 ## API surface
 
 All endpoints under `app/api/templates/...` and `app/api/user-preferences/`. All routes use `validateBody(request, schema)` from `@/lib/api/validate` and `errorResponse()` from `@/lib/api/api-helpers` per project conventions. All errors route through `Sentry.captureException()`.
