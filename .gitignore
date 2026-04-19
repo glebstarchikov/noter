@@ -28,3 +28,5 @@ coverage/
 
 # Session recovery backups (ephemeral, never version-controlled)
 docs/recovered-sessions/
+# Supabase CLI local cache (from supabase link)
+supabase/
