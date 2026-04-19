@@ -34,22 +34,22 @@ export function TemplatePicker({
   if (!selected) return null
 
   return (
-    <div className="inline-flex items-center rounded-full bg-primary text-primary-foreground">
+    <div className="inline-flex h-8 items-center rounded-full bg-primary text-primary-foreground text-[12px] font-medium">
       <button
         type="button"
         onClick={() => onConfirm(selected.id)}
         disabled={disabled}
-        className="inline-flex items-center gap-2 rounded-l-full pl-5 pr-3 py-2.5 text-[13px] font-medium hover:opacity-90 disabled:opacity-60"
+        className="inline-flex h-full items-center gap-1.5 rounded-l-full pl-3.5 pr-2 hover:opacity-90 disabled:opacity-60"
       >
         <span>{buttonLabel}</span>
-        <span className="rounded-lg bg-white/15 px-2 py-0.5 text-[12px]">{selected.name}</span>
+        <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-[11px]">{selected.name}</span>
       </button>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           aria-label="Choose template"
-          className="inline-flex items-center rounded-r-full pr-4 pl-2 py-2.5 hover:opacity-90 border-l border-white/15"
+          className="inline-flex h-full items-center rounded-r-full pr-3 pl-1.5 hover:opacity-90 border-l border-white/15"
         >
-          <ChevronDown className="size-[14px]" />
+          <ChevronDown className="size-3" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[340px] p-2">
           <GroupLabel>Built-in</GroupLabel>

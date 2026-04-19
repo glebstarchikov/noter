@@ -182,12 +182,12 @@ function LoadingPill({ label, templateName }: { label: string; templateName: str
       type="button"
       disabled
       aria-live="polite"
-      className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[13px] font-medium text-primary-foreground opacity-80 disabled:cursor-not-allowed"
+      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12px] font-medium text-primary-foreground opacity-80 disabled:cursor-not-allowed"
     >
-      <Loader2 className="size-4 animate-spin" />
+      <Loader2 className="size-3.5 animate-spin" />
       <span>{label}</span>
       {templateName ? (
-        <span className="rounded-lg bg-white/15 px-2 py-0.5 text-[12px]">{templateName}</span>
+        <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-[11px]">{templateName}</span>
       ) : null}
     </button>
   )
@@ -200,10 +200,10 @@ function RetryPill({ onClick }: { onClick: () => void }) {
         <button
           type="button"
           onClick={onClick}
-          className="inline-flex items-center gap-2 rounded-full bg-destructive px-5 py-2.5 text-[13px] font-medium text-destructive-foreground transition-opacity hover:opacity-90"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-destructive px-3.5 text-[12px] font-medium text-destructive-foreground transition-opacity hover:opacity-90"
         >
           <span>Draft failed</span>
-          <span className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-0.5 text-[12px]">
+          <span className="inline-flex items-center gap-1 rounded-md bg-white/15 px-1.5 py-0.5 text-[11px]">
             <RefreshCcw className="size-3" />
             Retry
           </span>
@@ -218,7 +218,7 @@ function StatusPill({ tone, children }: { tone: 'muted' | 'destructive'; childre
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-5 py-2.5 text-[13px] font-medium',
+        'inline-flex h-8 items-center rounded-full px-3.5 text-[12px] font-medium',
         tone === 'destructive'
           ? 'bg-destructive text-destructive-foreground'
           : 'bg-muted text-muted-foreground'
