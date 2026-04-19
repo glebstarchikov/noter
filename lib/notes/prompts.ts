@@ -46,6 +46,12 @@ ${formatTemplateContext(template)}
 Use the selected note format to shape the structure, emphasis, and language of the generated metadata.`
 }
 
+const SPARSE_DRAFT_WORD_THRESHOLD = 150
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length
+}
+
 export function buildDraftProposalPrompt({
   mode,
   template,
@@ -61,16 +67,38 @@ export function buildDraftProposalPrompt({
   transcript: string
   repairFeedback?: string | null
 }) {
-  const modeInstructions =
-    mode === 'generate'
-      ? `# Mode: Generate
+  let modeInstructions: string
+
+  if (mode === 'generate') {
+    modeInstructions = `# Mode: Generate
 
 The note editor is currently empty. Create a thorough first draft using all available transcript content and structured metadata. Every section must contain specific, substantive content from the meeting — not placeholder text or vague bullets. Use the selected note format as the primary structure.`
-      : `# Mode: Enhance
+  } else {
+    const draftWordCount = countWords(currentDocumentText)
+    const isSparse = draftWordCount < SPARSE_DRAFT_WORD_THRESHOLD
 
-Expand and improve the existing draft. Add missing sections, flesh out sparse bullet points, and incorporate information from the transcript and structured context that is absent from the current draft.
+    modeInstructions = isSparse
+      ? `# Mode: Enhance — sparse draft (${draftWordCount} words)
 
-Do not remove or shorten existing content — only add, clarify, and expand. The enhanced draft must be at least as long as the current draft and typically significantly longer when the transcript contains additional information.`
+The current draft is sparse. Expand it significantly using the transcript and structured metadata. Add missing sections, flesh out sparse bullet points, and incorporate substantive content from the transcript.
+
+Preserve any content the user has already written verbatim where it exists — do not rewrite the user's sentences. Build around their existing text by filling in what's missing.`
+      : `# Mode: Enhance — substantial draft (${draftWordCount} words)
+
+The current draft already contains substantial user-authored content. Treat the user's existing text as the source of truth. Your job is to polish, not rewrite.
+
+HARD RULES — violating any of these is a failure:
+
+1. Preserve every user-written sentence verbatim. Do not reword, paraphrase, restructure, or "improve the style of" sentences the user has written. If a sentence is grammatically correct, leave it exactly as-is.
+2. Only modify existing content to fix objective errors: clear typos, broken grammar, or factual contradictions with the transcript. When you fix something, change the minimum number of words needed.
+3. You may ADD content only in two cases:
+   (a) A section that is entirely empty or contains only a placeholder.
+   (b) A clear, specific piece of information from the transcript is missing from the draft and fits logically into an existing section.
+4. Do not shorten the draft. Do not collapse multiple bullets into one. Do not reorder sections.
+5. Do not add content that restates what the user already wrote in different words.
+
+If the draft is already complete and accurate, return it essentially unchanged with only minor polish. A response that looks almost identical to the input is a correct response.`
+  }
 
   return `You are a meeting-notes assistant writing inside a document editor.
 

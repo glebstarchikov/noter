@@ -269,7 +269,7 @@ describe('POST /api/meetings/[id]/enhance', () => {
 
     const generateCall = (mockGenerateObject as any).mock.calls[0][0]
     expect(generateCall.model).toEqual({ provider: 'openai', modelId: 'gpt-5.4-mini' })
-    expect(generateCall.prompt).toContain('Expand and improve the existing draft')
+    expect(generateCall.prompt).toContain('The current draft is sparse')
     expect(generateCall.prompt).toContain('Selected note format: General Meeting')
     expect(generateCall.prompt).toContain('"schemaVersion": 1')
     expect(generateCall.prompt).toContain('Allowed block types: heading, paragraph, bullet_list, task_list.')
