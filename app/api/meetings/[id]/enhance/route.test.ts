@@ -116,9 +116,11 @@ function buildMeetingsSelect(meetingData: unknown) {
 function mockSupabase({
   user,
   meetingData = null,
+  userPreferences = null,
 }: {
   user: { id: string } | null
   meetingData?: unknown
+  userPreferences?: { default_template_id: string } | null
 }) {
   const updateCalls: unknown[] = []
   const updateMock = mock((payload: unknown) => {
@@ -128,6 +130,10 @@ function mockSupabase({
     return { eq: eqId }
   })
 
+  const prefsMaybeSingle = mock(async () => ({ data: userPreferences ?? null }))
+  const prefsEqUser = mock(() => ({ maybeSingle: prefsMaybeSingle }))
+  const prefsSelect = mock(() => ({ eq: prefsEqUser }))
+
   const from = mock((table: string) => {
     if (table === 'meetings') {
       return {
@@ -135,6 +141,8 @@ function mockSupabase({
         update: updateMock,
       }
     }
+
+    if (table === 'user_preferences') return { select: prefsSelect }
 
     throw new Error(`Unexpected table ${table}`)
   })
@@ -270,7 +278,7 @@ describe('POST /api/meetings/[id]/enhance', () => {
     const generateCall = (mockGenerateObject as any).mock.calls[0][0]
     expect(generateCall.model).toEqual({ provider: 'openai', modelId: 'gpt-5.4-mini' })
     expect(generateCall.prompt).toContain('The current draft is sparse')
-    expect(generateCall.prompt).toContain('Selected note format: General Meeting')
+    expect(generateCall.prompt).toContain('Selected note format: General')
     expect(generateCall.prompt).toContain('"schemaVersion": 1')
     expect(generateCall.prompt).toContain('Allowed block types: heading, paragraph, bullet_list, task_list.')
 
@@ -688,5 +696,48 @@ describe('POST /api/meetings/[id]/enhance', () => {
       ((updateCalls[1] as Record<string, unknown>).enhancement_state as Record<string, unknown>)
         .lastError
     ).toBe('Something went wrong. Please try again.')
+  })
+
+  it('uses user preference default template when template_id is not in body', async () => {
+    mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: makeMeeting(),
+      userPreferences: { default_template_id: 'builtin-team' },
+    })
+
+    const res = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+      }),
+      { params: Promise.resolve({ id: 'meeting-1' }) }
+    )
+
+    expect(res.status).toBe(200)
+    const generateCall = (mockGenerateObject as any).mock.calls[0][0]
+    expect(generateCall.prompt).toContain('Selected note format: Team meeting')
+  })
+
+  it('honors body template_id over user preference', async () => {
+    mockSupabase({
+      user: { id: 'user-1' },
+      meetingData: makeMeeting(),
+      userPreferences: { default_template_id: 'builtin-team' },
+    })
+
+    const res = await POST(
+      makeRequest({
+        action: 'generate',
+        mode: 'enhance',
+        documentContent: makeDocument('Typed note from the user'),
+        template_id: 'builtin-interview',
+      }),
+      { params: Promise.resolve({ id: 'meeting-1' }) }
+    )
+
+    expect(res.status).toBe(200)
+    const generateCall = (mockGenerateObject as any).mock.calls[0][0]
+    expect(generateCall.prompt).toContain('Selected note format: Customer interview')
   })
 })

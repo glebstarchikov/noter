@@ -9,6 +9,7 @@ import {
 } from '@/lib/notes/enhance-persist'
 import { errorResponse } from '@/lib/api/api-helpers'
 import { translateToUserError } from '@/lib/notes/error-messages'
+import { resolveTemplate, FALLBACK_TEMPLATE_ID } from '@/lib/note-template'
 
 export const maxDuration = 60
 
@@ -41,6 +42,19 @@ export async function POST(
 
   // ── generate action ──────────────────────────────────────────────────────────
   try {
+    // Read user preferences to find the default template
+    const { data: prefRow } = await validated.supabase
+      .from('user_preferences')
+      .select('default_template_id')
+      .eq('user_id', validated.userId)
+      .maybeSingle()
+
+    const templateId = (parsedBody.action === 'generate' ? parsedBody.template_id : undefined)
+      ?? prefRow?.default_template_id
+      ?? FALLBACK_TEMPLATE_ID
+
+    validated.template = await resolveTemplate(templateId, validated.userId, validated.supabase)
+
     const llmResult = await runEnhanceLlm(validated)
 
     await clearPersistedGenerateError(validated)

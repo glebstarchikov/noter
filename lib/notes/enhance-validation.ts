@@ -23,6 +23,7 @@ const requestSchema = z.discriminatedUnion('action', [
     action: z.literal('generate'),
     mode: z.enum(['generate', 'enhance']),
     documentContent: tiptapDocumentSchema,
+    template_id: z.string().trim().min(1).optional(),
   }),
   z.object({
     action: z.literal('complete'),

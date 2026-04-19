@@ -14,6 +14,7 @@ import {
 import { copyDocumentAsMarkdown } from '@/lib/meetings/meeting-actions'
 import type { Meeting } from '@/lib/types'
 import { useNoteEnhancement } from '@/hooks/use-note-enhancement'
+import { useTemplates } from '@/hooks/use-templates'
 
 export function MeetingNoteSurface({
   meeting,
@@ -76,6 +77,8 @@ export function MeetingNoteSurface({
     },
     []
   )
+
+  const { templates, defaultTemplateId } = useTemplates()
 
   const {
     draftState,
@@ -176,7 +179,9 @@ export function MeetingNoteSurface({
             regenPromptDismissed={regenPromptDismissed}
             meetingStatus={meeting.status}
             meetingErrorMessage={meeting.error_message}
-            onDraftRequest={() => void handleDraftRequest()}
+            templates={templates}
+            defaultTemplateId={defaultTemplateId}
+            onDraftRequest={(templateId) => void handleDraftRequest(templateId)}
             onUndo={handleUndo}
             onCopyMarkdown={handleCopyMarkdown}
           />

@@ -59,6 +59,7 @@ export interface UseDraftProposalReturn {
   clearUndoDocument: () => void
   requestDraft: (params: {
     onAccepted: (payload: DraftAcceptedPayload) => void
+    templateId?: string
   }) => Promise<void>
 }
 
@@ -87,12 +88,20 @@ export function useDraftProposal(
   const [reviewState, setReviewState] = useState<EnhancementState>(
     normalizeReviewState(meeting.enhancement_state)
   )
-  const [wasEverEnhanced, setWasEverEnhanced] = useState(false)
   const [regenPromptDismissed, setRegenPromptDismissed] = useState(false)
+
+  // Derived from server state: has AI ever successfully reviewed this note?
+  // Was previously a local useState that reset on every mount — causing the
+  // regen-prompt indicator to disappear on reload even when server state had
+  // a prior review. Deriving from reviewState keeps client + server consistent.
+  const wasEverEnhanced =
+    reviewState.lastReviewedSourceHash !== null ||
+    reviewState.lastReviewedAt !== null
 
   const meetingIdRef = useRef(meeting.id)
   const draftStateRef = useRef(draftState)
   const currentDocumentRef = useRef(currentDocument)
+  const undoDocumentRef = useRef(undoDocument)
 
   useEffect(() => {
     draftStateRef.current = draftState
@@ -102,6 +111,10 @@ export function useDraftProposal(
     currentDocumentRef.current = currentDocument
   }, [currentDocument])
 
+  useEffect(() => {
+    undoDocumentRef.current = undoDocument
+  }, [undoDocument])
+
   // Reset all draft state when the meeting changes
   useEffect(() => {
     if (meetingIdRef.current === meeting.id) return
@@ -110,15 +123,19 @@ export function useDraftProposal(
     setDraftState('idle')
     setUndoDocument(null)
     setReviewState(serverReviewState)
-    setWasEverEnhanced(false)
     setRegenPromptDismissed(false)
   }, [meeting.id, serverReviewState])
 
-  // Sync server review state when idle and no pending undo
+  // Sync server review state when it actually changes (e.g., the parent
+  // refetched the meeting). Intentionally does NOT depend on `undoDocument`:
+  // dismissing the undo chip is a local UI action, not a server change, and
+  // re-syncing then would clobber freshly-cleared state with a stale
+  // `meeting.enhancement_state` prop (see the "Draft failed reappears after
+  // undo dismiss" bug).
   useEffect(() => {
-    if (draftStateRef.current !== 'idle' || undoDocument) return
+    if (draftStateRef.current !== 'idle' || undoDocumentRef.current) return
     setReviewState(serverReviewState)
-  }, [serverReviewState, undoDocument])
+  }, [serverReviewState])
 
   // Mirrors getNoteSurfaceView: 'empty-generating' only when no content, no conflict, status=generating
   const isEmptyGenerating =
@@ -188,7 +205,6 @@ export function useDraftProposal(
 
         setReviewState(normalizeReviewState(payload.enhancement_state))
         setUndoDocument(baseDocument)
-        setWasEverEnhanced(true)
         setRegenPromptDismissed(false)
         setDraftState('idle')
 
@@ -211,8 +227,10 @@ export function useDraftProposal(
   const requestDraft = useCallback(
     async ({
       onAccepted,
+      templateId,
     }: {
       onAccepted: (payload: DraftAcceptedPayload) => void
+      templateId?: string
     }) => {
       if (!shouldShowAction || draftStateRef.current !== 'idle') return
 
@@ -229,6 +247,7 @@ export function useDraftProposal(
             action: 'generate',
             mode: actionMode,
             documentContent: currentDocumentRef.current,
+            ...(templateId ? { template_id: templateId } : {}),
           }),
         })
 

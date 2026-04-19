@@ -19,7 +19,7 @@ export type UseNoteEnhancementReturn = {
   setRegenPromptDismissed: (value: boolean) => void
   setDocumentConflict: (value: DocumentSaveConflict | null) => void
   clearUndoDocument: () => void
-  handleDraftRequest: () => Promise<void>
+  handleDraftRequest: (templateId?: string) => Promise<void>
   handleUndo: () => void
   handleLoadLatestVersion: () => void
   handleKeepLocalDraft: () => Promise<void>
@@ -181,13 +181,14 @@ export function useNoteEnhancement(
 
   // --- Public handleDraftRequest: thin wrapper keeping the external interface ---
 
-  const handleDraftRequest = useCallback(async () => {
+  const handleDraftRequest = useCallback(async (templateId?: string) => {
     await requestDraft({
       onAccepted: (payload) => {
         onAcknowledgedHashChange(payload.documentHash)
         setDocumentConflict(null)
         onDocumentAccepted(payload)
       },
+      templateId,
     })
   }, [requestDraft, onAcknowledgedHashChange, onDocumentAccepted])
 

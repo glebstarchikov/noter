@@ -1,14 +1,17 @@
 'use client'
 
-import { ClipboardCopy, Loader2, RefreshCcw, Sparkles, Undo2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { useState } from 'react'
+import { ClipboardCopy, Loader2, RefreshCcw, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { isNeutralEnhancementMessage } from '@/lib/notes/enhancement-errors'
 import type { DocumentSaveConflict } from '@/lib/document-sync'
 import type { TiptapDocument } from '@/lib/tiptap/tiptap-converter'
 import type { EnhancementState } from '@/lib/types'
 import type { DraftUiState, DraftMode } from '@/hooks/use-draft-proposal'
+import type { ResolvedNoteTemplate } from '@/lib/note-template'
+import { TemplatePicker } from '@/components/templates/template-picker'
 
 interface DraftActionBarProps {
   draftState: DraftUiState
@@ -23,7 +26,9 @@ interface DraftActionBarProps {
   regenPromptDismissed: boolean
   meetingStatus: string
   meetingErrorMessage: string | null
-  onDraftRequest: () => void
+  templates: ResolvedNoteTemplate[]
+  defaultTemplateId: string
+  onDraftRequest: (templateId: string) => void
   onUndo: () => void
   onCopyMarkdown?: () => void
 }
@@ -41,10 +46,14 @@ export function DraftActionBar({
   regenPromptDismissed,
   meetingStatus,
   meetingErrorMessage,
+  templates,
+  defaultTemplateId,
   onDraftRequest,
   onUndo,
   onCopyMarkdown,
 }: DraftActionBarProps) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const effectiveTemplateId = selectedTemplateId ?? defaultTemplateId
   const isNeutralDraftFeedback = isNeutralEnhancementMessage(reviewState.lastError)
 
   // Derive header description text
@@ -84,13 +93,6 @@ export function DraftActionBar({
         ? 'Creating draft...'
         : 'Improving...'
 
-  const draftActionLabel =
-    meetingStatus === 'error'
-      ? 'Try again'
-      : hasDocumentContent
-        ? 'Improve with AI'
-        : 'Create first draft'
-
   return (
     <div className="flex flex-col gap-4 border-b border-border/60 pb-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -119,33 +121,28 @@ export function DraftActionBar({
         {showHeaderActions ? (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {showHeaderDraftAction && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="relative gap-2 rounded-full border-border/70 bg-background/80 shadow-none"
-                    onClick={onDraftRequest}
-                    disabled={draftState !== 'idle'}
-                  >
-                    {draftState !== 'idle' ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-4" />
-                    )}
-                    {draftState !== 'idle' ? loadingLabel : draftActionLabel}
-                    {showRegenPrompt && draftState === 'idle' ? (
-                      <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" />
-                    ) : null}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {showRegenPrompt
-                    ? 'Your note changed since the last improvement'
-                    : 'Use AI to review this note'}
-                </TooltipContent>
-              </Tooltip>
+              draftState !== 'idle' ? (
+                <LoadingPill
+                  label={loadingLabel}
+                  templateName={templates.find((t) => t.id === effectiveTemplateId)?.name ?? ''}
+                />
+              ) : (
+                <div className="relative">
+                  {showRegenPrompt ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-1 -top-1 z-10 size-2.5 rounded-full bg-accent ring-2 ring-background"
+                    />
+                  ) : null}
+                  <TemplatePicker
+                    templates={templates}
+                    selectedId={effectiveTemplateId}
+                    onChange={setSelectedTemplateId}
+                    onConfirm={(id) => onDraftRequest(id)}
+                    buttonLabel={hasDocumentContent ? 'Improve with AI:' : 'Create notes with:'}
+                  />
+                </div>
+              )
             )}
 
             {undoDocument && draftState === 'idle' ? (
@@ -167,35 +164,70 @@ export function DraftActionBar({
             ) : null}
 
             {reviewState.lastError && draftState === 'idle' ? (
-              <>
-                <Badge
-                  variant={isNeutralDraftFeedback ? 'secondary' : 'destructive'}
-                  className="rounded-full"
-                >
-                  {isNeutralDraftFeedback ? 'No changes suggested' : 'Draft failed'}
-                </Badge>
-                {!isNeutralDraftFeedback && canReview ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 rounded-full gap-1"
-                        onClick={onDraftRequest}
-                      >
-                        <RefreshCcw className="size-3" />
-                        Retry
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Try again</TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </>
+              isNeutralDraftFeedback ? (
+                <StatusPill tone="muted">No changes suggested</StatusPill>
+              ) : canReview ? (
+                <RetryPill onClick={() => onDraftRequest(effectiveTemplateId)} />
+              ) : (
+                <StatusPill tone="destructive">Draft failed</StatusPill>
+              )
             ) : null}
           </div>
         ) : null}
       </div>
     </div>
+  )
+}
+
+function LoadingPill({ label, templateName }: { label: string; templateName: string }) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-live="polite"
+      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12px] font-medium text-primary-foreground opacity-80 disabled:cursor-not-allowed"
+    >
+      <Loader2 className="size-3.5 animate-spin" />
+      <span>{label}</span>
+      {templateName ? (
+        <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-[11px]">{templateName}</span>
+      ) : null}
+    </button>
+  )
+}
+
+function RetryPill({ onClick }: { onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-destructive px-3.5 text-[12px] font-medium text-destructive-foreground transition-opacity hover:opacity-90"
+        >
+          <span>Draft failed</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-white/15 px-1.5 py-0.5 text-[11px]">
+            <RefreshCcw className="size-3" />
+            Retry
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Try again with the selected template</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function StatusPill({ tone, children }: { tone: 'muted' | 'destructive'; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-8 items-center rounded-full px-3.5 text-[12px] font-medium',
+        tone === 'destructive'
+          ? 'bg-destructive text-destructive-foreground'
+          : 'bg-muted text-muted-foreground'
+      )}
+    >
+      {children}
+    </span>
   )
 }

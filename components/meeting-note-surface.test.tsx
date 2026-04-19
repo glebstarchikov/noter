@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { afterEach, describe, expect, it, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { hashDocumentContent } from '@/lib/document-hash'
 import { ENHANCEMENT_NO_USEFUL_CHANGES_MESSAGE } from '@/lib/notes/enhancement-errors'
@@ -17,6 +17,12 @@ function makeDocument(text: string): TiptapDocument {
     ],
   }
 }
+
+mock.module('next/link', () => ({
+  __esModule: true,
+  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) =>
+    React.createElement('a', { href, ...props }, children),
+}))
 
 mock.module('@/components/meeting-editor', () => ({
   MeetingEditor: ({
@@ -96,12 +102,31 @@ function makeMeeting(overrides: Partial<Meeting> = {}): Meeting {
   }
 }
 
+const FAKE_TEMPLATES_RESPONSE = new Response(
+  JSON.stringify({
+    templates: [{ id: 'builtin-general', name: 'General', description: '', prompt: 'p', isBuiltin: true }],
+    defaultTemplateId: 'builtin-general',
+  }),
+  { status: 200 }
+)
+
 describe('MeetingNoteSurface', () => {
+  beforeEach(() => {
+    // Default fetch: handle /api/templates so useTemplates doesn't throw.
+    // Individual tests that need to intercept /enhance or /document override globalThis.fetch.
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      if (String(input).includes('/api/templates')) {
+        return Promise.resolve(FAKE_TEMPLATES_RESPONSE.clone())
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${String(input)}`))
+    }) as unknown as typeof fetch
+  })
+
   afterEach(() => {
     cleanup()
   })
 
-  it('shows state-based AI actions for empty and populated notes', () => {
+  it('shows state-based AI actions for empty and populated notes', async () => {
     const emptyMeeting = makeMeeting({
       document_content: null,
       summary: null,
@@ -114,14 +139,18 @@ describe('MeetingNoteSurface', () => {
 
     const { rerender } = render(<MeetingNoteSurface meeting={emptyMeeting} />)
 
-    // Empty meeting with a transcript shows "Create first draft"; no auto-gen or improve button
+    // Empty meeting with a transcript shows "Create notes with:"; no auto-gen or improve button
     expect(screen.queryByRole('button', { name: /generate notes with ai/i })).toBeNull()
-    expect(screen.getByRole('button', { name: /create first draft/i })).not.toBeNull()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /create notes with/i })).not.toBeNull()
+    })
     expect(screen.queryByRole('button', { name: /improve with ai/i })).toBeNull()
 
     rerender(<MeetingNoteSurface meeting={populatedMeeting} />)
 
-    expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
+    })
   })
 
   it('streams AI content into the editor and shows undo chip when done', async () => {
@@ -131,6 +160,10 @@ describe('MeetingNoteSurface', () => {
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
+
+      if (url.includes('/api/templates')) {
+        return Promise.resolve(FAKE_TEMPLATES_RESPONSE.clone())
+      }
 
       if (url.endsWith('/document')) {
         return Promise.resolve(
@@ -177,6 +210,9 @@ describe('MeetingNoteSurface', () => {
 
     const { container } = render(<MeetingNoteSurface meeting={makeMeeting()} />)
 
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
+    })
     fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
     await waitFor(() => {
@@ -205,6 +241,10 @@ describe('MeetingNoteSurface', () => {
   it('renders no useful changes as neutral inline feedback instead of a destructive failure', async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = String(input)
+
+      if (url.includes('/api/templates')) {
+        return Promise.resolve(FAKE_TEMPLATES_RESPONSE.clone())
+      }
 
       if (url.endsWith('/document')) {
         return Promise.resolve(
@@ -235,6 +275,9 @@ describe('MeetingNoteSurface', () => {
 
     render(<MeetingNoteSurface meeting={makeMeeting()} />)
 
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /improve with ai/i })).not.toBeNull()
+    })
     fireEvent.click(screen.getByRole('button', { name: /improve with ai/i }))
 
     await waitFor(() => {
