@@ -44,4 +44,35 @@ describe('useDraftProposal', () => {
     expect(result.current.draftState).toBe('idle')
     expect(result.current.wasEverEnhanced).toBe(false)
   })
+
+  test('wasEverEnhanced is derived from server state — persists across mount', () => {
+    // Meeting has a prior AI review (lastReviewedSourceHash) from the server.
+    // On a fresh mount, wasEverEnhanced must be true without the user having
+    // to click anything — otherwise the regen-prompt indicator disappears on
+    // page reload even when the server knows AI ran before.
+    const enhancedMeeting = {
+      ...fakeMeeting,
+      enhancement_state: {
+        lastReviewedSourceHash: 'hash-server-reviewed',
+        lastOutcome: 'accepted' as const,
+        lastReviewedAt: '2026-04-19T10:00:00Z',
+        lastError: null,
+      },
+    } as Meeting
+
+    const { result } = renderHook(() =>
+      useDraftProposal(enhancedMeeting, {
+        currentDocument: { type: 'doc', content: [] },
+        currentHash: 'hash-0',
+        actionMode: 'enhance',
+        canReview: true,
+        meetingStatus: 'done',
+        hasDocumentConflict: false,
+        persistDocument: async () => {},
+        waitForEditor: async () => null,
+      }),
+    )
+
+    expect(result.current.wasEverEnhanced).toBe(true)
+  })
 })

@@ -88,8 +88,15 @@ export function useDraftProposal(
   const [reviewState, setReviewState] = useState<EnhancementState>(
     normalizeReviewState(meeting.enhancement_state)
   )
-  const [wasEverEnhanced, setWasEverEnhanced] = useState(false)
   const [regenPromptDismissed, setRegenPromptDismissed] = useState(false)
+
+  // Derived from server state: has AI ever successfully reviewed this note?
+  // Was previously a local useState that reset on every mount — causing the
+  // regen-prompt indicator to disappear on reload even when server state had
+  // a prior review. Deriving from reviewState keeps client + server consistent.
+  const wasEverEnhanced =
+    reviewState.lastReviewedSourceHash !== null ||
+    reviewState.lastReviewedAt !== null
 
   const meetingIdRef = useRef(meeting.id)
   const draftStateRef = useRef(draftState)
@@ -116,7 +123,6 @@ export function useDraftProposal(
     setDraftState('idle')
     setUndoDocument(null)
     setReviewState(serverReviewState)
-    setWasEverEnhanced(false)
     setRegenPromptDismissed(false)
   }, [meeting.id, serverReviewState])
 
@@ -199,7 +205,6 @@ export function useDraftProposal(
 
         setReviewState(normalizeReviewState(payload.enhancement_state))
         setUndoDocument(baseDocument)
-        setWasEverEnhanced(true)
         setRegenPromptDismissed(false)
         setDraftState('idle')
 
