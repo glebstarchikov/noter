@@ -70,4 +70,4 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md) for the responsible disclo
 
 ---
 
-Built for [AI Society](https://github.com/glebstarchikov/noter) and the broader self-hosting community. Star ⭐ the repo if it's useful — it helps others find the project.
+Built with love for the self-hosting community. Star ⭐ the repo if it's useful — it helps others find the project.
