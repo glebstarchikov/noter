@@ -8,7 +8,6 @@
 
 Record, transcribe, and turn meetings into structured notes with AI — running entirely on your own infrastructure. Self-host on Vercel + Supabase in under 10 minutes.
 
-**Try the live demo →** [my-noter.vercel.app](https://my-noter.vercel.app)
 
 ![noter dashboard showing a generated meeting note](public/landing/dashboard-hero.png)
 
